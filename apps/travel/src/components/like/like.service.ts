@@ -10,6 +10,9 @@ import { OrdinaryInquery } from '../../libs/dto/property/property.input';
 import { Properties } from '../../libs/dto/property/property';
 import { LikeGroup } from '../../libs/enums/like.enum';
 import { lookupFavorite } from '../../libs/config';
+import { lookupFavoriteTour } from '../../libs/config';
+import { Tours } from '../../libs/dto/tour/tour';
+import { OrdinaryTourInquiry } from '../../libs/dto/tour/tour.input';
 
 
 @Injectable()
@@ -87,6 +90,40 @@ export class LikeService {
 		const result: Properties = { list: [], metaCounter: data[0].metaCounter };
 		result.list = data[0].list.map((ele) => ele.favoriteProperty);
 
+		return result;
+	}
+
+	public async getFavoriteTours(memberId: Types.ObjectId, input: OrdinaryTourInquiry): Promise<Tours> {
+		const data: T = await this.likeModel
+			.aggregate([
+				{ $match: { likeGroup: LikeGroup.TOUR, memberId } },
+				{ $sort: { createdAt: -1 } },
+				{
+					$lookup: {
+						from: 'tours',
+						localField: 'likeRefId',
+						foreignField: '_id',
+						as: 'favoriteTour',
+					},
+				},
+				{ $unwind: '$favoriteTour' },
+				{ $match: { 'favoriteTour.tourStatus': 'ACTIVE', 'favoriteTour.deletedAt': null } },
+				{
+					$facet: {
+						list: [
+							{ $skip: (input.page - 1) * input.limit },
+							{ $limit: input.limit },
+							lookupFavoriteTour,
+							{ $unwind: '$favoriteTour.memberData' },
+						],
+						metaCounter: [{ $count: 'total' }],
+					},
+				},
+			])
+			.exec();
+
+		const result: Tours = { list: [], metaCounter: data[0]?.metaCounter ?? [] };
+		result.list = (data[0]?.list ?? []).map((item) => item.favoriteTour);
 		return result;
 	}
 }

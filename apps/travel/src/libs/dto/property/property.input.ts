@@ -14,7 +14,8 @@ import {
 import { Types } from 'mongoose';
 import { PropertyStatus, PropertyType } from '../../enums/property.enum';
 import { Direction } from '../../enums/common.enum';
-import { availableOptions, availablePropertySorts } from '../../config';
+import { availablePropertySorts } from '../../config';
+
 @InputType()
 export class CreatePropertyInput {
 	@Field(() => String)
@@ -44,10 +45,10 @@ export class CreatePropertyInput {
 	@IsString()
 	propertyCity?: string;
 
-	@Field({ nullable: true })
-	@IsOptional()
+	@Field()
+	@IsNotEmpty()
 	@IsString()
-	propertyAddress?: string;
+	propertyAddress: string;
 
 	@Field(() => Float)
 	@IsNumber()
@@ -96,34 +97,21 @@ export class CreatePropertyInput {
 	@IsString({ each: true })
 	propertyImages?: string[];
 
-	@Field()
-	memberId: Types.ObjectId;
+	/** Resolverdagi authenticated agentdan qo'yiladi. */
+	memberId?: Types.ObjectId;
 }
+
 @InputType()
-export class PricesRange {
-	@Field(() => Int)
+export class PricePerNightRange {
+	@Field(() => Float)
+	@IsNumber()
+	@Min(0)
 	start!: number;
 
-	@Field(() => Int)
+	@Field(() => Float)
+	@IsNumber()
+	@Min(0)
 	end!: number;
-}
-
-@InputType()
-export class SquaresRange {
-	@Field(() => Int)
-	start!: number;
-
-	@Field(() => Int)
-	end!: number;
-}
-
-@InputType()
-export class PeriodsRange {
-	@Field(() => Date)
-	start!: Date;
-
-	@Field(() => Date)
-	end!: Date;
 }
 
 @InputType()
@@ -134,36 +122,51 @@ export class PISearch {
 
 	@IsOptional()
 	@Field(() => [String], { nullable: true })
-	locationList?: String[];
+	destinationId?: string;
+
+	@IsOptional()
+	@Field(() => [String], { nullable: true })
+	propertyCityList?: string[];
 
 	@IsOptional()
 	@Field(() => [PropertyType], { nullable: true })
-	typeList?: PropertyType[];
+	propertyTypeList?: PropertyType[];
 
 	@IsOptional()
-	@Field(() => [Int], { nullable: true })
-	roomsList?: number[];
+	@Field(() => Int, { nullable: true })
+	@IsInt()
+	@Min(1)
+	minGuests?: number;
 
 	@IsOptional()
-	@Field(() => [Int], { nullable: true })
-	bedsList?: number[];
+	@Field(() => Int, { nullable: true })
+	@IsInt()
+	@Min(0)
+	bedrooms?: number;
 
 	@IsOptional()
-	@IsIn(availableOptions, { each: true })
+	@Field(() => Int, { nullable: true })
+	@IsInt()
+	@Min(0)
+	beds?: number;
+
+	@IsOptional()
 	@Field(() => [String], { nullable: true })
-	options?: string[];
+	@IsArray()
+	@IsString({ each: true })
+	amenities?: string[];
 
 	@IsOptional()
-	@Field(() => PricesRange, { nullable: true })
-	pricesRange?: PricesRange;
+	@Field(() => PricePerNightRange, { nullable: true })
+	pricePerNightRange?: PricePerNightRange;
 
 	@IsOptional()
-	@Field(() => PeriodsRange, { nullable: true })
-	periodsRange?: PeriodsRange;
+	@Field(() => Date, { nullable: true })
+	checkIn?: Date;
 
 	@IsOptional()
-	@Field(() => SquaresRange, { nullable: true })
-	squaresRange?: SquaresRange;
+	@Field(() => Date, { nullable: true })
+	checkOut?: Date;
 
 	@IsOptional()
 	@Field(() => String, { nullable: true })
@@ -248,7 +251,11 @@ class ALPISearch {
 
 	@IsOptional()
 	@Field(() => [String], { nullable: true })
-	propertyLocationList?: String[];
+	destinationIdList?: string[];
+
+	@IsOptional()
+	@Field(() => [String], { nullable: true })
+	propertyCityList?: string[];
 }
 
 @InputType()

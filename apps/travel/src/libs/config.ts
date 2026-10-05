@@ -10,7 +10,15 @@ export const availablePropertySorts = [
 	'propertyRating',
 	'pricePerNight',
 ];
-export const availableOptions = ['propertyBarter', 'propertyRent'];
+export const availableTourSorts = [
+	'createdAt',
+	'updatedAt',
+	'tourPrice',
+	'tourStartDate',
+	'tourLikes',
+	'tourViews',
+	'tourRating',
+];
 export const availableBoardArticleSorts = ['createdAt', 'updatedAt', 'articleLikes', 'articleViews'];
 export const availableCommentSorts = ['createdAt', 'updatedAt'];
 export const availableChatSorts = ['createdAt', 'updatedAt', 'lastMessageAt'];
@@ -133,5 +141,21 @@ export const lookupVisited = {
 		localField: 'visitedProperty.memberId',
 		foreignField: '_id',
 		as: 'visitedProperty.memberData',
+	},
+};
+export const lookupFavoriteTour = {
+	$lookup: {
+		from: 'members',
+		localField: 'favoriteTour.memberId',
+		foreignField: '_id',
+		as: 'favoriteTour.memberData',
+	},
+};
+export const lookupVisitedTour = {
+	$lookup: {
+		from: 'members',
+		localField: 'visitedTour.memberId',
+		foreignField: '_id',
+		as: 'visitedTour.memberData',
 	},
 };

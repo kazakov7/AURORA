@@ -17,6 +17,7 @@ import { lookupMember } from '../../libs/config';
 import { T } from '../../libs/types/common';
 import { BoardArticleService } from '../article/board-article.service';
 import { Direction, Messages } from '../../libs/enums/common.enum';
+import { TourService } from '../tour/tour.service';
 
 @Injectable()
 export class CommentService {
@@ -26,6 +27,7 @@ export class CommentService {
 		private memberService: MemberService,
 		private boardArticleService: BoardArticleService,
 		private propertyService: PropertyService,
+		private tourService: TourService,
 	) { }
 
 	public async createComment(
@@ -61,6 +63,13 @@ export class CommentService {
 				});
 				break;
 
+			case CommentGroup.TOUR:
+				await this.tourService.tourStatsEditor({
+					_id: input.commentRefId,
+					targetKey: 'tourComments',
+					modifier: 1,
+				});
+				break;
 
 		}
 

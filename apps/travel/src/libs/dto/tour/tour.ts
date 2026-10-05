@@ -1,6 +1,8 @@
 import { Field, Float, Int, ObjectType } from '@nestjs/graphql';
 import { TourStatus } from '../../enums/tour.enum';
 import { Types } from 'mongoose';
+import { Member, TotalCounter } from '../member/member';
+import { MeLiked } from '../like/like';
 
 @ObjectType()
 export class Tour {
@@ -84,4 +86,19 @@ export class Tour {
 
 	@Field()
 	updatedAt: Date;
+
+	@Field(() => Member)
+	memberData!: Member;
+
+	@Field(() => [MeLiked], { nullable: true })
+	meLiked?: MeLiked[];
+}
+
+@ObjectType()
+export class Tours {
+	@Field(() => [Tour])
+	list!: Tour[];
+
+	@Field(() => [TotalCounter], { nullable: true })
+	metaCounter?: TotalCounter[];
 }

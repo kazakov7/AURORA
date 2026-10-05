@@ -6,7 +6,7 @@ import { TourModule } from './tour/tour.module';
 import { LikeModule } from './like/like.module';
 import { ViewModule } from './view/view.module';
 import { CommentModule } from './comment/comment.module';
-import { ArticleDataModule } from './article/article-data.module';
+import { BoardArticleModule } from './article/board-article.module';
 import { AgentModule } from './agent/agent.module';
 import { DestinationModule } from './destination/destination.module';
 import { BookingModule } from './booking/booking.module';
@@ -34,7 +34,7 @@ import { TravelHistoryModule } from './travel-history/travel-history.module';
 		ViewModule,
 		CommentModule,
 		FollowModule,
-		ArticleDataModule,
+		BoardArticleModule,
 		NotificationModule,
 		NoticeModule,
 		ChatModule,

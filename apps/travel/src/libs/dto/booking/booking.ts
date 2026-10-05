@@ -3,6 +3,7 @@ import { ObjectId } from 'mongoose';
 import { BookingCategory, BookingStatus } from '../../enums/booking.enum';
 import { Member, TotalCounter } from '../member/member';
 import { Property } from '../property/property';
+import { Tour } from '../tour/tour';
 
 @ObjectType()
 export class Booking {
@@ -61,8 +62,8 @@ export class Booking {
 	@Field(() => Property, { nullable: true })
 	propertyData?: Property;
 
-	// @Field(() => Tour, { nullable: true })
-	// tourData?: Tour;
+	@Field(() => Tour, { nullable: true })
+	tourData?: Tour;
 }
 
 @ObjectType()

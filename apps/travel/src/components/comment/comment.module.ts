@@ -8,6 +8,7 @@ import CommentSchema from '../../schemas/Comment.model';
 import { MemberModule } from '../member/member.module';
 import { BoardArticleModule } from '../article/board-article.module';
 import { PropertyModule } from '../property/property.module';
+import { TourModule } from '../tour/tour.module';
 
 
 @Module({
@@ -17,6 +18,7 @@ import { PropertyModule } from '../property/property.module';
 		MemberModule,
 		BoardArticleModule,
 		PropertyModule,
+		TourModule,
 	],
 	providers: [CommentResolver, CommentService],
 	exports: [CommentService],

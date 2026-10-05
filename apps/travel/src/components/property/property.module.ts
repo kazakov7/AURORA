@@ -7,6 +7,7 @@ import { ViewModule } from '../view/view.module';
 import PropertySchema from '../../schemas/Property.model';
 import { MemberModule } from '../member/member.module';
 import { LikeModule } from '../like/like.module';
+import { BookingModule } from '../booking/booking.module';
 
 @Module({
 	imports: [
@@ -15,6 +16,7 @@ import { LikeModule } from '../like/like.module';
 		ViewModule,
 		MemberModule,
 		LikeModule,
+		BookingModule,
 	],
 	providers: [PropertyResolver, PropertyService],
 	exports: [PropertyService],

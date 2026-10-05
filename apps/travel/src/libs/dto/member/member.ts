@@ -1,6 +1,7 @@
 import { ObjectType, Field, Int } from '@nestjs/graphql';
 import { MemberType, MemberStatus, MemberAuthType } from '../../enums/member.enum';
 import { MeLiked } from '../like/like';
+import { MeFollowed } from '../follow/follow';
 
 @ObjectType()
 export class Member {
@@ -76,6 +77,11 @@ export class Member {
 	@Field(() => String, { nullable: true })
 	accessToken?: string;
 
+
+
+	@Field(() => [MeFollowed], { nullable: true })
+	meFollowed?: MeFollowed[];
+
 	@Field({ nullable: true })
 	deletedAt?: Date;
 
@@ -85,11 +91,19 @@ export class Member {
 	@Field()
 	updatedAt: Date;
 
-	@Field(() => [MeLiked], { nullable: true })
-	meLiked?: MeLiked[];
+
 }
 @ObjectType()
 export class TotalCounter {
 	@Field(() => Int, { nullable: true })
 	total!: number;
+}
+
+@ObjectType()
+export class Members {
+	@Field(() => [Member])
+	list!: Member[];
+
+	@Field(() => [TotalCounter], { nullable: true })
+	metaCounter!: TotalCounter[];
 }

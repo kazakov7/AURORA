@@ -1,89 +1,72 @@
-import { Field, Int, InputType } from '@nestjs/graphql';
-import { ObjectId } from 'mongoose';
-import { IsNotEmpty, IsOptional, Length, Min, IsInt, IsDate } from 'class-validator';
-import { BookingCategory } from '../../enums/booking.enum';
-// import { availableBookingSorts } from '../../config';
+import { Field, InputType, Int } from '@nestjs/graphql';
+import { IsArray, IsDate, IsEnum, IsInt, IsNotEmpty, IsOptional, Length, Min } from 'class-validator';
+import { Types } from 'mongoose';
+import { BookingStatus } from '../../enums/booking.enum';
 
 @InputType()
-export class BookingInput {
-	/** memberId resolverdagi @AuthMember dan olinadi, clientdan kelmaydi */
-	memberId?: ObjectId;
-
-	@IsNotEmpty()
-	@Field(() => BookingCategory)
-	bookingCategory: BookingCategory;
-
-	@IsNotEmpty()
+export class CreatePropertyBookingInput {
 	@Field(() => String)
-	bookingRefId: ObjectId;
-
-	@IsOptional()
-	@IsDate()
-	@Field(() => Date, { nullable: true })
-	checkIn?: Date;
-
-	@IsOptional()
-	@IsDate()
-	@Field(() => Date, { nullable: true })
-	checkOut?: Date;
-
 	@IsNotEmpty()
+	propertyId: Types.ObjectId;
+
+	@Field(() => Date)
+	@IsDate()
+	checkIn: Date;
+
+	@Field(() => Date)
+	@IsDate()
+	checkOut: Date;
+
+	@Field(() => Int)
 	@IsInt()
 	@Min(1)
-	@Field(() => Int)
 	bookingGuests: number;
 
+	@Field(() => String, { nullable: true })
 	@IsOptional()
 	@Length(3, 500)
-	@Field(() => String, { nullable: true })
 	bookingNote?: string;
 }
 
-// @InputType()
-// class BISearch {
-// 	@IsOptional()
-// 	@Field(() => String, { nullable: true })
-// 	memberId?: ObjectId;
+@InputType()
+export class CreateTourBookingInput {
+	@Field(() => String)
+	@IsNotEmpty()
+	tourId: Types.ObjectId;
 
-// 	@IsOptional()
-// 	@Field(() => BookingCategory, { nullable: true })
-// 	bookingCategory?: BookingCategory;
+	@Field(() => Int)
+	@IsInt()
+	@Min(1)
+	bookingGuests: number;
 
-// 	@IsOptional()
-// 	@Field(() => [BookingStatus], { nullable: true })
-// 	bookingStatusList?: BookingStatus[];
+	@Field(() => String, { nullable: true })
+	@IsOptional()
+	@Length(3, 500)
+	bookingNote?: string;
+}
 
-// 	@IsOptional()
-// 	@Field(() => String, { nullable: true })
-// 	bookingRefId?: ObjectId;
+@InputType()
+export class BookingSearch {
+	@Field(() => [BookingStatus], { nullable: true })
+	@IsOptional()
+	@IsArray()
+	@IsEnum(BookingStatus, { each: true })
+	bookingStatusList?: BookingStatus[];
+}
 
-// 	@IsOptional()
-// 	@Field(() => String, { nullable: true })
-// 	text?: string;
-// }
+@InputType()
+export class BookingsInquiry {
+	@Field(() => Int)
+	@IsInt()
+	@Min(1)
+	page: number;
 
-// @InputType()
-// export class BookingsInquiry {
-// 	@IsNotEmpty()
-// 	@Min(1)
-// 	@Field(() => Int)
-// 	page: number;
+	@Field(() => Int)
+	@IsInt()
+	@Min(1)
+	limit: number;
 
-// 	@IsNotEmpty()
-// 	@Min(1)
-// 	@Field(() => Int)
-// 	limit: number;
-
-// 	@IsOptional()
-// 	@IsIn(availableBookingSorts)
-// 	@Field(() => String, { nullable: true })
-// 	sort?: string;
-
-// 	@IsOptional()
-// 	@Field(() => Direction, { nullable: true })
-// 	direction?: Direction;
-
-// 	@IsNotEmpty()
-// 	@Field(() => BISearch)
-// 	search: BISearch;
-// }
+	@Field(() => BookingSearch, { nullable: true })
+	@IsOptional()
+	search?: BookingSearch;
+}
