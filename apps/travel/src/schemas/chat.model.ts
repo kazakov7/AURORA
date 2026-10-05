@@ -1,18 +1,17 @@
-import { Schema, model, Types } from 'mongoose';
+import { Schema, Types } from 'mongoose';
+import { ChatType } from '../libs/enums/chat.enum';
 
 const ChatSchema = new Schema(
 	{
 		chatType: {
 			type: String,
-			enum: ['PRIVATE'],
-			required: true,
+			enum: ChatType,
 			index: true,
 		},
 
 		memberOneId: {
 			type: Types.ObjectId,
 			ref: 'Member',
-			required: true,
 			index: true,
 		},
 
@@ -32,6 +31,11 @@ const ChatSchema = new Schema(
 			type: Date,
 			index: true,
 		},
+
+		directKey: {
+			type: String,
+			trim: true,
+		},
 	},
 	{
 		timestamps: true,
@@ -39,6 +43,10 @@ const ChatSchema = new Schema(
 	},
 );
 
-ChatSchema.index({ memberOneId: 1, memberTwoId: 1 }, { unique: true });
+ChatSchema.index(
+	{ directKey: 1 },
+	{ unique: true, partialFilterExpression: { chatType: ChatType.DIRECT }, name: 'chats_direct_key_uq' },
+);
+ChatSchema.index({ chatType: 1, lastMessageAt: 1 }, { name: 'chats_recent_idx' });
 
 export default ChatSchema;

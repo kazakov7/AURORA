@@ -1,6 +1,6 @@
 import { InputType, Field, Float, Int } from '@nestjs/graphql';
-import { IsOptional, IsEnum, IsString, IsNotEmpty, MaxLength, IsNumber, Min, IsInt, IsArray } from 'class-validator';
-import { PropertyType, PropertyAmenity } from '../../enums/property.enum';
+import { IsOptional, IsEnum, IsString, MaxLength, IsNumber, Min, IsInt, IsArray } from 'class-validator';
+import { PropertyType } from '../../enums/property.enum';
 
 @InputType()
 export class UpdatePropertyInput {
@@ -24,11 +24,6 @@ export class UpdatePropertyInput {
 	@Field({ nullable: true })
 	@IsOptional()
 	@IsString()
-	propertyCountry?: string;
-
-	@Field({ nullable: true })
-	@IsOptional()
-	@IsString()
 	propertyCity?: string;
 
 	@Field({ nullable: true })
@@ -40,40 +35,46 @@ export class UpdatePropertyInput {
 	@IsOptional()
 	@IsNumber()
 	@Min(0)
-	propertyPricePerNight?: number;
+	pricePerNight?: number;
 
 	@Field({ nullable: true })
 	@IsOptional()
 	@IsString()
-	propertyCurrency?: string;
+	currency?: string;
 
 	@Field(() => Int, { nullable: true })
 	@IsOptional()
+	@IsInt()
 	@Min(1)
-	propertyMaxGuests?: number;
+	maxGuests?: number;
 
 	@Field(() => Int, { nullable: true })
 	@IsOptional()
+	@IsInt()
 	@Min(0)
-	propertyBedrooms?: number;
+	bedrooms?: number;
 
 	@Field(() => Int, { nullable: true })
 	@IsOptional()
+	@IsInt()
 	@Min(0)
-	propertyBeds?: number;
+	beds?: number;
 
 	@Field(() => Int, { nullable: true })
 	@IsOptional()
+	@IsInt()
 	@Min(0)
-	propertyBathrooms?: number;
-
-	@Field(() => [PropertyAmenity], { nullable: true })
-	@IsOptional()
-	@IsEnum(PropertyAmenity, { each: true })
-	propertyAmenities?: PropertyAmenity[];
+	bathrooms?: number;
 
 	@Field(() => [String], { nullable: true })
 	@IsOptional()
+	@IsArray()
 	@IsString({ each: true })
-	properytImages?: string[];
+	amenities?: string[];
+
+	@Field(() => [String], { nullable: true })
+	@IsOptional()
+	@IsArray()
+	@IsString({ each: true })
+	propertyImages?: string[];
 }

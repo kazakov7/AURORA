@@ -1,6 +1,5 @@
 import { Schema } from 'mongoose';
-import { defaultFieldResolver } from 'graphql';
-import { MemberType, MemberStatus, MemberAuthType, AgentType } from '../libs/enums/member.enum';
+import { MemberType, MemberStatus, MemberAuthType } from '../libs/enums/member.enum';
 
 const MemberSchema = new Schema(
 	{
@@ -21,19 +20,15 @@ const MemberSchema = new Schema(
 		memberAuthType: {
 			type: String,
 			enum: MemberAuthType,
-			default: MemberAuthType.PHONE,
+			default: MemberAuthType.NICK,
 		},
 
 		memberPhone: {
 			type: String,
-			unique: true,
-			sparse: true,
 		},
 
 		memberEmail: {
 			type: String,
-			unique: true,
-			sparse: true,
 			lowercase: true,
 			trim: true,
 		},
@@ -49,9 +44,7 @@ const MemberSchema = new Schema(
 
 		memberNick: {
 			type: String,
-			unique: true,
 			trim: true,
-			index: true,
 		},
 
 		memberFullName: {
@@ -70,26 +63,6 @@ const MemberSchema = new Schema(
 
 		memberAddress: {
 			type: String,
-		},
-
-		agentType: {
-			type: String,
-			enum: AgentType,
-		},
-
-		agentCompanyName: {
-			type: String,
-		},
-
-		agentBusinessNumber: {
-			type: String,
-			unique: true,
-			sparse: true,
-		},
-
-		agentVerified: {
-			type: Boolean,
-			default: false,
 		},
 
 		memberFollowers: {
@@ -142,16 +115,6 @@ const MemberSchema = new Schema(
 			default: 0,
 		},
 
-		memberWarnings: {
-			type: Number,
-			default: 0,
-		},
-
-		memberBlocks: {
-			type: Number,
-			default: 0,
-		},
-
 		deletedAt: {
 			type: Date,
 			default: null,
@@ -162,4 +125,11 @@ const MemberSchema = new Schema(
 		collection: 'members',
 	},
 );
+
+MemberSchema.index({ memberPhone: 1 }, { unique: true, partialFilterExpression: { memberPhone: { $type: 'string' } } });
+MemberSchema.index({ memberEmail: 1 }, { unique: true, partialFilterExpression: { memberEmail: { $type: 'string' } } });
+MemberSchema.index({ memberNick: 1 }, { unique: true, partialFilterExpression: { memberNick: { $type: 'string' } } });
+MemberSchema.index({ memberType: 1, memberStatus: 1, memberRank: 1 }, { name: 'members_ranking_idx' });
+MemberSchema.index({ memberStatus: 1, createdAt: 1 }, { name: 'members_status_created_idx' });
+
 export default MemberSchema;

@@ -21,17 +21,31 @@ export class Booking {
 	@Field(() => String)
 	bookingRefId: ObjectId;
 
+	@Field(() => Date, { nullable: true })
+	checkIn?: Date;
+
+	@Field(() => Date, { nullable: true })
+	checkOut?: Date;
+
 	@Field(() => Int)
 	bookingGuests: number;
 
 	@Field(() => Float)
 	bookingTotalPrice: number;
 
+	@Field(() => String)
+	bookingCurrency: string;
+
+	priceSnapshot: Record<string, unknown>;
+
 	@Field(() => String, { nullable: true })
 	bookingNote?: string;
 
 	@Field(() => Date, { nullable: true })
 	cancelledAt?: Date;
+
+	@Field(() => Date, { nullable: true })
+	expiresAt?: Date;
 
 	@Field(() => Date)
 	createdAt: Date;

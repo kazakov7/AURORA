@@ -1,5 +1,5 @@
 import { Field, Float, Int, ObjectType } from '@nestjs/graphql';
-import { TourCurrensy, TourStatus } from '../../enums/tour.enum';
+import { TourStatus } from '../../enums/tour.enum';
 import { Types } from 'mongoose';
 
 @ObjectType()
@@ -28,8 +28,8 @@ export class Tour {
 	@Field(() => Float)
 	tourPrice: number;
 
-	@Field(() => TourCurrensy)
-	tourCurrency: TourCurrensy;
+	@Field()
+	tourCurrency: string;
 
 	@Field()
 	tourStartDate: Date;
@@ -37,8 +37,11 @@ export class Tour {
 	@Field()
 	tourEndDate: Date;
 
-	@Field(() => Int, { nullable: true })
-	tourCapacity?: number;
+	@Field(() => Int)
+	tourCapacity: number;
+
+	@Field(() => Int)
+	tourReservedSeats: number;
 
 	@Field({ nullable: true })
 	tourDepartureCountry?: string;
@@ -48,9 +51,6 @@ export class Tour {
 
 	@Field({ nullable: true })
 	tourDeparturePlace?: string;
-
-	@Field({ nullable: true })
-	tourDestinationCountry?: string;
 
 	@Field({ nullable: true })
 	tourDestinationCity?: string;
@@ -74,7 +74,7 @@ export class Tour {
 	tourRating: number;
 
 	@Field(() => Int)
-	tourRatingCount: number;
+	tourReviews: number;
 
 	@Field({ nullable: true })
 	deletedAt?: Date;

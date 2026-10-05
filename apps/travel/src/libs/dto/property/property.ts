@@ -1,6 +1,6 @@
-import { Field, Float, InputType, Int, ObjectType } from '@nestjs/graphql';
+import { Field, Float, Int, ObjectType } from '@nestjs/graphql';
 
-import { PropertyAmenity, PropertyStatus, PropertyType } from '../../enums/property.enum';
+import { PropertyStatus, PropertyType } from '../../enums/property.enum';
 import { Types } from 'mongoose';
 @ObjectType()
 export class Property {
@@ -25,38 +25,35 @@ export class Property {
 	@Field(() => PropertyStatus)
 	propertyStatus: PropertyStatus;
 
-	@Field()
-	propertyCountry: string;
+	@Field({ nullable: true })
+	propertyCity?: string;
 
-	@Field()
-	propertyCity: string;
-
-	@Field()
-	propertyAddress: string;
+	@Field({ nullable: true })
+	propertyAddress?: string;
 
 	@Field(() => Float)
-	propertyPricePerNight: number;
+	pricePerNight: number;
 
 	@Field()
-	propertyCurrency: string;
+	currency: string;
 
 	@Field(() => Int)
-	propertyMaxGuests: number;
+	maxGuests: number;
 
 	@Field(() => Int)
-	propertyBedrooms: number;
+	bedrooms: number;
 
 	@Field(() => Int)
-	propertyBeds: number;
+	beds: number;
 
 	@Field(() => Int)
-	propertyBathrooms: number;
-
-	@Field(() => [PropertyAmenity])
-	propertyAmenities: PropertyAmenity[];
+	bathrooms: number;
 
 	@Field(() => [String])
-	properytImages: string[];
+	amenities: string[];
+
+	@Field(() => [String])
+	propertyImages: string[];
 
 	// Statistics
 	@Field(() => Int)
@@ -72,7 +69,7 @@ export class Property {
 	propertyRating: number;
 
 	@Field(() => Int)
-	propertyRatingCount: number;
+	propertyReviews: number;
 
 	@Field(() => Int)
 	propertyComments: number;

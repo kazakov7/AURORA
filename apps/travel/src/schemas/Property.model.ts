@@ -1,5 +1,5 @@
 import { Schema } from 'mongoose';
-import { PropertyAmenity, PropertyCurrensy, PropertyStatus, PropertyType } from '../libs/enums/property.enum';
+import { PropertyStatus, PropertyType } from '../libs/enums/property.enum';
 
 const PropertySchema = new Schema(
 	{
@@ -23,7 +23,7 @@ const PropertySchema = new Schema(
 		propertyStatus: {
 			type: String,
 			enum: PropertyStatus,
-			default: PropertyStatus.ACTIVE,
+			default: PropertyStatus.PENDING,
 			index: true,
 		},
 
@@ -40,67 +40,58 @@ const PropertySchema = new Schema(
 			minLength: 5,
 		},
 
-		propertyCountry: {
-			type: String,
-			required: true,
-			index: true,
-		},
-
 		propertyCity: {
 			type: String,
-			required: true,
-			index: true,
+			trim: true,
 		},
 
 		propertyAddress: {
 			type: String,
 			required: true,
 		},
-		properytImages: [
+		propertyImages: [
 			{
 				type: String,
 			},
 		],
 
-		propertyPricePerNight: {
+		pricePerNight: {
 			type: Number,
 			required: true,
 			min: 0,
 		},
 
-		propertyCurrency: {
+		currency: {
 			type: String,
 			required: true,
-			enum: PropertyCurrensy,
 		},
 
-		propertyMaxGuests: {
+		maxGuests: {
 			type: Number,
 			required: true,
 			min: 1,
 		},
 
-		propertyBedrooms: {
+		bedrooms: {
 			type: Number,
 			default: 1,
 			min: 0,
 		},
 
-		propertyBeds: {
+		beds: {
 			type: Number,
 			default: 1,
 			min: 0,
 		},
 
-		propertyBathrooms: {
+		bathrooms: {
 			type: Number,
 			default: 1,
 			min: 0,
 		},
-		propertyAmenities: [
+		amenities: [
 			{
 				type: String,
-				enum: PropertyAmenity,
 			},
 		],
 
@@ -130,7 +121,7 @@ const PropertySchema = new Schema(
 			max: 5,
 		},
 
-		propertyRatingCount: {
+		propertyReviews: {
 			type: Number,
 			default: 0,
 		},
@@ -149,5 +140,8 @@ const PropertySchema = new Schema(
 		collection: 'properties',
 	},
 );
+
+PropertySchema.index({ destinationId: 1, propertyStatus: 1, pricePerNight: 1 }, { name: 'property_search_idx' });
+PropertySchema.index({ memberId: 1, createdAt: 1 }, { name: 'property_owner_idx' });
 
 export default PropertySchema;

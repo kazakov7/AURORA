@@ -1,5 +1,4 @@
-import { Field, InputType, Int, ObjectType } from '@nestjs/graphql';
-import { MemberType, MemberStatus, MemberAuthType, AgentType } from '../../enums/member.enum';
+import { Field, InputType } from '@nestjs/graphql';
 import { IsEmail, IsNotEmpty, IsOptional, IsString, Length } from 'class-validator';
 
 @InputType()

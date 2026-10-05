@@ -32,6 +32,4 @@ export class Like {
 	@Field(() => Date)
 	createdAt: Date;
 
-	@Field(() => Date)
-	updatedAt: Date;
 }

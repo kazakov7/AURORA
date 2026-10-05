@@ -12,9 +12,10 @@ const FollowSchema = new Schema(
 			required: true,
 		},
 	},
-	{ timestamps: true },
+	{ timestamps: { createdAt: true, updatedAt: false }, collection: 'follows' },
 );
 
-FollowSchema.index({ followingId: 1, followerId: 1 }, { unique: true });
+FollowSchema.index({ followerId: 1, followingId: 1 }, { unique: true, name: 'follows_pair_uq' });
+FollowSchema.index({ followingId: 1, createdAt: 1 }, { name: 'follows_followers_idx' });
 
 export default FollowSchema;

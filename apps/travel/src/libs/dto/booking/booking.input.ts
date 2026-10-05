@@ -1,8 +1,7 @@
 import { Field, Int, InputType } from '@nestjs/graphql';
 import { ObjectId } from 'mongoose';
-import { IsIn, IsNotEmpty, IsOptional, Length, Min, IsInt } from 'class-validator';
-import { BookingCategory, BookingStatus } from '../../enums/booking.enum';
-import { Direction } from '../../enums/common.enum';
+import { IsNotEmpty, IsOptional, Length, Min, IsInt, IsDate } from 'class-validator';
+import { BookingCategory } from '../../enums/booking.enum';
 // import { availableBookingSorts } from '../../config';
 
 @InputType()
@@ -17,6 +16,16 @@ export class BookingInput {
 	@IsNotEmpty()
 	@Field(() => String)
 	bookingRefId: ObjectId;
+
+	@IsOptional()
+	@IsDate()
+	@Field(() => Date, { nullable: true })
+	checkIn?: Date;
+
+	@IsOptional()
+	@IsDate()
+	@Field(() => Date, { nullable: true })
+	checkOut?: Date;
 
 	@IsNotEmpty()
 	@IsInt()

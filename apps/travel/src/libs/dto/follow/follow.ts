@@ -29,8 +29,6 @@ export class Follower {
 	@Field(() => Date)
 	createdAt: Date;
 
-	@Field(() => Date)
-	updatedAt: Date;
 
 	/** from aggregation **/
 
@@ -58,8 +56,6 @@ export class Following {
 	@Field(() => Date)
 	createdAt: Date;
 
-	@Field(() => Date)
-	updatedAt: Date;
 
 	/** from aggregation **/
 

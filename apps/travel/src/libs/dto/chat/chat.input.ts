@@ -13,13 +13,12 @@ import { availableChatSorts } from '../../config';
 export class ChatInput {
 	memberOneId?: ObjectId;
 
-	@IsNotEmpty()
-	@Field(() => String)
-	memberTwoId: ObjectId;
+	@IsOptional()
+	@Field(() => String, { nullable: true })
+	memberTwoId?: ObjectId;
 
 	@IsOptional()
-	@Field(() => ChatType, { nullable: true, defaultValue: ChatType.PRIVATE })
-	chatType?: ChatType;
+	chatType: ChatType = ChatType.DIRECT;
 }
 
 @InputType()

@@ -43,6 +43,9 @@ export class BoardArticle {
 	@Field(() => Date)
 	updatedAt!: Date;
 
+	@Field(() => Date, { nullable: true })
+	deletedAt?: Date;
+
 	/** from aggregation **/
 
 	@Field(() => Member, { nullable: true })

@@ -12,6 +12,9 @@ export class TravelHistory {
 	destinationId: string;
 
 	@Field()
+	bookingId: string;
+
+	@Field()
 	visitedAt: Date;
 
 	@Field()

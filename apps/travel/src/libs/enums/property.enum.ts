@@ -15,31 +15,11 @@ registerEnumType(PropertyType, {
 	name: 'PropertyType',
 });
 export enum PropertyStatus {
-	ACTIVE = 'PENDING',
+	ACTIVE = 'ACTIVE',
 	INACTIVE = 'INACTIVE',
+	PENDING = 'PENDING',
+	REJECTED = 'REJECTED',
 }
 registerEnumType(PropertyStatus, {
 	name: 'PropertyStatus',
-});
-export enum PropertyCurrensy {
-	USD = 'usd',
-	KRW = 'krw',
-}
-registerEnumType(PropertyStatus, {
-	name: 'PropertyStatus',
-});
-export enum PropertyAmenity {
-	WIFI = 'WIFI',
-	PARKING = 'PARKING',
-	AIR_CONDITIONING = 'AIR_CONDITIONING',
-	BREAKFAST = 'BREAKFAST',
-	SWIMMING_POOL = 'SWIMMING_POOL',
-	GYM = 'GYM',
-	SPA = 'SPA',
-	KITCHEN = 'KITCHEN',
-	WASHING_MACHINE = 'WASHING_MACHINE',
-	PET_FRIENDLY = 'PET_FRIENDLY',
-}
-registerEnumType(PropertyAmenity, {
-	name: 'PropertyAmenity',
 });

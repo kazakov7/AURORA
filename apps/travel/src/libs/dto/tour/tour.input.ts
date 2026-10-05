@@ -1,12 +1,9 @@
 import { Field, Float, InputType, Int } from '@nestjs/graphql';
-import { IsArray, IsDate, IsMongoId, IsNotEmpty, IsNumber, IsOptional, IsString, Max, Min } from 'class-validator';
-import { TourCurrensy } from '../../enums/tour.enum';
+import { IsArray, IsDate, IsMongoId, IsNotEmpty, IsNumber, IsOptional, IsString, Min } from 'class-validator';
 import { Types } from 'mongoose';
 @InputType()
 export class TourInput {
-	@Field()
-	@IsNotEmpty()
-	memberId: Types.ObjectId;
+	memberId?: Types.ObjectId;
 
 	@Field()
 	@IsMongoId()
@@ -33,9 +30,10 @@ export class TourInput {
 	@Min(0)
 	tourPrice: number;
 
-	@Field(() => TourCurrensy)
+	@Field()
+	@IsString()
 	@IsNotEmpty()
-	tourCurrency: TourCurrensy;
+	tourCurrency: string;
 
 	@Field()
 	@IsDate()
@@ -45,11 +43,10 @@ export class TourInput {
 	@IsDate()
 	tourEndDate: Date;
 
-	@Field(() => Int, { nullable: true })
-	@IsOptional()
+	@Field(() => Int)
 	@IsNumber()
 	@Min(1)
-	tourCapacity?: number;
+	tourCapacity: number;
 
 	@Field({ nullable: true })
 	@IsOptional()
@@ -65,11 +62,6 @@ export class TourInput {
 	@IsOptional()
 	@IsString()
 	tourDeparturePlace?: string;
-
-	@Field({ nullable: true })
-	@IsOptional()
-	@IsString()
-	tourDestinationCountry?: string;
 
 	@Field({ nullable: true })
 	@IsOptional()

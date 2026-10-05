@@ -1,15 +1,8 @@
 import { Schema } from 'mongoose';
-import { DestinationStatus, DestinationType } from '../libs/enums/destination';
+import { DestinationStatus } from '../libs/enums/destination';
 
 const DestinationSchema = new Schema(
 	{
-		destinationType: {
-			type: String,
-			enum: DestinationType,
-			required: true,
-			index: true,
-		},
-
 		destinationStatus: {
 			type: String,
 			enum: DestinationStatus,
@@ -38,15 +31,9 @@ const DestinationSchema = new Schema(
 			trim: true,
 		},
 
-		destinationCity: {
-			type: String,
-			trim: true,
-		},
+		latitude: Number,
 
-		destinationAddress: {
-			type: String,
-			trim: true,
-		},
+		longitude: Number,
 		destinationImages: {
 			type: [String],
 			default: [],
@@ -82,5 +69,7 @@ const DestinationSchema = new Schema(
 		collection: 'destinations',
 	},
 );
+
+DestinationSchema.index({ destinationStatus: 1, createdAt: 1 }, { name: 'destination_status_created_idx' });
 
 export default DestinationSchema;

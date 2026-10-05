@@ -1,5 +1,5 @@
-import { Field, InputType } from '@nestjs/graphql';
-import { IsEnum, IsOptional, IsString, MaxLength, IsArray, IsNotEmpty } from 'class-validator';
+import { Field, Float, InputType } from '@nestjs/graphql';
+import { IsOptional, IsString, MaxLength, IsArray, IsNotEmpty, IsNumber } from 'class-validator';
 
 @InputType()
 export class DestinationInput {
@@ -18,16 +18,15 @@ export class DestinationInput {
 	@IsNotEmpty()
 	destinationCountry: string;
 
-	@Field(() => String, { nullable: true })
+	@Field(() => Float, { nullable: true })
 	@IsOptional()
-	@IsString()
-	@IsNotEmpty()
-	destinationCity?: string;
+	@IsNumber()
+	latitude?: number;
 
-	@Field(() => String, { nullable: true })
+	@Field(() => Float, { nullable: true })
 	@IsOptional()
-	@IsString()
-	destinationAddress?: string;
+	@IsNumber()
+	longitude?: number;
 
 	@Field(() => [String], { nullable: true })
 	@IsOptional()

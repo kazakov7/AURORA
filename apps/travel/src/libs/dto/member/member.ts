@@ -1,5 +1,5 @@
 import { ObjectType, Field, Int } from '@nestjs/graphql';
-import { MemberType, MemberStatus, MemberAuthType, AgentType } from '../../enums/member.enum';
+import { MemberType, MemberStatus, MemberAuthType } from '../../enums/member.enum';
 import { MeLiked } from '../like/like';
 
 @ObjectType()
@@ -39,19 +39,6 @@ export class Member {
 	@Field({ nullable: true })
 	memberAddress?: string;
 
-	// Agent
-	@Field(() => AgentType, { nullable: true })
-	agentType?: AgentType;
-
-	@Field({ nullable: true })
-	agentCompanyName?: string;
-
-	@Field({ nullable: true })
-	agentBusinessNumber?: string;
-
-	@Field()
-	agentVerified: boolean;
-
 	// Statistics
 	@Field(() => Int)
 	memberFollowers: number;
@@ -82,13 +69,6 @@ export class Member {
 
 	@Field(() => Int)
 	memberRank: number;
-
-	// Moderation
-	@Field(() => Int)
-	memberWarnings: number;
-
-	@Field(() => Int)
-	memberBlocks: number;
 
 	@Field({ nullable: true })
 	lastLoginAt?: Date;

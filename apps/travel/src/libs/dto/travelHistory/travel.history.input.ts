@@ -1,20 +1,13 @@
-import { Field, InputType } from '@nestjs/graphql';
-import { IsDate, IsMongoId, IsNotEmpty } from 'class-validator';
+import { IsMongoId, IsNotEmpty } from 'class-validator';
 
-@InputType()
 export class TravelHistoryInput {
-	@Field()
+	@IsNotEmpty()
 	@IsMongoId()
-	@IsNotEmpty()
-	memberId: string;
+	bookingId: string;
 
-	@Field()
-	@IsMongoId()
-	@IsNotEmpty()
-	destinationId: string;
+	memberId?: string;
 
-	@Field()
-	@IsDate()
-	@IsNotEmpty()
+	destinationId?: string;
+
 	visitedAt: Date;
 }

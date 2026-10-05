@@ -1,5 +1,5 @@
-import { Schema, model, Types } from 'mongoose';
-import { TourCurrensy, TourStatus } from '../libs/enums/tour.enum';
+import { Schema, Types } from 'mongoose';
+import { TourStatus } from '../libs/enums/tour.enum';
 
 const TourSchema = new Schema(
 	{
@@ -40,7 +40,7 @@ const TourSchema = new Schema(
 		tourStatus: {
 			type: String,
 			enum: TourStatus,
-			default: TourStatus.ACTIVE,
+			default: TourStatus.PENDING,
 			index: true,
 		},
 
@@ -53,7 +53,6 @@ const TourSchema = new Schema(
 		tourCurrency: {
 			type: String,
 			required: true,
-			enum: TourCurrensy,
 		},
 
 		tourStartDate: {
@@ -68,7 +67,14 @@ const TourSchema = new Schema(
 
 		tourCapacity: {
 			type: Number,
+			required: true,
 			min: 1,
+		},
+
+		tourReservedSeats: {
+			type: Number,
+			default: 0,
+			min: 0,
 		},
 
 		tourDepartureCountry: {
@@ -80,10 +86,6 @@ const TourSchema = new Schema(
 			trim: true,
 		},
 		tourDeparturePlace: {
-			type: String,
-			trim: true,
-		},
-		tourDestinationCountry: {
 			type: String,
 			trim: true,
 		},
@@ -126,7 +128,7 @@ const TourSchema = new Schema(
 			max: 5,
 		},
 
-		tourRatingCount: {
+		tourReviews: {
 			type: Number,
 			default: 0,
 			min: 0,
@@ -139,7 +141,11 @@ const TourSchema = new Schema(
 	},
 	{
 		timestamps: true,
-		collection: 'properties',
+		collection: 'tours',
 	},
 );
+
+TourSchema.index({ destinationId: 1, tourStatus: 1, tourStartDate: 1 }, { name: 'tour_search_idx' });
+TourSchema.index({ memberId: 1, createdAt: 1 }, { name: 'tour_owner_idx' });
+
 export default TourSchema;

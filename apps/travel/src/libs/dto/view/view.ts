@@ -13,12 +13,10 @@ export class View {
 	@Field(() => String)
 	viewRefId!: Types.ObjectId;
 
-	@Field(() => String)
-	memberId!: Types.ObjectId;
+	@Field(() => String, { nullable: true })
+	memberId?: Types.ObjectId;
 
 	@Field(() => Date)
 	createdAt!: Date;
 
-	@Field(() => Date)
-	updatedAt!: Date;
 }

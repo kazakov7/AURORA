@@ -11,11 +11,14 @@ export class Chat {
 	@Field(() => ChatType)
 	chatType: ChatType;
 
-	@Field(() => String)
-	memberOneId: ObjectId;
+	@Field(() => String, { nullable: true })
+	memberOneId?: ObjectId;
 
-	@Field(() => String)
-	memberTwoId: ObjectId;
+	@Field(() => String, { nullable: true })
+	memberTwoId?: ObjectId;
+
+	@Field(() => String, { nullable: true })
+	directKey?: string;
 
 	@Field(() => String, { nullable: true })
 	lastMessage?: string;

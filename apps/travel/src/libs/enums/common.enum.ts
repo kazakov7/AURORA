@@ -14,6 +14,7 @@ export enum Messages {
 	INVALID_ID = 'Invalid ID!',
 	INVALID_DATA = 'Invalid data!',
 	DUPLICATE_DATA = 'Data already exists!',
+	SELF_SUBSCRIPTION_DENIED = "SELF SUBSCRIPTION DENIED",
 
 	// =========================
 	// AUTH

@@ -1,14 +1,8 @@
-import { Field, InputType } from '@nestjs/graphql';
-import { IsArray, IsEnum, IsOptional, IsString, MaxLength } from 'class-validator';
-import { DestinationStatus } from '../../enums/destination';
+import { Field, Float, InputType } from '@nestjs/graphql';
+import { IsArray, IsOptional, IsString, MaxLength, IsNumber } from 'class-validator';
 
 @InputType()
 export class DestinationUpdate {
-	@Field(() => DestinationStatus, { nullable: true })
-	@IsOptional()
-	@IsEnum(DestinationStatus)
-	destinationStatus?: DestinationStatus;
-
 	@Field(() => String, { nullable: true })
 	@IsOptional()
 	@IsString()
@@ -24,15 +18,15 @@ export class DestinationUpdate {
 	@IsString()
 	destinationCountry?: string;
 
-	@Field(() => String, { nullable: true })
+	@Field(() => Float, { nullable: true })
 	@IsOptional()
-	@IsString()
-	destinationCity?: string;
+	@IsNumber()
+	latitude?: number;
 
-	@Field(() => String, { nullable: true })
+	@Field(() => Float, { nullable: true })
 	@IsOptional()
-	@IsString()
-	destinationAddress?: string;
+	@IsNumber()
+	longitude?: number;
 
 	@Field(() => [String], { nullable: true })
 	@IsOptional()

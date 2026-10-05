@@ -1,4 +1,4 @@
-import { Schema, model, Types } from 'mongoose';
+import { Schema, Types } from 'mongoose';
 
 const TravelHistorySchema = new Schema(
 	{
@@ -16,6 +16,13 @@ const TravelHistorySchema = new Schema(
 			index: true,
 		},
 
+		bookingId: {
+			type: Types.ObjectId,
+			ref: 'Booking',
+			required: true,
+			index: true,
+		},
+
 		visitedAt: {
 			type: Date,
 			required: true,
@@ -28,6 +35,7 @@ const TravelHistorySchema = new Schema(
 	},
 );
 
-TravelHistorySchema.index({ memberId: 1, destinationId: 1 }, { unique: true });
+TravelHistorySchema.index({ memberId: 1, bookingId: 1 }, { unique: true, name: 'travel_member_booking_uq' });
+TravelHistorySchema.index({ memberId: 1, visitedAt: 1 }, { name: 'travel_member_date_idx' });
 
 export default TravelHistorySchema;

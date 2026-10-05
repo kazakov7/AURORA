@@ -1,4 +1,4 @@
-import { Field, Float, InputType, Int, ObjectType } from '@nestjs/graphql';
+import { Field, Float, InputType, Int } from '@nestjs/graphql';
 import {
 	IsArray,
 	IsEnum,
@@ -7,17 +7,16 @@ import {
 	IsNumber,
 	IsOptional,
 	IsString,
-	Max,
 	MaxLength,
 	Min,
 } from 'class-validator';
-import { PropertyAmenity, PropertyType } from '../../enums/property.enum';
+import { PropertyType } from '../../enums/property.enum';
 @InputType()
 export class CreatePropertyInput {
-	@Field(() => String, { nullable: true })
+	@Field(() => String)
 	@IsString()
-	@IsOptional()
-	destinationId?: string;
+	@IsNotEmpty()
+	destinationId: string;
 
 	@Field(() => PropertyType)
 	@IsNotEmpty()
@@ -36,66 +35,60 @@ export class CreatePropertyInput {
 	@MaxLength(3000)
 	propertyDesc?: string;
 
-	@Field()
+	@Field({ nullable: true })
+	@IsOptional()
 	@IsString()
-	@IsNotEmpty()
-	propertyCountry: string;
+	propertyCity?: string;
 
-	@Field()
+	@Field({ nullable: true })
+	@IsOptional()
 	@IsString()
-	@IsNotEmpty()
-	propertyCity: string;
-
-	@Field()
-	@IsString()
-	@IsNotEmpty()
-	propertyAddress: string;
+	propertyAddress?: string;
 
 	@Field(() => Float)
 	@IsNumber()
 	@Min(0)
 	@IsNotEmpty()
-	propertyPricePerNight: number;
+	pricePerNight: number;
 
-	@Field({ nullable: true })
-	@IsOptional()
+	@Field()
 	@IsString()
 	@IsNotEmpty()
-	propertyCurrency?: string;
+	currency: string;
 
 	@Field(() => Int)
 	@IsInt()
 	@Min(1)
 	@IsNotEmpty()
-	propertyMaxGuests: number;
+	maxGuests: number;
 
 	@Field(() => Int, { nullable: true })
 	@IsOptional()
 	@IsInt()
 	@Min(0)
-	propertyBedrooms?: number;
+	bedrooms?: number;
 
 	@Field(() => Int, { nullable: true })
 	@IsOptional()
 	@IsInt()
 	@Min(0)
-	propertyBeds?: number;
+	beds?: number;
 
 	@Field(() => Int, { nullable: true })
 	@IsOptional()
 	@IsInt()
 	@Min(0)
-	propertyBathrooms?: number;
-
-	@Field(() => [PropertyAmenity], { nullable: true })
-	@IsOptional()
-	@IsArray()
-	@IsEnum(PropertyAmenity, { each: true })
-	propertyAmenities?: PropertyAmenity[];
+	bathrooms?: number;
 
 	@Field(() => [String], { nullable: true })
 	@IsOptional()
 	@IsArray()
 	@IsString({ each: true })
-	images?: string[];
+	amenities?: string[];
+
+	@Field(() => [String], { nullable: true })
+	@IsOptional()
+	@IsArray()
+	@IsString({ each: true })
+	propertyImages?: string[];
 }

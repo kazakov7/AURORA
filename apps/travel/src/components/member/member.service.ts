@@ -7,7 +7,7 @@ import { LoginInput, MemberInput } from '../../libs/dto/member/member.input';
 import { Messages } from '../../libs/enums/common.enum';
 import { Message } from '../../libs/dto/message/message';
 import { MemberStatus } from '../../libs/enums/member.enum';
-import { T } from '../../libs/types/common';
+import { StatisticModifier, T } from '../../libs/types/common';
 import { ViewGroup } from '../../libs/enums/view.enum';
 import { ViewService } from '../view/view.service';
 import { LikeGroup } from '../../libs/enums/like.enum';
@@ -20,7 +20,7 @@ export class MemberService {
 		private authService: AuthService,
 		private viewService: ViewService,
 		private likeService: LikeService,
-	) {}
+	) { }
 
 	public async signup(input: MemberInput): Promise<Member> {
 		input.memberPassword = await this.authService.hashPassword(input.memberPassword!);
@@ -107,6 +107,16 @@ export class MemberService {
 			// result.meFollowed = await this.checkSubscription(memberId, targetId);
 		}
 
+		return result;
+	}
+
+	public async memberStatusEditor(input: StatisticModifier): Promise<Member> {
+		console.log('executed');
+		const { _id, targetKey, modifier } = input;
+		const result = await this.memberModel
+			.findByIdAndUpdate(_id, { $inc: { [targetKey]: modifier } }, { new: true })
+			.exec();
+		if (!result) throw new InternalServerErrorException(Messages.UPDATE_FAILED);
 		return result;
 	}
 }

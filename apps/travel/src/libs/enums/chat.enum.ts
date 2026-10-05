@@ -1,7 +1,7 @@
 import { registerEnumType } from '@nestjs/graphql';
 
 export enum ChatType {
-	PRIVATE = 'PRIVATE',
+	DIRECT = 'DIRECT',
 	GLOBAL = 'GLOBAL',
 }
 registerEnumType(ChatType, { name: 'ChatType' });

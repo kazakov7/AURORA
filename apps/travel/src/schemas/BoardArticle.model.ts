@@ -12,7 +12,7 @@ const BoardArticleSchema = new Schema(
 		articleStatus: {
 			type: String,
 			enum: BoardArticleStatus,
-			default: BoardArticleStatus.ACTIVE,
+			default: BoardArticleStatus.DRAFT,
 		},
 
 		articleTitle: {
@@ -49,8 +49,16 @@ const BoardArticleSchema = new Schema(
 			required: true,
 			ref: 'Member',
 		},
+
+		deletedAt: {
+			type: Date,
+			default: null,
+		},
 	},
-	{ timestamps: true, collection: 'boardArticles' },
+	{ timestamps: true, collection: 'articles' },
 );
+
+BoardArticleSchema.index({ articleStatus: 1, articleCategory: 1, createdAt: 1 }, { name: 'articles_feed_idx' });
+BoardArticleSchema.index({ memberId: 1, createdAt: 1 }, { name: 'articles_author_idx' });
 
 export default BoardArticleSchema;

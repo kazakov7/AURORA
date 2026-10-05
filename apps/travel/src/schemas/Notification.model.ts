@@ -32,7 +32,6 @@ const NotificationSchema = new Schema(
 
 		authorId: {
 			type: Schema.Types.ObjectId,
-			required: true,
 			ref: 'Member',
 		},
 
@@ -42,17 +41,12 @@ const NotificationSchema = new Schema(
 			ref: 'Member',
 		},
 
-		propertyId: {
-			type: Schema.Types.ObjectId,
-			ref: 'Property',
-		},
-
-		articleId: {
-			type: Schema.Types.ObjectId,
-			ref: 'BoardArticle',
-		},
+		notificationRefId: Schema.Types.ObjectId,
 	},
-	{ timestamps: true, collection: 'notifications' },
+	{ timestamps: { createdAt: true, updatedAt: false }, collection: 'notifications' },
 );
+
+NotificationSchema.index({ receiverId: 1, notificationStatus: 1, createdAt: 1 }, { name: 'notifications_inbox_idx' });
+NotificationSchema.index({ notificationGroup: 1, notificationRefId: 1, createdAt: 1 }, { name: 'notifications_target_idx' });
 
 export default NotificationSchema;

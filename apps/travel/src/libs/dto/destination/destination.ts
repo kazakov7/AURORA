@@ -1,13 +1,10 @@
-import { Field, Int, ObjectType } from '@nestjs/graphql';
-import { DestinationStatus, DestinationType } from '../../enums/destination';
+import { Field, Float, Int, ObjectType } from '@nestjs/graphql';
+import { DestinationStatus } from '../../enums/destination';
 
 @ObjectType()
 export class Destination {
 	@Field(() => String)
 	_id: string;
-
-	@Field(() => DestinationType)
-	destinationType: DestinationType;
 
 	@Field(() => DestinationStatus)
 	destinationStatus: DestinationStatus;
@@ -21,11 +18,11 @@ export class Destination {
 	@Field(() => String)
 	destinationCountry: string;
 
-	@Field(() => String, { nullable: true })
-	destinationCity?: string;
+	@Field(() => Float, { nullable: true })
+	latitude?: number;
 
-	@Field(() => String, { nullable: true })
-	destinationAddress?: string;
+	@Field(() => Float, { nullable: true })
+	longitude?: number;
 
 	@Field(() => [String])
 	destinationImages: string[];

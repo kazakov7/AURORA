@@ -20,9 +20,10 @@ const LikeSchema = new Schema(
 			ref: 'Member',
 		},
 	},
-	{ timestamps: true, collection: 'likes' },
+	{ timestamps: { createdAt: true, updatedAt: false }, collection: 'likes' },
 );
 
-LikeSchema.index({ memberId: 1, likeRefId: 1 }, { unique: true });
+LikeSchema.index({ memberId: 1, likeGroup: 1, likeRefId: 1 }, { unique: true, name: 'likes_unique_member_target' });
+LikeSchema.index({ likeGroup: 1, likeRefId: 1 }, { name: 'likes_target_idx' });
 
 export default LikeSchema;

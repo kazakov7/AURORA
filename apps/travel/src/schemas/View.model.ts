@@ -16,13 +16,13 @@ const ViewSchema = new Schema(
 
 		memberId: {
 			type: Schema.Types.ObjectId,
-			required: true,
 			ref: 'Member',
 		},
 	},
-	{ timestamps: true, collection: 'views' },
+	{ timestamps: { createdAt: true, updatedAt: false }, collection: 'views' },
 );
 
-ViewSchema.index({ memberId: 1, viewRefId: 1 }, { unique: true });
+ViewSchema.index({ viewGroup: 1, viewRefId: 1, createdAt: 1 }, { name: 'views_target_idx' });
+ViewSchema.index({ memberId: 1, createdAt: 1 }, { name: 'views_member_idx' });
 
 export default ViewSchema;

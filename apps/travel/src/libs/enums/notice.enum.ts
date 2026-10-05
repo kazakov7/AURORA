@@ -12,7 +12,7 @@ registerEnumType(NoticeCategory, {
 export enum NoticeStatus {
 	HOLD = 'HOLD',
 	ACTIVE = 'ACTIVE',
-	DELETE = 'DELETE',
+	DELETED = 'DELETED',
 }
 registerEnumType(NoticeStatus, {
 	name: 'NoticeStatus',

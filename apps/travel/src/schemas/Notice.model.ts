@@ -1,4 +1,4 @@
-import mongoose, { Schema } from 'mongoose';
+import { Schema } from 'mongoose';
 import { NoticeCategory, NoticeStatus } from '../libs/enums/notice.enum';
 
 const NoticeSchema = new Schema(
@@ -12,7 +12,7 @@ const NoticeSchema = new Schema(
 		noticeStatus: {
 			type: String,
 			enum: NoticeStatus,
-			default: NoticeStatus.ACTIVE,
+			default: NoticeStatus.HOLD,
 		},
 
 		noticeTitle: {
@@ -33,5 +33,7 @@ const NoticeSchema = new Schema(
 	},
 	{ timestamps: true, collection: 'notices' },
 );
+
+NoticeSchema.index({ noticeStatus: 1, noticeCategory: 1, createdAt: 1 }, { name: 'notices_feed_idx' });
 
 export default NoticeSchema;
