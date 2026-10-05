@@ -1,9 +1,12 @@
 import { InputType, Field, Float, Int } from '@nestjs/graphql';
 import { IsOptional, IsEnum, IsString, MaxLength, IsNumber, Min, IsInt, IsArray } from 'class-validator';
 import { PropertyType } from '../../enums/property.enum';
-
+import { Types } from 'mongoose';
 @InputType()
 export class UpdatePropertyInput {
+	@Field()
+	_id: Types.ObjectId;
+
 	@Field(() => PropertyType, { nullable: true })
 	@IsOptional()
 	@IsEnum(PropertyType)
@@ -77,4 +80,5 @@ export class UpdatePropertyInput {
 	@IsArray()
 	@IsString({ each: true })
 	propertyImages?: string[];
+
 }

@@ -1,15 +1,7 @@
 import { Args, Mutation, Query, Resolver } from '@nestjs/graphql';
 import { PropertyService } from './property.service';
 import { UseGuards } from '@nestjs/common';
-import * as mongoose from 'mongoose';
 import { Properties, Property } from '../../libs/dto/property/property';
-import {
-	AgentPropertiesInquiry,
-	AllPropertiesInquiry,
-	OrdinaryInquery,
-	PropertiesInquiry,
-	PropertyInput,
-} from '../../libs/dto/property/property.input';
 import { MemberType } from '../../libs/enums/member.enum';
 import { AuthMember } from '../auth/decorators/authMember.decorator';
 import { Roles } from '../auth/decorators/roles.decorator';
@@ -17,20 +9,20 @@ import { RolesGuard } from '../auth/guards/roles.guard';
 import { shapeIntoMongoObjectId } from '../../libs/config';
 import { WithoutGuard } from '../auth/guards/without.guard';
 import { Types } from 'mongoose';
-import { PropertyUpdate } from '../../libs/dto/property/property.update';
-import { Member } from '../../libs/dto/member/member';
 import { AuthGuard } from '../auth/guards/auth.guard';
+import { AgentPropertiesInquiry, AllPropertiesInquiry, CreatePropertyInput, OrdinaryInquery, PropertiesInquiry } from '../../libs/dto/property/property.input';
+import { UpdatePropertyInput } from '../../libs/dto/property/property.update';
 
 @Resolver()
 export class PropertyResolver {
-	constructor(private readonly propertyService: PropertyService) {}
+	constructor(private readonly propertyService: PropertyService) { }
 
 	@Roles(MemberType.AGENT)
 	@UseGuards(RolesGuard)
 	@Mutation(() => Property)
 	public async createProperty(
-		@Args('input') input: PropertyInput,
-		@AuthMember('_id') memberId: mongoose.ObjectId,
+		@Args('input') input: CreatePropertyInput,
+		@AuthMember('_id') memberId: Types.ObjectId,
 	): Promise<Property> {
 		console.log('Mutation: createProperty');
 		input.memberId = memberId;
@@ -54,7 +46,7 @@ export class PropertyResolver {
 	@UseGuards(RolesGuard)
 	@Mutation(() => Property)
 	public async updateProperty(
-		@Args('input') input: PropertyUpdate,
+		@Args('input') input: UpdatePropertyInput,
 		@AuthMember('_id') memberId: Types.ObjectId,
 	): Promise<Property> {
 		console.log('Mutation: updateProperty');
@@ -131,7 +123,7 @@ export class PropertyResolver {
 	@UseGuards(RolesGuard)
 	@Mutation(() => Property)
 	public async updatePropertyByAdmin(
-		@Args('input') input: PropertyUpdate,
+		@Args('input') input: UpdatePropertyInput,
 	): Promise<Property> {
 		console.log('Mutation: updatePropertyByAdmin');
 

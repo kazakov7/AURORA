@@ -2,6 +2,7 @@ import { Field, Float, Int, ObjectType } from '@nestjs/graphql';
 
 import { PropertyStatus, PropertyType } from '../../enums/property.enum';
 import { Types } from 'mongoose';
+import { TotalCounter } from '../member/member';
 @ObjectType()
 export class Property {
 	@Field()
@@ -82,4 +83,12 @@ export class Property {
 
 	@Field()
 	updatedAt: Date;
+}
+@ObjectType()
+export class Properties {
+	@Field(() => [Property])
+	list!: Property[];
+
+	@Field(() => [TotalCounter], { nullable: true })
+	metaCounter?: TotalCounter[];
 }
