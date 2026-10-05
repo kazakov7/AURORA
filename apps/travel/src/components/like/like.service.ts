@@ -6,24 +6,24 @@ import { LikeInput } from '../../libs/dto/like/like.input';
 import { InputType } from '@nestjs/graphql';
 import { Messages } from '../../libs/enums/common.enum';
 import { T } from '../../libs/types/common';
-// import { OrdinaryInquery } from '../../libs/dto/property/property.input';
-// import { promises } from 'dns';
-// import { Properties } from '../../libs/dto/property/property';
-// import { LikeGroup } from '../../libs/enums/like.enum';
-// import { lookupFavorite } from '../../libs/config';
+import { OrdinaryInquery } from '../../libs/dto/property/property.input';
+import { Properties } from '../../libs/dto/property/property';
+import { LikeGroup } from '../../libs/enums/like.enum';
+import { lookupFavorite } from '../../libs/config';
+
 
 @Injectable()
 export class LikeService {
 	constructor(
 		@InjectModel('Like')
 		private readonly likeModel: Model<Like>,
-	) {}
+	) { }
 
 	public async toggleLike(input: LikeInput): Promise<number> {
 		const search: T = {
-				memberId: input.memberId,
-				likeRefId: input.likeRefId,
-			},
+			memberId: input.memberId,
+			likeRefId: input.likeRefId,
+		},
 			exist = await this.likeModel.findOne(search).exec();
 		let modifier = 1;
 
@@ -50,43 +50,43 @@ export class LikeService {
 		return result ? [{ memberId: memberId, likeRefId: likeRefId, myFavorite: true }] : [];
 	}
 
-	// public async getFavoriteProperties(
-	// 	memberId: Types.ObjectId,
-	// 	input: OrdinaryInquery,
-	// ): Promise<Properties> {
-	// 	const { page, limit } = input;
-	// 	const match: T = { likeGroup: LikeGroup.PROPERTY, memberId: memberId };
+	public async getFavoriteProperties(
+		memberId: Types.ObjectId,
+		input: OrdinaryInquery,
+	): Promise<Properties> {
+		const { page, limit } = input;
+		const match: T = { likeGroup: LikeGroup.PROPERTY, memberId: memberId };
 
-	// 	const data: T = await this.likeModel
-	// 		.aggregate([
-	// 			{ $match: match },
-	// 			{ $sort: { updatedAt: -1 } },
-	// 			{
-	// 				$lookup: {
-	// 					from: 'properties',
-	// 					localField: 'likeRefId',
-	// 					foreignField: '_id',
-	// 					as: 'favoriteProperty',
-	// 				},
-	// 			},
-	// 			{ $unwind: '$favoriteProperty' },
-	// 			{
-	// 				$facet: {
-	// 					list: [
-	// 						{ $skip: (page - 1) * limit },
-	// 						{ $limit: limit },
-	// 						lookupFavorite,
-	// 						{ $unwind: '$favoriteProperty.memberData' },
-	// 					],
-	// 					metaCounter: [{ $count: 'total' }],
-	// 				},
-	// 			},
-	// 		])
-	// 		.exec();
+		const data: T = await this.likeModel
+			.aggregate([
+				{ $match: match },
+				{ $sort: { updatedAt: -1 } },
+				{
+					$lookup: {
+						from: 'properties',
+						localField: 'likeRefId',
+						foreignField: '_id',
+						as: 'favoriteProperty',
+					},
+				},
+				{ $unwind: '$favoriteProperty' },
+				{
+					$facet: {
+						list: [
+							{ $skip: (page - 1) * limit },
+							{ $limit: limit },
+							lookupFavorite,
+							{ $unwind: '$favoriteProperty.memberData' },
+						],
+						metaCounter: [{ $count: 'total' }],
+					},
+				},
+			])
+			.exec();
 
-	// 	const result: Properties = { list: [], metaCounter: data[0].metaCounter };
-	// 	result.list = data[0].list.map((ele) => ele.favoriteProperty);
+		const result: Properties = { list: [], metaCounter: data[0].metaCounter };
+		result.list = data[0].list.map((ele) => ele.favoriteProperty);
 
-	// 	return result;
-	// }
+		return result;
+	}
 }

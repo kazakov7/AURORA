@@ -9,20 +9,18 @@ import { Properties, Property } from '../../libs/dto/property/property';
 import {
 	AgentPropertiesInquiry,
 	AllPropertiesInquiry,
+	CreatePropertyInput,
 	OrdinaryInquery,
 	PropertiesInquiry,
-	PropertyInput,
 } from '../../libs/dto/property/property.input';
-import { Message } from '../../libs/enums/common.enum';
-import { AuthService } from '../auth/auth.service';
 import { MemberService } from '../member/member.service';
 import { ViewService } from '../view/view.service';
 import { PropertyStatus } from '../../libs/enums/property.enum';
 import { ViewGroup } from '../../libs/enums/view.enum';
 import { T, StatisticModifier } from '../../libs/types/common';
-import { PropertyUpdate } from '../../libs/dto/property/property.update';
+
 import moment from 'moment';
-import { Direction } from '../../libs/enums/comment.enum';
+
 import {
 	lookUpAuthMemberLiked,
 	lookupMember,
@@ -30,18 +28,19 @@ import {
 } from '../../libs/config';
 import { LikeGroup } from '../../libs/enums/like.enum';
 import { LikeService } from '../like/like.service';
-import { InputType } from '@nestjs/graphql';
+import { Direction, Messages } from '../../libs/enums/common.enum';
+import { UpdatePropertyInput } from '../../libs/dto/property/property.update';
 
 @Injectable()
 export class PropertyService {
 	constructor(
 		@InjectModel('Property')
-		private readonly propertyModel: Model<null>,
+		private readonly propertyModel: Model<Property>,
 		private memberService: MemberService,
 		private likeService: LikeService,
 		private viewService: ViewService,
-	) {}
-	public async createProperty(input: PropertyInput): Promise<Property> {
+	) { }
+	public async createProperty(input: CreatePropertyInput): Promise<Property> {
 		try {
 			const result = await this.propertyModel.create(input);
 			// increase memberProperties
@@ -54,7 +53,7 @@ export class PropertyService {
 			return result;
 		} catch (err) {
 			console.log('Error, Service.model:', err instanceof Error ? err.message : err);
-			throw new BadRequestException(Message.CREATE_FAILED);
+			throw new BadRequestException(Messages.CREATE_FAILED);
 		}
 	}
 
@@ -72,7 +71,7 @@ export class PropertyService {
 			.lean<Property>()
 			.exec();
 
-		if (!targetProperty) throw new InternalServerErrorException(Message.NO_DATA_FOUND);
+		if (!targetProperty) throw new InternalServerErrorException(Messages.NO_DATA_FOUND);
 
 		if (memberId) {
 			const viewInput = {
@@ -102,7 +101,6 @@ export class PropertyService {
 		}
 
 		targetProperty.memberData = await this.memberService.getMember(
-			// @ts-ignore
 			null,
 			targetProperty.memberId as unknown as Types.ObjectId,
 		);
@@ -127,7 +125,7 @@ export class PropertyService {
 
 	public async updateProperty(
 		memberId: Types.ObjectId,
-		input: PropertyUpdate,
+		input: UpdatePropertyInput,
 	): Promise<Property> {
 		let { propertyStatus, soldAt, deletedAt } = input;
 		console.log(memberId);
@@ -138,8 +136,8 @@ export class PropertyService {
 			propertyStatus: PropertyStatus.ACTIVE,
 		};
 
-		if (propertyStatus === PropertyStatus.SOLD) soldAt = moment().toDate();
-		else if (propertyStatus === PropertyStatus.DELETE) deletedAt = moment().toDate();
+		if (propertyStatus === PropertyStatus.INACTIVE) soldAt = moment().toDate();
+		else if (propertyStatus === PropertyStatus.REJECTED) deletedAt = moment().toDate();
 		console.log('test', soldAt, deletedAt);
 
 		const result = await this.propertyModel
@@ -149,7 +147,7 @@ export class PropertyService {
 			})
 			.exec();
 
-		if (!result) throw new InternalServerErrorException(Message.UPDATE_FAILED);
+		if (!result) throw new InternalServerErrorException(Messages.UPDATE_FAILED);
 
 		if (soldAt || deletedAt) {
 			await this.memberService.memberStatusEditor({
@@ -197,7 +195,7 @@ export class PropertyService {
 			])
 			.exec();
 
-		if (!result.length) throw new InternalServerErrorException(Message.NO_DATA_FOUND);
+		if (!result.length) throw new InternalServerErrorException(Messages.NO_DATA_FOUND);
 
 		console.log('dddd', result[0]);
 		return result[0];
@@ -293,7 +291,7 @@ export class PropertyService {
 			_id: likeRefId,
 			propertyStatus: PropertyStatus.ACTIVE,
 		});
-		if (!target) throw new InternalServerErrorException(Message.NO_DATA_FOUND);
+		if (!target) throw new InternalServerErrorException(Messages.NO_DATA_FOUND);
 
 		const input = {
 			memberId: memberId,
@@ -309,7 +307,7 @@ export class PropertyService {
 			modifier: modifier,
 		});
 
-		if (!result) throw new InternalServerErrorException(Message.SOMETHING_WENT_WRONG);
+		if (!result) throw new InternalServerErrorException(Messages.SOMETHING_WENT_WRONG);
 		return result;
 	}
 
@@ -319,12 +317,12 @@ export class PropertyService {
 	): Promise<Properties> {
 		const { propertyStatus } = input.search;
 
-		if (propertyStatus === PropertyStatus.DELETE)
-			throw new BadRequestException(Message.NOT_ALLOWED_REQUEST);
+		if (propertyStatus === PropertyStatus.INACTIVE)
+			throw new BadRequestException(Messages.BAD_REQUEST);
 
 		const match: T = {
 			memberId: memberId,
-			propertyStatus: propertyStatus ?? { $ne: PropertyStatus.DELETE },
+			propertyStatus: propertyStatus ?? { $ne: PropertyStatus.INACTIVE },
 		};
 
 		const sort: T = {
@@ -351,7 +349,7 @@ export class PropertyService {
 			])
 			.exec();
 
-		if (!result.length) throw new InternalServerErrorException(Message.NO_DATA_FOUND);
+		if (!result.length) throw new InternalServerErrorException(Messages.NO_DATA_FOUND);
 
 		return result[0];
 	}
@@ -379,12 +377,12 @@ export class PropertyService {
 				},
 			},
 		]);
-		if (!result.length) throw new InternalServerErrorException(Message.NO_DATA_FOUND);
+		if (!result.length) throw new InternalServerErrorException(Messages.NO_DATA_FOUND);
 
 		return result[0];
 	}
 
-	public async updatePropertyByAdmin(input: PropertyUpdate): Promise<Property> {
+	public async updatePropertyByAdmin(input: UpdatePropertyInput): Promise<Property> {
 		let { propertyStatus, soldAt, deletedAt } = input;
 
 		const search: T = {
@@ -392,8 +390,8 @@ export class PropertyService {
 			propertyStatus: PropertyStatus.ACTIVE,
 		};
 
-		if (propertyStatus === PropertyStatus.SOLD) soldAt = moment().toDate();
-		else if (propertyStatus === PropertyStatus.DELETE) deletedAt = moment().toDate();
+		if (propertyStatus === PropertyStatus.INACTIVE) soldAt = moment().toDate();
+		else if (propertyStatus === PropertyStatus.REJECTED) deletedAt = moment().toDate();
 
 		const result = await this.propertyModel
 			// @ts-ignore
@@ -402,7 +400,7 @@ export class PropertyService {
 			})
 			.exec();
 
-		if (!result) throw new InternalServerErrorException(Message.UPDATE_FAILED);
+		if (!result) throw new InternalServerErrorException(Messages.UPDATE_FAILED);
 
 		if (soldAt || deletedAt) {
 			await this.memberService.memberStatusEditor({
@@ -420,12 +418,12 @@ export class PropertyService {
 	public async removePropertyByAdmin(propertyId: Types.ObjectId): Promise<Property> {
 		const search: T = {
 			_id: propertyId,
-			propertyStatus: PropertyStatus.DELETE,
+			propertyStatus: PropertyStatus.INACTIVE,
 		};
 
 		const result = await this.propertyModel.findOneAndDelete(search).exec();
 
-		if (!result) throw new InternalServerErrorException(Message.REMOVE_FAILED);
+		if (!result) throw new InternalServerErrorException(Messages.REMOVE_FAILED);
 
 		return result;
 	}
