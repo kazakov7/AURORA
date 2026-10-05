@@ -28,7 +28,7 @@ export class CreatePropertyInput {
 	@IsEnum(PropertyType)
 	propertyType: PropertyType;
 
-	@Field()
+	@Field(() => String)
 	@IsString()
 	@IsNotEmpty()
 	@MaxLength(200)
@@ -45,7 +45,7 @@ export class CreatePropertyInput {
 	@IsString()
 	propertyCity?: string;
 
-	@Field()
+	@Field(() => String)
 	@IsNotEmpty()
 	@IsString()
 	propertyAddress: string;
@@ -56,7 +56,7 @@ export class CreatePropertyInput {
 	@IsNotEmpty()
 	pricePerNight: number;
 
-	@Field()
+	@Field(() => String)
 	@IsString()
 	@IsNotEmpty()
 	currency: string;

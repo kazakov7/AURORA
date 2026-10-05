@@ -5,7 +5,7 @@ import { Types } from 'mongoose';
 
 @InputType()
 export class UpdatePropertyInput {
-	@Field()
+	@Field(() => String)
 	_id: Types.ObjectId;
 
 	@Field(() => PropertyType, { nullable: true })

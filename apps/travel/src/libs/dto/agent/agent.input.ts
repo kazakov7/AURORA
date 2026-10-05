@@ -10,17 +10,17 @@ export class AgentInput {
 	@IsNotEmpty()
 	agentType: AgentType;
 
-	@Field()
+	@Field(() => String)
 	@IsString()
 	@IsNotEmpty()
 	companyName: string;
 
-	@Field()
+	@Field(() => String)
 	@IsString()
 	@IsNotEmpty()
 	businessNumber: string;
 
-	@Field()
+	@Field(() => String)
 	@IsString()
 	@IsNotEmpty()
 	companyAddress: string;

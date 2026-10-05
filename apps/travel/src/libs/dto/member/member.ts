@@ -5,7 +5,7 @@ import { MeFollowed } from '../follow/follow';
 
 @ObjectType()
 export class Member {
-	@Field()
+	@Field(() => String)
 	_id: string;
 
 	@Field(() => MemberType)
@@ -23,7 +23,7 @@ export class Member {
 	@Field({ nullable: true })
 	memberEmail?: string;
 
-	@Field()
+	@Field(() => String)
 	memberNick: string;
 
 	memberPassword?: string;
@@ -85,10 +85,10 @@ export class Member {
 	@Field({ nullable: true })
 	deletedAt?: Date;
 
-	@Field()
+	@Field(() => String)
 	createdAt: Date;
 
-	@Field()
+	@Field(() => String)
 	updatedAt: Date;
 
 

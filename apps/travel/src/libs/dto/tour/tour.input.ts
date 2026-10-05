@@ -28,13 +28,13 @@ export class TourInput {
 	@IsNotEmpty()
 	destinationId: string;
 
-	@Field()
+	@Field(() => String)
 	@IsString()
 	@IsNotEmpty()
 	@MaxLength(200)
 	tourName: string;
 
-	@Field()
+	@Field(() => String)
 	@IsString()
 	@IsNotEmpty()
 	tourSlug: string;
@@ -50,16 +50,16 @@ export class TourInput {
 	@Min(0)
 	tourPrice: number;
 
-	@Field()
+	@Field(() => String)
 	@IsString()
 	@IsNotEmpty()
 	tourCurrency: string;
 
-	@Field()
+	@Field(() => String)
 	@IsDate()
 	tourStartDate: Date;
 
-	@Field()
+	@Field(() => String)
 	@IsDate()
 	tourEndDate: Date;
 

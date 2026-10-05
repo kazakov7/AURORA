@@ -12,10 +12,10 @@ export class Notice {
 	@Field(() => NoticeStatus)
 	noticeStatus: NoticeStatus;
 
-	@Field()
+	@Field(() => String)
 	noticeTitle: string;
 
-	@Field()
+	@Field(() => String)
 	noticeContent: string;
 
 	@Field(() => String)

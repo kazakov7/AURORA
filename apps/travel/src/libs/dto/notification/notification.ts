@@ -24,7 +24,7 @@ export class Notification {
 	@Field(() => String, { nullable: true })
 	notificationRefId?: string;
 
-	@Field()
+	@Field(() => String)
 	notificationTitle: string;
 
 	@Field({ nullable: true })

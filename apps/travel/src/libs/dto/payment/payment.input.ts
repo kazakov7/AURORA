@@ -21,7 +21,7 @@ export class StartPropertyPaymentInput {
 	@Min(1)
 	bookingGuests!: number;
 
-	@Field()
+	@Field(() => String)
 	@IsUUID()
 	idempotencyKey!: string;
 
@@ -43,7 +43,7 @@ export class StartTourPaymentInput {
 	@Min(1)
 	bookingGuests!: number;
 
-	@Field()
+	@Field(() => String)
 	@IsUUID()
 	idempotencyKey!: string;
 

@@ -2,21 +2,21 @@ import { Field, ObjectType } from '@nestjs/graphql';
 
 @ObjectType()
 export class TravelHistory {
-	@Field()
+	@Field(() => String)
 	_id: string;
 
-	@Field()
+	@Field(() => String)
 	memberId: string;
 
-	@Field()
+	@Field(() => String)
 	destinationId: string;
 
-	@Field()
+	@Field(() => String)
 	bookingId: string;
 
-	@Field()
+	@Field(() => String)
 	visitedAt: Date;
 
-	@Field()
+	@Field(() => String)
 	createdAt: Date;
 }

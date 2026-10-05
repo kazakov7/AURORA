@@ -6,10 +6,10 @@ import { Member, TotalCounter } from '../member/member';
 import { MeLiked } from '../like/like';
 @ObjectType()
 export class Property {
-	@Field()
+	@Field(() => String)
 	_id: Types.ObjectId;
 
-	@Field()
+	@Field(() => String)
 	memberId: Types.ObjectId;
 
 	@Field(() => String)
@@ -18,7 +18,7 @@ export class Property {
 	@Field(() => PropertyType)
 	propertyType: PropertyType;
 
-	@Field()
+	@Field(() => String)
 	propertyName: string;
 
 	@Field({ nullable: true })
@@ -36,7 +36,7 @@ export class Property {
 	@Field(() => Float)
 	pricePerNight: number;
 
-	@Field()
+	@Field(() => String)
 	currency: string;
 
 	@Field(() => Int)
@@ -79,10 +79,10 @@ export class Property {
 	@Field({ nullable: true })
 	deletedAt?: Date;
 
-	@Field()
+	@Field(() => String)
 	createdAt: Date;
 
-	@Field()
+	@Field(() => String)
 	updatedAt: Date;
 
 	@Field(() => String, { nullable: true })

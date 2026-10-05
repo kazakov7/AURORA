@@ -10,12 +10,12 @@ export class NoticeInput {
 	@IsNotEmpty()
 	noticeCategory: NoticeCategory;
 
-	@Field()
+	@Field(() => String)
 	@IsString()
 	@Length(3, 200)
 	noticeTitle: string;
 
-	@Field()
+	@Field(() => String)
 	@IsString()
 	@Length(3, 10000)
 	noticeContent: string;

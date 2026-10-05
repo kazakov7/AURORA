@@ -12,13 +12,13 @@ export class Agent {
 	@Field(() => AgentType)
 	agentType: AgentType;
 
-	@Field()
+	@Field(() => String)
 	companyName: string;
 
-	@Field()
+	@Field(() => String)
 	businessNumber: string;
 
-	@Field()
+	@Field(() => String)
 	companyAddress: string;
 
 	@Field({ nullable: true })

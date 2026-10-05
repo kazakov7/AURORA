@@ -6,19 +6,19 @@ import { MeLiked } from '../like/like';
 
 @ObjectType()
 export class Tour {
-	@Field()
+	@Field(() => String)
 	_id: Types.ObjectId;
 
-	@Field()
+	@Field(() => String)
 	memberId: Types.ObjectId;
 
-	@Field()
+	@Field(() => String)
 	destinationId: Types.ObjectId;
 
-	@Field()
+	@Field(() => String)
 	tourName: string;
 
-	@Field()
+	@Field(() => String)
 	tourSlug: string;
 
 	@Field({ nullable: true })
@@ -30,13 +30,13 @@ export class Tour {
 	@Field(() => Float)
 	tourPrice: number;
 
-	@Field()
+	@Field(() => String)
 	tourCurrency: string;
 
-	@Field()
+	@Field(() => String)
 	tourStartDate: Date;
 
-	@Field()
+	@Field(() => String)
 	tourEndDate: Date;
 
 	@Field(() => Int)
@@ -81,10 +81,10 @@ export class Tour {
 	@Field({ nullable: true })
 	deletedAt?: Date;
 
-	@Field()
+	@Field(() => String)
 	createdAt: Date;
 
-	@Field()
+	@Field(() => String)
 	updatedAt: Date;
 
 	@Field(() => Member)

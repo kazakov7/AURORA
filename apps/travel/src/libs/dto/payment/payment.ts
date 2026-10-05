@@ -21,13 +21,13 @@ export class Payment {
 	@Field(() => Float)
 	paymentAmount: number;
 
-	@Field()
+	@Field(() => String)
 	paymentCurrency: string;
 
-	@Field()
+	@Field(() => String)
 	providerPaymentId: string;
 
-	@Field()
+	@Field(() => String)
 	idempotencyKey: string;
 
 	@Field({ nullable: true })
@@ -48,6 +48,6 @@ export class PaymentCheckout {
 	@Field(() => Payment)
 	payment!: Payment;
 
-	@Field()
+	@Field(() => String)
 	clientSecret!: string;
 }

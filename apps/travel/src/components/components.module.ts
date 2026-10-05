@@ -42,4 +42,4 @@ import { TravelHistoryModule } from './travel-history/travel-history.module';
 		TravelHistoryModule,
 	],
 })
-export class ComponentsModule {}
+export class ComponentsModule { }
