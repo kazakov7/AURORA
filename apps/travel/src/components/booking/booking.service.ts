@@ -19,10 +19,15 @@ export class BookingService {
 	) {}
 
 	public async getUnavailablePropertyIds(checkIn: Date, checkOut: Date): Promise<Types.ObjectId[]> {
+		const now = new Date();
 		const propertyIds = await this.bookingModel
 			.distinct('bookingRefId', {
 				bookingCategory: BookingCategory.PROPERTY,
-				bookingStatus: { $in: [BookingStatus.PENDING, BookingStatus.CONFIRMED] },
+				$or: [
+					{ bookingStatus: BookingStatus.CONFIRMED },
+					{ bookingStatus: BookingStatus.PENDING, expiresAt: null },
+					{ bookingStatus: BookingStatus.PENDING, expiresAt: { $gt: now } },
+				],
 				checkIn: { $lt: checkOut },
 				checkOut: { $gt: checkIn },
 			})
@@ -251,11 +256,16 @@ export class BookingService {
 	}
 
 	private async isPropertyAvailable(propertyId: Types.ObjectId, checkIn: Date, checkOut: Date): Promise<boolean> {
+		const now = new Date();
 		const conflictingBooking = await this.bookingModel
 			.exists({
 				bookingCategory: BookingCategory.PROPERTY,
 				bookingRefId: propertyId,
-				bookingStatus: { $in: [BookingStatus.PENDING, BookingStatus.CONFIRMED] },
+				$or: [
+					{ bookingStatus: BookingStatus.CONFIRMED },
+					{ bookingStatus: BookingStatus.PENDING, expiresAt: null },
+					{ bookingStatus: BookingStatus.PENDING, expiresAt: { $gt: now } },
+				],
 				checkIn: { $lt: checkOut },
 				checkOut: { $gt: checkIn },
 			})

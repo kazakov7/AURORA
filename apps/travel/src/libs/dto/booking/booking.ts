@@ -22,6 +22,10 @@ export class Booking {
 	@Field(() => String)
 	bookingRefId: ObjectId;
 
+	checkoutKey?: string;
+
+	confirmedPaymentId?: ObjectId;
+
 	@Field(() => Date, { nullable: true })
 	checkIn?: Date;
 

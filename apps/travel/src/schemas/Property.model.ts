@@ -114,6 +114,12 @@ const PropertySchema = new Schema(
 			default: 0,
 		},
 
+		availabilityVersion: {
+			type: Number,
+			default: 0,
+			select: false,
+		},
+
 		propertyRating: {
 			type: Number,
 			default: 0,

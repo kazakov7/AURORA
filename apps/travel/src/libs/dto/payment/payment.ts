@@ -42,3 +42,12 @@ export class Payment {
 	@Field(() => Date)
 	updatedAt: Date;
 }
+
+@ObjectType()
+export class PaymentCheckout {
+	@Field(() => Payment)
+	payment!: Payment;
+
+	@Field()
+	clientSecret!: string;
+}

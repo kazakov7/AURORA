@@ -6,6 +6,7 @@ import TourSchema from '../../schemas/Tour.model';
 import { AuthModule } from '../auth/auth.module';
 import { BookingResolver } from './booking.resolver';
 import { BookingService } from './booking.service';
+import { PaymentModule } from '../payment/payment.module';
 
 @Module({
 	imports: [
@@ -15,6 +16,7 @@ import { BookingService } from './booking.service';
 			{ name: 'Tour', schema: TourSchema },
 		]),
 		AuthModule,
+		PaymentModule,
 	],
 	providers: [BookingResolver, BookingService],
 	exports: [BookingService],

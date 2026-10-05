@@ -28,6 +28,17 @@ const BookingSchema = new Schema(
 			index: true,
 		},
 
+		checkoutKey: {
+			type: String,
+			trim: true,
+		},
+
+		confirmedPaymentId: {
+			type: Schema.Types.ObjectId,
+			ref: 'Payment',
+			default: null,
+		},
+
 		checkIn: Date,
 
 		checkOut: Date,
@@ -78,5 +89,13 @@ BookingSchema.index(
 );
 BookingSchema.index({ memberId: 1, createdAt: 1 }, { name: 'booking_member_history_idx' });
 BookingSchema.index({ bookingStatus: 1, expiresAt: 1 }, { name: 'booking_expiry_idx' });
+BookingSchema.index(
+	{ memberId: 1, checkoutKey: 1 },
+	{
+		unique: true,
+		partialFilterExpression: { checkoutKey: { $type: 'string' } },
+		name: 'booking_member_checkout_key_uq',
+	},
+);
 
 export default BookingSchema;
