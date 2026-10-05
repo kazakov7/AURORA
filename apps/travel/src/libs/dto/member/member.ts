@@ -1,5 +1,6 @@
 import { ObjectType, Field, Int } from '@nestjs/graphql';
 import { MemberType, MemberStatus, MemberAuthType, AgentType } from '../../enums/member.enum';
+import { MeLiked } from '../like/like';
 
 @ObjectType()
 export class Member {
@@ -23,6 +24,8 @@ export class Member {
 
 	@Field()
 	memberNick: string;
+
+	memberPassword?: string;
 
 	@Field({ nullable: true })
 	memberFullName?: string;
@@ -101,6 +104,9 @@ export class Member {
 
 	@Field()
 	updatedAt: Date;
+
+	@Field(() => [MeLiked], { nullable: true })
+	meLiked?: MeLiked[];
 }
 @ObjectType()
 export class TotalCounter {

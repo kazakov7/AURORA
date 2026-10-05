@@ -2,16 +2,18 @@ import { Field, InputType } from '@nestjs/graphql';
 import { IsEmail, IsOptional, IsString, IsNotEmpty, MaxLength } from 'class-validator';
 
 @InputType()
-export class UpdateMember {
+export class MemberUpdate {
 	@Field({ nullable: true })
 	@IsOptional()
-	@IsNotEmpty()
+	_id?: string;
+
+	@Field({ nullable: true })
+	@IsOptional()
 	memberNick?: string;
 
 	@Field({ nullable: true })
 	@IsOptional()
 	@IsString()
-	@IsNotEmpty()
 	memberFullName?: string;
 
 	@Field({ nullable: true })
