@@ -10,10 +10,6 @@ export class DestinationInput {
 	@IsNotEmpty()
 	destinationName: string;
 
-	@Field(() => String)
-	@IsString()
-	@IsNotEmpty()
-	destinationSlug: string;
 
 	@Field(() => String)
 	@IsString()
@@ -83,4 +79,4 @@ export class DestinationsInquiry {
 }
 
 @InputType()
-export class AdminDestinationsInquiry extends DestinationsInquiry {}
+export class AdminDestinationsInquiry extends DestinationsInquiry { }

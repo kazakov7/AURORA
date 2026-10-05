@@ -3,7 +3,7 @@ import { InjectModel } from '@nestjs/mongoose';
 import { Model, Types } from 'mongoose';
 import { Destination, Destinations } from '../../libs/dto/destination/destination';
 import { DestinationInput, DestinationsInquiry } from '../../libs/dto/destination/destination.input';
-import { DestinationUpdate, UpdateDestinationStatusInput } from '../../libs/dto/destination/destination.update';
+import { DestinationUpdate } from '../../libs/dto/destination/destination.update';
 import { lookUpAuthMemberLiked } from '../../libs/config';
 import { Direction, Messages } from '../../libs/enums/common.enum';
 import { LikeGroup } from '../../libs/enums/like.enum';
@@ -19,11 +19,19 @@ export class DestinationService {
 		@InjectModel('Destination') private readonly destinationModel: Model<Destination>,
 		private readonly likeService: LikeService,
 		private readonly viewService: ViewService,
-	) {}
+	) { }
 
 	public async createDestination(input: DestinationInput): Promise<Destination> {
+		const slug = input.destinationName
+			.toLowerCase()
+			.trim()
+			.replace(/\s+/g, '-');
+
 		try {
-			const result = await this.destinationModel.create(input);
+			const result = await this.destinationModel.create({
+				...input,
+				destinationSlug: slug,
+			});
 			return result as unknown as Destination;
 		} catch (error) {
 			console.error('Destination creation failed:', error);
@@ -127,31 +135,19 @@ export class DestinationService {
 		return result as unknown as Destination;
 	}
 
-	public async updateDestinationStatusByAdmin(input: UpdateDestinationStatusInput): Promise<Destination> {
-		const { _id, destinationStatus } = input;
+
+
+	public async removeDestinationByAdmin(destinationId: Types.ObjectId): Promise<String> {
 		const result = await this.destinationModel
-			.findOneAndUpdate(
-				{ _id: _id as unknown as Types.ObjectId, deletedAt: null },
-				{ destinationStatus },
-				{ new: true },
+			.findOne(
+				{ _id: destinationId, destinationStatus: DestinationStatus.INACTIVE }
 			)
 			.exec();
-
-		if (!result) throw new InternalServerErrorException(Messages.UPDATE_FAILED);
-		return result as unknown as Destination;
-	}
-
-	public async removeDestinationByAdmin(destinationId: Types.ObjectId): Promise<Destination> {
-		const result = await this.destinationModel
-			.findOneAndUpdate(
-				{ _id: destinationId, destinationStatus: DestinationStatus.INACTIVE, deletedAt: null },
-				{ deletedAt: new Date() },
-				{ new: true },
-			)
-			.exec();
-
 		if (!result) throw new InternalServerErrorException(Messages.REMOVE_FAILED);
-		return result as unknown as Destination;
+
+		await this.destinationModel.deleteOne({ _id: destinationId });
+
+		return 'Destination successfully deleted'
 	}
 
 	private async attachViewerData(destination: Destination, memberId: Types.ObjectId): Promise<Destination> {

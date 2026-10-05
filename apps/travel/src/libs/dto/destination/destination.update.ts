@@ -8,6 +8,10 @@ export class DestinationUpdate {
 	@IsMongoId()
 	_id: string;
 
+	@Field(() => DestinationStatus)
+	@IsEnum(DestinationStatus)
+	destinationStatus: DestinationStatus;
+
 	@Field(() => String, { nullable: true })
 	@IsOptional()
 	@IsString()
@@ -46,14 +50,3 @@ export class DestinationUpdate {
 	destinationDesc?: string;
 }
 
-@InputType()
-export class UpdateDestinationStatusInput {
-	@Field(() => String)
-	@IsMongoId()
-	@IsNotEmpty()
-	_id: string;
-
-	@Field(() => DestinationStatus)
-	@IsEnum(DestinationStatus)
-	destinationStatus: DestinationStatus;
-}
