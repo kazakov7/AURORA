@@ -49,6 +49,24 @@ const DestinationSchema = new Schema(
 			type: Number,
 			default: 0,
 		},
+		destinationLikes: {
+			type: Number,
+			default: 0,
+		},
+		destinationComments: {
+			type: Number,
+			default: 0,
+		},
+		destinationReviews: {
+			type: Number,
+			default: 0,
+		},
+		destinationRating: {
+			type: Number,
+			default: 0,
+			min: 0,
+			max: 5,
+		},
 
 		destinationProperties: {
 			type: Number,
@@ -71,5 +89,6 @@ const DestinationSchema = new Schema(
 );
 
 DestinationSchema.index({ destinationStatus: 1, createdAt: 1 }, { name: 'destination_status_created_idx' });
+DestinationSchema.index({ destinationStatus: 1, destinationViews: -1 }, { name: 'destination_top_views_idx' });
 
 export default DestinationSchema;

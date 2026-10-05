@@ -1,10 +1,13 @@
 import { Field, Float, Int, ObjectType } from '@nestjs/graphql';
 import { DestinationStatus } from '../../enums/destination';
+import { MeLiked } from '../like/like';
+import { TotalCounter } from '../member/member';
+import { Types } from 'mongoose';
 
 @ObjectType()
 export class Destination {
 	@Field(() => String)
-	_id: string;
+	_id: Types.ObjectId;
 
 	@Field(() => DestinationStatus)
 	destinationStatus: DestinationStatus;
@@ -34,6 +37,18 @@ export class Destination {
 	destinationViews: number;
 
 	@Field(() => Int)
+	destinationLikes: number;
+
+	@Field(() => Int)
+	destinationComments: number;
+
+	@Field(() => Int)
+	destinationReviews: number;
+
+	@Field(() => Float)
+	destinationRating: number;
+
+	@Field(() => Int)
 	destinationProperties: number;
 
 	@Field(() => Int)
@@ -47,4 +62,16 @@ export class Destination {
 
 	@Field(() => Date)
 	updatedAt: Date;
+
+	@Field(() => [MeLiked], { nullable: true })
+	meLiked?: MeLiked[];
+}
+
+@ObjectType()
+export class Destinations {
+	@Field(() => [Destination])
+	list!: Destination[];
+
+	@Field(() => [TotalCounter], { nullable: true })
+	metaCounter?: TotalCounter[];
 }

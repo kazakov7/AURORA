@@ -1,8 +1,13 @@
 import { Field, Float, InputType } from '@nestjs/graphql';
-import { IsArray, IsOptional, IsString, MaxLength, IsNumber } from 'class-validator';
+import { IsArray, IsEnum, IsMongoId, IsNotEmpty, IsNumber, IsOptional, IsString, MaxLength } from 'class-validator';
+import { DestinationStatus } from '../../enums/destination';
 
 @InputType()
 export class DestinationUpdate {
+	@Field(() => String)
+	@IsMongoId()
+	_id: string;
+
 	@Field(() => String, { nullable: true })
 	@IsOptional()
 	@IsString()
@@ -31,6 +36,7 @@ export class DestinationUpdate {
 	@Field(() => [String], { nullable: true })
 	@IsOptional()
 	@IsArray()
+	@IsString({ each: true })
 	destinationImages?: string[];
 
 	@Field(() => String, { nullable: true })
@@ -38,4 +44,16 @@ export class DestinationUpdate {
 	@IsString()
 	@MaxLength(2000)
 	destinationDesc?: string;
+}
+
+@InputType()
+export class UpdateDestinationStatusInput {
+	@Field(() => String)
+	@IsMongoId()
+	@IsNotEmpty()
+	_id: string;
+
+	@Field(() => DestinationStatus)
+	@IsEnum(DestinationStatus)
+	destinationStatus: DestinationStatus;
 }

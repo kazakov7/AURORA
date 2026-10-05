@@ -19,6 +19,15 @@ export const availableTourSorts = [
 	'tourViews',
 	'tourRating',
 ];
+export const availableDestinationSorts = [
+	'createdAt',
+	'updatedAt',
+	'destinationViews',
+	'destinationLikes',
+	'destinationRating',
+	'destinationProperties',
+	'destinationTours',
+];
 export const availableBoardArticleSorts = ['createdAt', 'updatedAt', 'articleLikes', 'articleViews'];
 export const availableCommentSorts = ['createdAt', 'updatedAt'];
 export const availableChatSorts = ['createdAt', 'updatedAt', 'lastMessageAt'];

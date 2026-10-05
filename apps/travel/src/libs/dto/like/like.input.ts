@@ -13,7 +13,7 @@ export class LikeInput {
 	likeRefId: Types.ObjectId;
 
 	@IsNotEmpty()
-	@IsIn([LikeGroup.PROPERTY, LikeGroup.TOUR, LikeGroup.ARTICLE])
+	@IsIn([LikeGroup.PROPERTY, LikeGroup.TOUR, LikeGroup.DESTINATION, LikeGroup.ARTICLE])
 	@Field(() => LikeGroup)
 	likeGroup: LikeGroup;
 }

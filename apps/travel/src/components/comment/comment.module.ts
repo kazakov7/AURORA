@@ -9,6 +9,7 @@ import { MemberModule } from '../member/member.module';
 import { BoardArticleModule } from '../article/board-article.module';
 import { PropertyModule } from '../property/property.module';
 import { TourModule } from '../tour/tour.module';
+import { DestinationModule } from '../destination/destination.module';
 
 
 @Module({
@@ -19,6 +20,7 @@ import { TourModule } from '../tour/tour.module';
 		BoardArticleModule,
 		PropertyModule,
 		TourModule,
+		DestinationModule,
 	],
 	providers: [CommentResolver, CommentService],
 	exports: [CommentService],

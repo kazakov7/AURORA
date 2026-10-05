@@ -22,3 +22,36 @@ export class ReviewInput {
 	@MaxLength(3000)
 	reviewContent?: string;
 }
+
+@InputType()
+export class DestinationReviewInput {
+	@Field(() => String)
+	@IsMongoId()
+	@IsNotEmpty()
+	destinationId!: string;
+
+	@Field(() => Int)
+	@IsInt()
+	@Min(1)
+	@Max(5)
+	reviewRating!: number;
+
+	@Field({ nullable: true })
+	@IsOptional()
+	@IsString()
+	@MaxLength(3000)
+	reviewContent?: string;
+}
+
+@InputType()
+export class DestinationReviewsInquiry {
+	@Field(() => Int)
+	@IsInt()
+	@Min(1)
+	page!: number;
+
+	@Field(() => Int)
+	@IsInt()
+	@Min(1)
+	limit!: number;
+}

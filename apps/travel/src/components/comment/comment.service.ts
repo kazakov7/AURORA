@@ -18,6 +18,7 @@ import { T } from '../../libs/types/common';
 import { BoardArticleService } from '../article/board-article.service';
 import { Direction, Messages } from '../../libs/enums/common.enum';
 import { TourService } from '../tour/tour.service';
+import { DestinationService } from '../destination/destination.service';
 
 @Injectable()
 export class CommentService {
@@ -28,6 +29,7 @@ export class CommentService {
 		private boardArticleService: BoardArticleService,
 		private propertyService: PropertyService,
 		private tourService: TourService,
+		private destinationService: DestinationService,
 	) { }
 
 	public async createComment(
@@ -71,6 +73,14 @@ export class CommentService {
 				});
 				break;
 
+			case CommentGroup.DESTINATION:
+				await this.destinationService.destinationStatsEditor({
+					_id: input.commentRefId,
+					targetKey: 'destinationComments',
+					modifier: 1,
+				});
+				break;
+
 		}
 
 		if (!result) throw new InternalServerErrorException(Messages.CREATE_FAILED);
@@ -107,12 +117,13 @@ export class CommentService {
 		memberId: Types.ObjectId,
 		input: CommentsInquiry,
 	): Promise<Comments> {
-		const { commentRefId } = input.search;
+		const { commentRefId, commentGroup } = input.search;
 
 		const match: T = {
 			commentRefId: commentRefId,
 			commentStatus: CommentStatus.ACTIVE,
 		};
+		if (commentGroup) match.commentGroup = commentGroup;
 
 		const sort: T = {
 			[input?.sort ?? 'createdAt']: input?.direction ?? Direction.DESC,
@@ -149,6 +160,14 @@ export class CommentService {
 
 		if (!result) {
 			throw new InternalServerErrorException(Messages.REMOVE_FAILED);
+		}
+
+		if (result.commentGroup === CommentGroup.DESTINATION) {
+			await this.destinationService.destinationStatsEditor({
+				_id: result.commentRefId as unknown as Types.ObjectId,
+				targetKey: 'destinationComments',
+				modifier: -1,
+			});
 		}
 
 		return result;

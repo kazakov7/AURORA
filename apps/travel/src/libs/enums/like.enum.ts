@@ -3,6 +3,7 @@ import { registerEnumType } from '@nestjs/graphql';
 export enum LikeGroup {
 	PROPERTY = 'PROPERTY',
 	TOUR = 'TOUR',
+	DESTINATION = 'DESTINATION',
 	ARTICLE = 'ARTICLE',
 	/** @deprecated Kept temporarily while MemberService still reads member-like state. */
 	MEMBER = 'MEMBER',

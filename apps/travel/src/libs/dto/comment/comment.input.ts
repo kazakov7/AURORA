@@ -28,6 +28,10 @@ class CISearch {
 	@IsNotEmpty()
 	@Field(() => String)
 	commentRefId!: Types.ObjectId;
+
+	@IsOptional()
+	@Field(() => CommentGroup, { nullable: true })
+	commentGroup?: CommentGroup;
 }
 
 @InputType()
