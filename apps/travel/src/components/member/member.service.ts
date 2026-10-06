@@ -97,7 +97,6 @@ export class MemberService {
 
 			if (newView) {
 				await this.memberModel.findOneAndUpdate(search, { $inc: { memberViews: 1 } }, { new: true }).exec();
-
 				result.memberViews++;
 			}
 			result.meFollowed = await this.checkSubscription(memberId, targetId);

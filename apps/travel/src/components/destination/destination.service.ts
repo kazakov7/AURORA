@@ -127,8 +127,17 @@ export class DestinationService {
 
 	public async updateDestinationByAdmin(input: DestinationUpdate): Promise<Destination> {
 		const { _id, ...update } = input;
+
+		const slug = input.destinationName!
+			.toLowerCase()
+			.trim()
+			.replace(/\s+/g, '-');
+
 		const result = await this.destinationModel
-			.findOneAndUpdate({ _id: _id as unknown as Types.ObjectId, deletedAt: null }, update, { new: true })
+			.findOneAndUpdate({ _id: _id as unknown as Types.ObjectId, deletedAt: null }, {
+				...update,
+				destinationSlug: slug,
+			}, { new: true })
 			.exec();
 
 		if (!result) throw new InternalServerErrorException(Messages.UPDATE_FAILED);
