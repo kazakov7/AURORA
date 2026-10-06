@@ -44,7 +44,7 @@ export class BoardArticleService {
 		input: BoardArticleInput,
 	): Promise<BoardArticle> {
 		input.memberId = memberId;
-		try { //@ts-ignore
+		try {
 			const result = await this.boardArticleModel.create(input);
 			await this.memberService.memberStatusEditor({
 				//@ts-ignore
@@ -125,7 +125,7 @@ export class BoardArticleService {
 	public async updateBoardArticle(
 		memberId: Types.ObjectId,
 		input: BoardArticleUpdate,
-	): Promise<BoardArticle> {//@ts-ignore
+	): Promise<BoardArticle> {
 		const { _id, articleStatus } = input;
 
 		const result = await this.boardArticleModel
@@ -266,11 +266,11 @@ export class BoardArticleService {
 
 	public async updateBoardArticleByAdmin(
 		input: BoardArticleUpdate,
-	): Promise<BoardArticle> {//@ts-ignore
+	): Promise<BoardArticle> {
 		const { _id, articleStatus } = input;
 
-		const result = await this.boardArticleModel //@ts-ignore
-			.findOneAndUpdate({ _id: _id, articleStatus: BoardArticleStatus.ACTIVE }, input, {
+		const result = await this.boardArticleModel
+			.findOneAndUpdate({ _id: _id, articleStatus: BoardArticleStatus.PUBLISHED }, input, {
 				new: true,
 			})
 			.exec();

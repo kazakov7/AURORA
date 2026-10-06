@@ -14,7 +14,6 @@ registerEnumType(BoardArticleCategory, {
 });
 
 export enum BoardArticleStatus {
-	DRAFT = 'DRAFT',
 	PUBLISHED = 'PUBLISHED',
 	DELETED = 'DELETED',
 }
