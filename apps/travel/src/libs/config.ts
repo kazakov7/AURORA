@@ -2,6 +2,9 @@ import { ObjectId } from 'bson';
 import { BadRequestException } from '@nestjs/common';
 import { Messages } from './enums/common.enum';
 
+
+export const HOLD_DURATION_MS = 15 * 60 * 1000;
+export const KRW = 'KRW';
 export const availableAgentSorts = ['createdAt', 'updatedAt', 'agentType', 'verificationStatus'];
 export const availableMemberSorts = ['createdAt', 'updatedAt', 'memberLikes', 'memberViews'];
 export const availablePropertySorts = [

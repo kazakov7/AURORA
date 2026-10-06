@@ -9,7 +9,7 @@ import { PaymentService } from './payment.service';
 
 @Resolver()
 export class PaymentResolver {
-	constructor(private readonly paymentService: PaymentService) {}
+	constructor(private readonly paymentService: PaymentService) { }
 
 	@UseGuards(AuthGuard)
 	@Mutation(() => PaymentCheckout)

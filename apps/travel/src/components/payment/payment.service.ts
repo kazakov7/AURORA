@@ -9,9 +9,9 @@ import { Messages } from '../../libs/enums/common.enum';
 import { PaymentProvider, PaymentStatus } from '../../libs/enums/payment.enum';
 import { PropertyStatus } from '../../libs/enums/property.enum';
 import { TourStatus } from '../../libs/enums/tour.enum';
+import { HOLD_DURATION_MS, KRW } from '../../libs/config';
 
-const HOLD_DURATION_MS = 15 * 60 * 1000;
-const KRW = 'KRW';
+
 
 @Injectable()
 export class PaymentService implements OnModuleInit, OnModuleDestroy {
@@ -24,7 +24,7 @@ export class PaymentService implements OnModuleInit, OnModuleDestroy {
 		@InjectModel('Property') private readonly propertyModel: Model<any>,
 		@InjectModel('Tour') private readonly tourModel: Model<any>,
 		@InjectConnection() private readonly connection: Connection,
-	) {}
+	) { }
 
 	public onModuleInit(): void {
 		this.expiryTimer = setInterval(() => void this.expirePendingBookings(), 60 * 1000);
@@ -350,7 +350,7 @@ export class PaymentService implements OnModuleInit, OnModuleDestroy {
 		for (const payment of payments) {
 			try {
 				await this.stripe.paymentIntents.cancel(payment.providerPaymentId);
-			} catch (error) {}
+			} catch (error) { }
 			await this.paymentModel
 				.updateOne({ _id: payment._id, paymentStatus: { $ne: PaymentStatus.SUCCEEDED } }, { paymentStatus: PaymentStatus.FAILED, failureReason })
 				.exec();
