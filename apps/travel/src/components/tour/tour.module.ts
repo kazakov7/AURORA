@@ -8,6 +8,7 @@ import { ViewModule } from '../view/view.module';
 import { TourResolver } from './tour.resolver';
 import { TourService } from './tour.service';
 import { AgentModule } from '../agent/agent.module';
+import { DestinationModule } from '../destination/destination.module';
 
 @Module({
 	imports: [
@@ -17,6 +18,7 @@ import { AgentModule } from '../agent/agent.module';
 		LikeModule,
 		ViewModule,
 		AgentModule,
+		DestinationModule,
 	],
 	providers: [TourResolver, TourService],
 	exports: [TourService],

@@ -23,15 +23,6 @@ const TourSchema = new Schema(
 			trim: true,
 		},
 
-		tourSlug: {
-			type: String,
-			required: true,
-			unique: true,
-			lowercase: true,
-			trim: true,
-			index: true,
-		},
-
 		tourDesc: {
 			type: String,
 			trim: true,
@@ -40,7 +31,7 @@ const TourSchema = new Schema(
 		tourStatus: {
 			type: String,
 			enum: TourStatus,
-			default: TourStatus.PENDING,
+			default: TourStatus.ACTIVE,
 			index: true,
 		},
 

@@ -21,7 +21,7 @@ import { TourService } from './tour.service';
 
 @Resolver()
 export class TourResolver {
-	constructor(private readonly tourService: TourService) {}
+	constructor(private readonly tourService: TourService) { }
 
 	@Roles(MemberType.AGENT)
 	@UseGuards(RolesGuard)

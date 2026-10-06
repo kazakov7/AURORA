@@ -18,9 +18,6 @@ export class Tour {
 	@Field(() => String)
 	tourName: string;
 
-	@Field(() => String)
-	tourSlug: string;
-
 	@Field({ nullable: true })
 	tourDesc?: string;
 

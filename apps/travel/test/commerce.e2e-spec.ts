@@ -58,7 +58,6 @@ describe('Booking, Payment and TravelHistory (integration/e2e)', () => {
 			destinationId: destination._id,
 			tourStatus: 'ACTIVE',
 			tourName: 'Bali Tour',
-			tourSlug: 'bali-tour',
 			tourPrice: 70000,
 			tourCurrency: 'KRW',
 			tourStartDate: new Date(Date.now() + 86_400_000),

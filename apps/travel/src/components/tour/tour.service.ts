@@ -21,6 +21,7 @@ import { MemberService } from '../member/member.service';
 import { ViewService } from '../view/view.service';
 import { AgentService } from '../agent/agent.service';
 import { AgentType } from '../../libs/enums/agent.enum';
+import { DestinationService } from '../destination/destination.service';
 
 @Injectable()
 export class TourService {
@@ -30,18 +31,26 @@ export class TourService {
 		private readonly likeService: LikeService,
 		private readonly viewService: ViewService,
 		private readonly agentService: AgentService,
-	) {}
+		private readonly destinationService: DestinationService,
+	) { }
 
 	public async createTour(input: TourInput): Promise<Tour> {
 		if (!input.memberId) throw new BadRequestException(Messages.NOT_AUTHENTICATED);
 		await this.agentService.assertApprovedAgent(input.memberId, AgentType.TOUR);
 		this.validateTourDates(input.tourStartDate, input.tourEndDate);
+		const destinationId = shapeIntoMongoObjectId(input.destinationId);
+		await this.destinationService.getActiveDestination(destinationId);
 
 		try {
-			const result = await this.tourModel.create(input);
+			const result = await this.tourModel.create({ ...input, destinationId });
 			await this.memberService.memberStatusEditor({
 				_id: result.memberId as Types.ObjectId,
 				targetKey: 'memberTours',
+				modifier: 1,
+			});
+			await this.destinationService.destinationStatsEditor({
+				_id: destinationId,
+				targetKey: 'destinationTours',
 				modifier: 1,
 			});
 			return result as unknown as Tour;

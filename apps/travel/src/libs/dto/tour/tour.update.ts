@@ -23,11 +23,6 @@ export class TourUpdateInput {
 	@Field({ nullable: true })
 	@IsOptional()
 	@IsString()
-	tourSlug?: string;
-
-	@Field({ nullable: true })
-	@IsOptional()
-	@IsString()
 	@MaxLength(5000)
 	tourDesc?: string;
 

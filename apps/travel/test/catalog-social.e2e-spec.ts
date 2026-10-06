@@ -152,7 +152,6 @@ describe('Catalog and social domains (e2e)', () => {
 		const input = {
 			destinationId: destination._id.toString(),
 			tourName: 'Bangkok Tour',
-			tourSlug: 'bangkok-tour',
 			tourPrice: 50000,
 			tourCurrency: 'KRW',
 			tourStartDate: new Date(Date.now() + 86_400_000),
