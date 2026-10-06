@@ -1,31 +1,31 @@
 {
   "$schema": "https://json.schemastore.org/nest-cli",
   "collection": "@nestjs/schematics",
-  "sourceRoot": "apps/travel/src",
+  "sourceRoot": "apps/aurora-api/src",
   "compilerOptions": {
     "deleteOutDir": true,
     "webpack": true,
-    "tsConfigPath": "apps/travel/tsconfig.app.json"
+    "tsConfigPath": "apps/aurora-api/tsconfig.app.json"
   },
   "monorepo": true,
-  "root": "apps/travel",
+  "root": "apps/aurora-api",
   "projects": {
-    "travel": {
+    "aurora-api": {
       "type": "application",
-      "root": "apps/travel",
+      "root": "apps/aurora-api",
       "entryFile": "main",
-      "sourceRoot": "apps/travel/src",
+      "sourceRoot": "apps/aurora-api/src",
       "compilerOptions": {
-        "tsConfigPath": "apps/travel/tsconfig.app.json"
+        "tsConfigPath": "apps/aurora-api/tsconfig.app.json"
       }
     },
-    "travel-batch": {
+    "aurora-batch": {
       "type": "application",
-      "root": "apps/travel-batch",
+      "root": "apps/aurora-batch",
       "entryFile": "main",
-      "sourceRoot": "apps/travel-batch/src",
+      "sourceRoot": "apps/aurora-batch/src",
       "compilerOptions": {
-        "tsConfigPath": "apps/travel-batch/tsconfig.app.json"
+        "tsConfigPath": "apps/aurora-batch/tsconfig.app.json"
       }
     }
   }

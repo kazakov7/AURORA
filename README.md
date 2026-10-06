@@ -1,3 +1,7 @@
+# AURORA Backend
+
+The NestJS GraphQL backend for the AURORA travel marketplace.
+
 <p align="center">
   <a href="http://nestjs.com/" target="blank"><img src="https://nestjs.com/img/logo-small.svg" width="120" alt="Nest Logo" /></a>
 </p>
@@ -23,7 +27,7 @@
 
 ## Description
 
-[Nest](https://github.com/nestjs/nest) framework TypeScript starter repository.
+AURORA is built with [Nest](https://github.com/nestjs/nest).
 
 ## Project setup
 
@@ -54,8 +58,8 @@ $ npm run test
 $ npm run test:e2e
 
 # backend validation
-$ npx tsc -p apps/travel/tsconfig.app.json --noEmit
-$ npx tsc -p apps/travel-batch/tsconfig.app.json --noEmit
+$ npx tsc -p apps/aurora-api/tsconfig.app.json --noEmit
+$ npx tsc -p apps/aurora-batch/tsconfig.app.json --noEmit
 $ npm run build
 
 # test coverage

@@ -13,6 +13,6 @@ async function bootstrap() {
 	app.useGlobalPipes(new ValidationPipe());
 	app.useGlobalInterceptors(new LoggingInterceptor());
 	app.enableCors({ origin: true, credentials: true });
-	await app.listen(process.env.TRAVEL_PORT ?? 3000);
+	await app.listen(process.env.AURORA_PORT ?? process.env.TRAVEL_PORT ?? 3000);
 }
 bootstrap();

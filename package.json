@@ -1,5 +1,5 @@
 {
-	"name": "travel",
+	"name": "aurora",
 	"version": "0.0.1",
 	"description": "",
 	"author": "",
@@ -10,15 +10,15 @@
 		"format": "prettier --write \"apps/**/*.ts\" \"libs/**/*.ts\"",
 		"start": "nest start",
 		"dev": "nest start --watch",
-		"dev:batch": "nest start travel-batch --watch",
+		"dev:batch": "nest start aurora-batch --watch",
 		"start:debug": "nest start --debug --watch",
-		"start:prod": "NODE_ENV=production node dist/apps/travel/main",
+		"start:prod": "NODE_ENV=production node dist/apps/aurora-api/main",
 		"lint": "eslint \"{src,apps,libs,test}/**/*.ts\" --fix",
 		"test": "jest",
 		"test:watch": "jest --watch",
 		"test:cov": "jest --coverage",
 		"test:debug": "node --inspect-brk -r tsconfig-paths/register -r ts-node/register node_modules/.bin/jest --runInBand",
-		"test:e2e": "jest --config ./apps/travel/test/jest-e2e.json"
+		"test:e2e": "jest --config ./apps/aurora-api/test/jest-e2e.json"
 	},
 	"dependencies": {
 		"@as-integrations/express5": "^1.1.2",
@@ -83,7 +83,7 @@
 			"^.+\\.ts$": [
 				"ts-jest",
 				{
-					"tsconfig": "<rootDir>/apps/travel/tsconfig.spec.json",
+					"tsconfig": "<rootDir>/apps/aurora-api/tsconfig.spec.json",
 					"diagnostics": false
 				}
 			]

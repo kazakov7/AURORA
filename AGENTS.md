@@ -1,10 +1,10 @@
-# AURA Backend Agent Instruction
+# AURORA Backend Agent Instruction
 
-AURA is a NestJS GraphQL monorepo migrated from the existing Nestar backend into a travel marketplace platform.
+AURORA is a NestJS GraphQL monorepo migrated from the existing Nestar backend into a travel marketplace platform.
 
 ## Project Shape
 
-- Backend apps are `travel` and `travel-batch`.
+- Backend apps are `aurora-api` and `aurora-batch`.
 - Keep the existing Nestar architecture and coding style.
 - Keep the existing NestJS resolver/service/module pattern based on MVC and DI.
 - Keep DTOs, enums, types and schemas in their existing Nestar structure.
@@ -13,7 +13,7 @@ AURA is a NestJS GraphQL monorepo migrated from the existing Nestar backend into
 
 ## Domain Rules
 
-- AURA is a travel marketplace with Member, Agent, Destination, Property/Hotel and Tour as core domains.
+- AURORA is a travel marketplace with Member, Agent, Destination, Property/Hotel and Tour as core domains.
 - Keep `MemberType.USER`, `MemberType.AGENT` and `MemberType.ADMIN`.
 - Public signup creates `USER` only.
 - Member and Agent are separate entities.
@@ -24,7 +24,7 @@ AURA is a NestJS GraphQL monorepo migrated from the existing Nestar backend into
 - Destination represents countries only.
 - Authorization and ownership must always be validated server-side.
 - Do not trust client-provided roles, ownership, verification state, prices, counters or payment state.
-- Current AURA requirements provided in the task override old Nestar business/domain logic.
+- Current AURORA requirements provided in the task override old Nestar business/domain logic.
 - Existing Nestar architecture and code style remain the implementation reference.
 
 ## Workflow
@@ -42,7 +42,7 @@ AURA is a NestJS GraphQL monorepo migrated from the existing Nestar backend into
 Use these checks for backend work:
 
 ```bash
-npx tsc -p apps/travel/tsconfig.app.json --noEmit
-npx tsc -p apps/travel-batch/tsconfig.app.json --noEmit
+npx tsc -p apps/aurora-api/tsconfig.app.json --noEmit
+npx tsc -p apps/aurora-batch/tsconfig.app.json --noEmit
 npm run build
 ```
