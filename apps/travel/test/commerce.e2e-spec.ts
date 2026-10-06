@@ -16,6 +16,7 @@ jest.mock('stripe', () => ({
 import { INestApplication } from '@nestjs/common';
 import { randomUUID } from 'crypto';
 import { Types } from 'mongoose';
+import request from 'supertest';
 import { PaymentService } from '../src/components/payment/payment.service';
 import { TravelHistoryService } from '../src/components/travel-history/travel-history.service';
 import { BookingStatus } from '../src/libs/enums/booking.enum';
@@ -90,6 +91,7 @@ describe('Booking, Payment and TravelHistory (integration/e2e)', () => {
 		expect(first.body.errors).toBeUndefined();
 		expect(first.body.data.startPropertyPayment.payment.paymentAmount).toBe(240000);
 		const bookingId = first.body.data.startPropertyPayment.payment.bookingId;
+		expect((await model(app, 'Booking').findById(bookingId).lean()).bookingStatus).toBe(BookingStatus.PENDING);
 
 		const retry = await graphQL(
 			app,
@@ -113,13 +115,49 @@ describe('Booking, Payment and TravelHistory (integration/e2e)', () => {
 			type: 'payment_intent.succeeded',
 			data: { object: { id: providerPaymentId } },
 		});
-		await paymentService.handleStripeWebhook(Buffer.from('{}'), 'test-signature');
-		await paymentService.handleStripeWebhook(Buffer.from('{}'), 'test-signature');
+		const webhook = () =>
+			request(app.getHttpServer())
+				.post('/payments/stripe/webhook')
+				.set('stripe-signature', 'test-signature')
+				.set('Content-Type', 'application/json')
+				.send('{}');
+		expect((await webhook()).status).toBe(201);
+		expect((await webhook()).status).toBe(201);
 		const booking = await model(app, 'Booking').findById(bookingId).lean();
 		const payment = await model(app, 'Payment').findOne({ providerPaymentId }).lean();
 		expect(booking.bookingStatus).toBe(BookingStatus.CONFIRMED);
 		expect(payment.paymentStatus).toBe(PaymentStatus.SUCCEEDED);
 		expect((await model(app, 'Property').findById(property._id).lean()).propertyBookings).toBe(1);
+	});
+
+	it('permits only one parallel Property hold for an overlapping date range', async () => {
+		const userOne = await seedMember(app, 'parallelone');
+		const userTwo = await seedMember(app, 'paralleltwo');
+		const { property } = await catalogFixtures();
+		const mutation = `mutation Pay($input: StartPropertyPaymentInput!) {
+			startPropertyPayment(input: $input) { payment { _id bookingId } }
+		}`;
+		const checkIn = new Date(Date.now() + 3 * 86_400_000);
+		const checkOut = new Date(Date.now() + 5 * 86_400_000);
+		const [first, second] = await Promise.all([
+			graphQL(
+				app,
+				mutation,
+				{ input: { propertyId: property._id.toString(), checkIn, checkOut, bookingGuests: 1, idempotencyKey: randomUUID() } },
+				userOne.accessToken,
+			),
+			graphQL(
+				app,
+				mutation,
+				{ input: { propertyId: property._id.toString(), checkIn, checkOut, bookingGuests: 1, idempotencyKey: randomUUID() } },
+				userTwo.accessToken,
+			),
+		]);
+
+		expect([first, second].filter((result) => !result.body.errors)).toHaveLength(1);
+		expect(
+			await model(app, 'Booking').countDocuments({ bookingRefId: property._id, bookingStatus: BookingStatus.PENDING }),
+		).toBe(1);
 	});
 
 	it('reserves tour seats atomically and rejects capacity overflow', async () => {
@@ -146,6 +184,66 @@ describe('Booking, Payment and TravelHistory (integration/e2e)', () => {
 		);
 		expect(overflow.body.errors).toBeDefined();
 		expect((await model(app, 'Tour').findById(tour._id).lean()).tourReservedSeats).toBe(2);
+	});
+
+	it('expires an unpaid Tour hold, returns seats and refunds a late successful payment', async () => {
+		const user = await seedMember(app, 'expiretour');
+		const { tour } = await catalogFixtures();
+		const mutation = `mutation Pay($input: StartTourPaymentInput!) {
+			startTourPayment(input: $input) { payment { bookingId providerPaymentId } }
+		}`;
+		const checkout = await graphQL(
+			app,
+			mutation,
+			{ input: { tourId: tour._id.toString(), bookingGuests: 1, idempotencyKey: randomUUID() } },
+			user.accessToken,
+		);
+		expect(checkout.body.errors).toBeUndefined();
+		const { bookingId, providerPaymentId } = checkout.body.data.startTourPayment.payment;
+		await model(app, 'Booking').updateOne({ _id: bookingId }, { expiresAt: new Date(Date.now() - 1_000) }).exec();
+
+		const paymentService = app.get(PaymentService) as any;
+		await paymentService.expirePendingBookings();
+		expect((await model(app, 'Booking').findById(bookingId).lean()).bookingStatus).toBe(BookingStatus.CANCELLED);
+		expect((await model(app, 'Payment').findOne({ providerPaymentId }).lean()).paymentStatus).toBe(PaymentStatus.FAILED);
+		expect((await model(app, 'Tour').findById(tour._id).lean()).tourReservedSeats).toBe(0);
+
+		paymentService.stripe.webhooks.constructEvent.mockReturnValue({
+			type: 'payment_intent.succeeded',
+			data: { object: { id: providerPaymentId } },
+		});
+		const lateWebhook = await request(app.getHttpServer())
+			.post('/payments/stripe/webhook')
+			.set('stripe-signature', 'test-signature')
+			.set('Content-Type', 'application/json')
+			.send('{}');
+		expect(lateWebhook.status).toBe(201);
+		expect((await model(app, 'Booking').findById(bookingId).lean()).bookingStatus).toBe(BookingStatus.CANCELLED);
+		expect((await model(app, 'Payment').findOne({ providerPaymentId }).lean()).paymentStatus).toBe(PaymentStatus.REFUNDED);
+		expect((await model(app, 'Tour').findById(tour._id).lean()).tourReservedSeats).toBe(0);
+	});
+
+	it('rejects checkout without JWT and webhook requests without a Stripe signature', async () => {
+		const unauthorizedCheckout = await graphQL(
+			app,
+			`mutation Pay($input: StartPropertyPaymentInput!) { startPropertyPayment(input: $input) { clientSecret } }`,
+			{
+				input: {
+					propertyId: new Types.ObjectId().toString(),
+					checkIn: new Date(Date.now() + 3 * 86_400_000),
+					checkOut: new Date(Date.now() + 4 * 86_400_000),
+					bookingGuests: 1,
+					idempotencyKey: randomUUID(),
+				},
+			},
+		);
+		expect(unauthorizedCheckout.body.errors).toBeDefined();
+
+		const unsignedWebhook = await request(app.getHttpServer())
+			.post('/payments/stripe/webhook')
+			.set('Content-Type', 'application/json')
+			.send('{}');
+		expect(unsignedWebhook.status).toBe(400);
 	});
 
 	it('rejects invalid property dates and guest capacity', async () => {
