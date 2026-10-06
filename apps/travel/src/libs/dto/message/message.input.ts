@@ -1,6 +1,6 @@
 import { Field, Int, InputType } from '@nestjs/graphql';
 import { ObjectId } from 'mongoose';
-import { IsIn, IsNotEmpty, IsOptional, Length, Min } from 'class-validator';
+import { IsIn, IsNotEmpty, IsOptional, IsString, Length, Max, MaxLength, Min } from 'class-validator';
 import { MessageType } from '../../enums/message.enum';
 // import { availableMessageSorts } from '../../config';
 
@@ -21,6 +21,12 @@ export class MessageInput {
 	@Length(1, 1000)
 	@Field(() => String)
 	messageContent: string;
+
+	@IsOptional()
+	@IsString()
+	@MaxLength(100)
+	@Field(() => String, { nullable: true })
+	clientMessageId?: string;
 }
 
 // @InputType()
@@ -73,19 +79,19 @@ export class MessageInput {
  * Cursor-based variant: chat oynasida "yuqoriga scroll" uchun
  * page/limit dan ko'ra barqarorroq (yangi xabar kelsa sahifalar surilmaydi).
  */
-// @InputType()
-// export class MessagesCursorInquiry {
-// 	@IsNotEmpty()
-// 	@Field(() => String)
-// 	chatId: ObjectId;
+@InputType()
+export class MessagesCursorInquiry {
+	@IsNotEmpty()
+	@Field(() => String)
+	chatId: ObjectId;
 
-// 	@IsNotEmpty()
-// 	@Min(1)
-// 	@Field(() => Int)
-// 	limit: number;
+	@IsNotEmpty()
+	@Min(1)
+	@Max(100)
+	@Field(() => Int)
+	limit: number;
 
-// 	/** shu sanadan oldingi xabarlar qaytariladi */
-// 	@IsOptional()
-// 	@Field(() => Date, { nullable: true })
-// 	before?: Date;
-// }
+	@IsOptional()
+	@Field(() => Date, { nullable: true })
+	before?: Date;
+}

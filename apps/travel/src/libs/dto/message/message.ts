@@ -20,6 +20,9 @@ export class Message {
 	@Field(() => String, { nullable: true })
 	messageContent?: string;
 
+	@Field(() => String, { nullable: true })
+	clientMessageId?: string;
+
 	@Field(() => Date)
 	createdAt: Date;
 
@@ -38,4 +41,7 @@ export class Messages {
 
 	@Field(() => [TotalCounter], { nullable: true })
 	metaCounter: TotalCounter[];
+
+	@Field(() => Date, { nullable: true })
+	nextCursor?: Date;
 }

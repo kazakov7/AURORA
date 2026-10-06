@@ -12,13 +12,18 @@ const ChatSchema = new Schema(
 		memberOneId: {
 			type: Types.ObjectId,
 			ref: 'Member',
+			required: function () {
+				return this.chatType === ChatType.DIRECT;
+			},
 			index: true,
 		},
 
 		memberTwoId: {
 			type: Types.ObjectId,
 			ref: 'Member',
-			required: true,
+			required: function () {
+				return this.chatType === ChatType.DIRECT;
+			},
 			index: true,
 		},
 
@@ -46,6 +51,10 @@ const ChatSchema = new Schema(
 ChatSchema.index(
 	{ directKey: 1 },
 	{ unique: true, partialFilterExpression: { chatType: ChatType.DIRECT }, name: 'chats_direct_key_uq' },
+);
+ChatSchema.index(
+	{ chatType: 1 },
+	{ unique: true, partialFilterExpression: { chatType: ChatType.GLOBAL }, name: 'chats_global_singleton_uq' },
 );
 ChatSchema.index({ chatType: 1, lastMessageAt: 1 }, { name: 'chats_recent_idx' });
 
