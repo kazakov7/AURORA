@@ -2,6 +2,7 @@ import { SubscribeMessage, WebSocketGateway, WebSocketServer, ConnectedSocket, M
 import { Server, Socket } from 'socket.io';
 import { Types } from 'mongoose';
 import { MessageInput } from '../../libs/dto/message/message.input';
+import { Notification } from '../../libs/dto/notification/notification';
 import { Messages } from '../../libs/enums/common.enum';
 import { AuthService } from '../auth/auth.service';
 import { MessageService } from '../message/message.service';
@@ -78,6 +79,11 @@ export class ChatGateway {
 		} catch (err: any) {
 			return this.errorResult(err);
 		}
+	}
+
+	public emitNotification(memberId: Types.ObjectId, notification: Notification): void {
+		if (!this.server) return;
+		this.server.to(this.memberRoom(memberId)).emit('notification:new', notification);
 	}
 
 	private extractToken(client: Socket): string | undefined {

@@ -1,0 +1,104 @@
+import { BadRequestException, Injectable, InternalServerErrorException } from '@nestjs/common';
+import { InjectModel } from '@nestjs/mongoose';
+import { Model, Types } from 'mongoose';
+import { ChatGateway } from '../chat/chat.gateway';
+import { Notification, Notifications } from '../../libs/dto/notification/notification';
+import { NotificationsInquiry } from '../../libs/dto/notification/notification.input';
+import { Direction, Messages } from '../../libs/enums/common.enum';
+import { MemberStatus } from '../../libs/enums/member.enum';
+import { NotificationGroup, NotificationStatus, NotificationType } from '../../libs/enums/notification.enum';
+import { T } from '../../libs/types/common';
+
+export interface CreateNotificationInput {
+	receiverId: Types.ObjectId;
+	authorId?: Types.ObjectId;
+	notificationType: NotificationType;
+	notificationGroup: NotificationGroup;
+	notificationRefId?: Types.ObjectId;
+	notificationTitle: string;
+	notificationDesc?: string;
+}
+
+@Injectable()
+export class NotificationService {
+	constructor(
+		@InjectModel('Notification') private readonly notificationModel: Model<any>,
+		@InjectModel('Member') private readonly memberModel: Model<any>,
+		private readonly chatGateway: ChatGateway,
+	) { }
+
+	public async createNotification(input: CreateNotificationInput): Promise<Notification> {
+		const receiver = await this.memberModel
+			.findOne({ _id: input.receiverId, memberStatus: MemberStatus.ACTIVE, deletedAt: null })
+			.exec();
+		if (!receiver) throw new InternalServerErrorException(Messages.MEMBER_NOT_FOUND);
+
+		if (input.authorId) {
+			const author = await this.memberModel
+				.findOne({ _id: input.authorId, memberStatus: MemberStatus.ACTIVE, deletedAt: null })
+				.exec();
+			if (!author) throw new InternalServerErrorException(Messages.MEMBER_NOT_FOUND);
+		}
+
+		if (input.notificationType === NotificationType.SYSTEM && input.notificationGroup !== NotificationGroup.SYSTEM) {
+			throw new BadRequestException(Messages.BAD_REQUEST);
+		}
+
+		try {
+			const notification = await this.notificationModel.create(input);
+			this.chatGateway.emitNotification(input.receiverId, notification);
+			return notification;
+		} catch (err) {
+			console.error('Notification creation failed:', err);
+			throw new BadRequestException(Messages.CREATE_FAILED);
+		}
+	}
+
+	public async getMyNotifications(memberId: Types.ObjectId, input: NotificationsInquiry): Promise<Notifications> {
+		const match: T = { receiverId: memberId };
+		if (input.search?.notificationStatus) match.notificationStatus = input.search.notificationStatus;
+		if (input.search?.notificationType) match.notificationType = input.search.notificationType;
+		if (input.search?.notificationGroup) match.notificationGroup = input.search.notificationGroup;
+
+		const sort: T = { [input.sort ?? 'createdAt']: input.direction ?? Direction.DESC, _id: Direction.DESC };
+		const result = await this.notificationModel
+			.aggregate([
+				{ $match: match },
+				{ $sort: sort },
+				{
+					$facet: {
+						list: [{ $skip: (input.page - 1) * input.limit }, { $limit: input.limit }],
+						metaCounter: [{ $count: 'total' }],
+					},
+				},
+			])
+			.exec();
+		return result[0] ?? { list: [], metaCounter: [] };
+	}
+
+	public async getUnreadNotificationCount(memberId: Types.ObjectId): Promise<number> {
+		return await this.notificationModel.countDocuments({ receiverId: memberId, notificationStatus: NotificationStatus.WAIT }).exec();
+	}
+
+	public async markNotificationAsRead(memberId: Types.ObjectId, notificationId: Types.ObjectId): Promise<Notification> {
+		const result = await this.notificationModel
+			.findOneAndUpdate(
+				{ _id: notificationId, receiverId: memberId },
+				{ $set: { notificationStatus: NotificationStatus.READ } },
+				{ new: true },
+			)
+			.exec();
+		if (!result) throw new InternalServerErrorException(Messages.NOTIFICATION_NOT_FOUND);
+		return result;
+	}
+
+	public async markAllNotificationsAsRead(memberId: Types.ObjectId): Promise<number> {
+		const result = await this.notificationModel
+			.updateMany(
+				{ receiverId: memberId, notificationStatus: NotificationStatus.WAIT },
+				{ $set: { notificationStatus: NotificationStatus.READ } },
+			)
+			.exec();
+		return result.modifiedCount;
+	}
+}

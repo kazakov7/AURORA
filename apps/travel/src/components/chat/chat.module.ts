@@ -16,6 +16,6 @@ import { ChatService } from './chat.service';
 		MessageModule,
 	],
 	providers: [ChatResolver, ChatService, ChatGateway],
-	exports: [ChatService],
+	exports: [ChatService, ChatGateway],
 })
 export class ChatModule {}
