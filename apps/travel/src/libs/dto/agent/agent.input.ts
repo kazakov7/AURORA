@@ -6,8 +6,6 @@ import { AgentType, AgentVerificationStatus } from '../../enums/agent.enum';
 
 @InputType()
 export class AgentInput {
-	memberId?: string;
-
 	@Field(() => AgentType)
 	@IsNotEmpty()
 	agentType: AgentType;

@@ -14,7 +14,7 @@ import { AgentService } from './agent.service';
 
 @Resolver()
 export class AgentResolver {
-	constructor(private readonly agentService: AgentService) {}
+	constructor(private readonly agentService: AgentService) { }
 
 	@UseGuards(AuthGuard)
 	@Mutation(() => Agent)
@@ -44,7 +44,7 @@ export class AgentResolver {
 	@Roles(MemberType.ADMIN)
 	@UseGuards(RolesGuard)
 	@Mutation(() => Agent)
-	public async approveAgentApplication(@Args('agentId') agentId: string): Promise<Agent> {
+	public async approveAgentApplication(@Args('input') agentId: string): Promise<Agent> {
 		return this.agentService.approveAgentApplication(shapeIntoMongoObjectId(agentId));
 	}
 
