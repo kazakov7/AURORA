@@ -77,7 +77,7 @@ export class MessageService {
 		const memberMap = new Map(members.map((member: any) => [member._id.toString(), member]));
 
 		return {
-			list: list.map((message) => ({ ...message, senderData: memberMap.get(message.senderId.toString()) })) as Message[],
+			list: list.map((message) => ({ ...message, senderData: memberMap.get(message.senderId.toString()) })) as unknown as Message[],
 			metaCounter: [],
 			nextCursor: messages.length === input.limit ? messages[messages.length - 1]?.createdAt : undefined,
 		};

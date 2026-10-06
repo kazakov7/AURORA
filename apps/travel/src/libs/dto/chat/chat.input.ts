@@ -22,7 +22,7 @@ export class ChatInput {
 }
 
 @InputType()
-class CISearch {
+class ChatSearch {
 	@IsOptional()
 	@Field(() => ChatType, { nullable: true })
 	chatType?: ChatType;
@@ -60,6 +60,6 @@ export class ChatsInquiry {
 	direction?: Direction;
 
 	@IsOptional()
-	@Field(() => CISearch, { nullable: true })
-	search?: CISearch;
+	@Field(() => ChatSearch, { nullable: true })
+	search?: ChatSearch;
 }

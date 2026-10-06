@@ -55,11 +55,11 @@ export class TourInput {
 	@IsNotEmpty()
 	tourCurrency: string;
 
-	@Field(() => String)
+	@Field(() => Date)
 	@IsDate()
 	tourStartDate: Date;
 
-	@Field(() => String)
+	@Field(() => Date)
 	@IsDate()
 	tourEndDate: Date;
 

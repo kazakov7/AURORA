@@ -1,4 +1,6 @@
 import { ObjectId } from 'bson';
+import { BadRequestException } from '@nestjs/common';
+import { Messages } from './enums/common.enum';
 
 export const availableAgentSorts = ['createdAt', 'updatedAt', 'agentType', 'verificationStatus'];
 export const availableMemberSorts = ['createdAt', 'updatedAt', 'memberLikes', 'memberViews'];
@@ -32,18 +34,21 @@ export const availableBoardArticleSorts = ['createdAt', 'updatedAt', 'articleLik
 export const availableCommentSorts = ['createdAt', 'updatedAt'];
 export const availableChatSorts = ['createdAt', 'updatedAt', 'lastMessageAt'];
 // IMAGE CONFIGURATION ()
-import { v4 as uuidv4 } from 'uuid';
+import { randomUUID } from 'crypto';
 import * as path from 'path';
 import { T } from './types/common';
-import { InputType } from '@nestjs/graphql';
 
 export const validMimeTypes = ['image/png', 'image/jpg', 'image/jpeg'];
 export const getSerialForImage = (filename: string) => {
 	const ext = path.parse(filename).ext;
-	return uuidv4() + ext;
+	return randomUUID() + ext;
 };
-export const shapeIntoMongoObjectId = (target: any) => {
-	return typeof target === 'string' ? new ObjectId(target) : target;
+export const shapeIntoMongoObjectId = (target: any): any => {
+	if (target instanceof ObjectId) return target;
+	if (typeof target !== 'string' || !ObjectId.isValid(target)) {
+		throw new BadRequestException(Messages.INVALID_ID);
+	}
+	return new ObjectId(target);
 };
 
 export const lookUpAuthMemberLiked = (memberId: T, targetRefid: string = '$_id') => {

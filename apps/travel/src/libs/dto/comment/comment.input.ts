@@ -24,7 +24,7 @@ export class CommentInput {
 }
 
 @InputType()
-class CISearch {
+class CommentSearch {
 	@IsNotEmpty()
 	@Field(() => String)
 	commentRefId!: Types.ObjectId;
@@ -56,6 +56,6 @@ export class CommentsInquiry {
 	direction?: Direction;
 
 	@IsNotEmpty()
-	@Field(() => CISearch)
-	search!: CISearch;
+	@Field(() => CommentSearch)
+	search!: CommentSearch;
 }

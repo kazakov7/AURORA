@@ -205,7 +205,7 @@ export class PaymentService implements OnModuleInit, OnModuleDestroy {
 	private async createTourHold(memberId: Types.ObjectId, tourId: Types.ObjectId, input: StartTourPaymentInput): Promise<any> {
 		const today = new Date();
 		today.setHours(0, 0, 0, 0);
-		const tour = await this.tourModel
+		const tour: any = await this.tourModel
 			.findOneAndUpdate(
 				{
 					_id: tourId,

@@ -43,7 +43,7 @@ export class BookingService {
 		const propertyId = new Types.ObjectId(input.propertyId);
 		this.validateBookingDates(input.checkIn, input.checkOut);
 
-		const property = await this.propertyModel
+		const property: any = await this.propertyModel
 			.findOne({ _id: propertyId, propertyStatus: PropertyStatus.ACTIVE, deletedAt: null })
 			.lean()
 			.exec();
@@ -101,7 +101,7 @@ export class BookingService {
 		const today = new Date();
 		today.setHours(0, 0, 0, 0);
 
-		const tour = await this.tourModel
+		const tour: any = await this.tourModel
 			.findOneAndUpdate(
 				{
 					_id: tourId,

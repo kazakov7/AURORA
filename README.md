@@ -53,9 +53,16 @@ $ npm run test
 # e2e tests
 $ npm run test:e2e
 
+# backend validation
+$ npx tsc -p apps/travel/tsconfig.app.json --noEmit
+$ npx tsc -p apps/travel-batch/tsconfig.app.json --noEmit
+$ npm run build
+
 # test coverage
 $ npm run test:cov
 ```
+
+The E2E suite starts an isolated in-memory MongoDB replica set, clears test data between cases, and never uses `MONGO_DEV` or `MONGO_PROD`. The first run may download a MongoDB test binary into `/tmp/aura-mongodb-binaries`. Stripe is mocked in E2E; no real charge is created.
 
 ## Deployment
 
