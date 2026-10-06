@@ -127,16 +127,14 @@ export class DestinationService {
 
 	public async updateDestinationByAdmin(input: DestinationUpdate): Promise<Destination> {
 		const { _id, ...update } = input;
-
-		const slug = input.destinationName!
-			.toLowerCase()
-			.trim()
-			.replace(/\s+/g, '-');
+		const destinationSlug = input.destinationName
+			? input.destinationName.toLowerCase().trim().replace(/\s+/g, '-')
+			: undefined;
 
 		const result = await this.destinationModel
 			.findOneAndUpdate({ _id: _id as unknown as Types.ObjectId, deletedAt: null }, {
 				...update,
-				destinationSlug: slug,
+				...(destinationSlug && { destinationSlug }),
 			}, { new: true })
 			.exec();
 

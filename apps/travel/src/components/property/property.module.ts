@@ -9,6 +9,7 @@ import { MemberModule } from '../member/member.module';
 import { LikeModule } from '../like/like.module';
 import { BookingModule } from '../booking/booking.module';
 import { AgentModule } from '../agent/agent.module';
+import { DestinationModule } from '../destination/destination.module';
 
 @Module({
 	imports: [
@@ -19,6 +20,7 @@ import { AgentModule } from '../agent/agent.module';
 		LikeModule,
 		BookingModule,
 		AgentModule,
+		DestinationModule,
 	],
 	providers: [PropertyResolver, PropertyService],
 	exports: [PropertyService],

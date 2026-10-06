@@ -22,6 +22,7 @@ import { MemberService } from '../member/member.service';
 import { ViewService } from '../view/view.service';
 import { AgentService } from '../agent/agent.service';
 import { AgentType } from '../../libs/enums/agent.enum';
+import { DestinationService } from '../destination/destination.service';
 
 @Injectable()
 export class PropertyService {
@@ -32,17 +33,25 @@ export class PropertyService {
 		private readonly viewService: ViewService,
 		private readonly bookingService: BookingService,
 		private readonly agentService: AgentService,
+		private readonly destinationService: DestinationService,
 	) { }
 
 	public async createProperty(input: CreatePropertyInput): Promise<Property> {
 		if (!input.memberId) throw new BadRequestException(Messages.NOT_AUTHENTICATED);
 		await this.agentService.assertApprovedAgent(input.memberId, AgentType.HOTEL);
+		const destinationId = shapeIntoMongoObjectId(input.destinationId);
+		await this.destinationService.getActiveDestination(destinationId);
 
 		try {
-			const result = await this.propertyModel.create(input);
+			const result = await this.propertyModel.create({ ...input, destinationId });
 			await this.memberService.memberStatusEditor({
 				_id: result.memberId as Types.ObjectId,
 				targetKey: 'memberProperties',
+				modifier: 1,
+			});
+			await this.destinationService.destinationStatsEditor({
+				_id: destinationId,
+				targetKey: 'destinationProperties',
 				modifier: 1,
 			});
 			return result as unknown as Property;
