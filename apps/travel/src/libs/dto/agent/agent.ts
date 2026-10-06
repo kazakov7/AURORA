@@ -1,5 +1,7 @@
-import { Field, ObjectType } from '@nestjs/graphql';
+import { Field, Int, ObjectType } from '@nestjs/graphql';
 import { AgentType, AgentVerificationStatus } from '../../enums/agent.enum';
+import { TotalCounter } from '../member/member';
+import { Member } from '../member/member';
 
 @ObjectType()
 export class Agent {
@@ -38,4 +40,16 @@ export class Agent {
 
 	@Field(() => Date)
 	updatedAt: Date;
+
+	@Field(() => Member, { nullable: true })
+	memberData?: Member;
+}
+
+@ObjectType()
+export class Agents {
+	@Field(() => [Agent])
+	list!: Agent[];
+
+	@Field(() => [TotalCounter], { nullable: true })
+	metaCounter!: TotalCounter[];
 }

@@ -8,6 +8,7 @@ import PropertySchema from '../../schemas/Property.model';
 import { MemberModule } from '../member/member.module';
 import { LikeModule } from '../like/like.module';
 import { BookingModule } from '../booking/booking.module';
+import { AgentModule } from '../agent/agent.module';
 
 @Module({
 	imports: [
@@ -17,6 +18,7 @@ import { BookingModule } from '../booking/booking.module';
 		MemberModule,
 		LikeModule,
 		BookingModule,
+		AgentModule,
 	],
 	providers: [PropertyResolver, PropertyService],
 	exports: [PropertyService],

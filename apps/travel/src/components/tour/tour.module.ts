@@ -7,6 +7,7 @@ import { MemberModule } from '../member/member.module';
 import { ViewModule } from '../view/view.module';
 import { TourResolver } from './tour.resolver';
 import { TourService } from './tour.service';
+import { AgentModule } from '../agent/agent.module';
 
 @Module({
 	imports: [
@@ -15,6 +16,7 @@ import { TourService } from './tour.service';
 		MemberModule,
 		LikeModule,
 		ViewModule,
+		AgentModule,
 	],
 	providers: [TourResolver, TourService],
 	exports: [TourService],

@@ -20,6 +20,8 @@ import { BookingService } from '../booking/booking.service';
 import { LikeService } from '../like/like.service';
 import { MemberService } from '../member/member.service';
 import { ViewService } from '../view/view.service';
+import { AgentService } from '../agent/agent.service';
+import { AgentType } from '../../libs/enums/agent.enum';
 
 @Injectable()
 export class PropertyService {
@@ -29,10 +31,12 @@ export class PropertyService {
 		private readonly likeService: LikeService,
 		private readonly viewService: ViewService,
 		private readonly bookingService: BookingService,
+		private readonly agentService: AgentService,
 	) { }
 
 	public async createProperty(input: CreatePropertyInput): Promise<Property> {
 		if (!input.memberId) throw new BadRequestException(Messages.NOT_AUTHENTICATED);
+		await this.agentService.assertApprovedAgent(input.memberId, AgentType.HOTEL);
 
 		try {
 			const result = await this.propertyModel.create(input);
@@ -92,6 +96,7 @@ export class PropertyService {
 	}
 
 	public async updateProperty(memberId: Types.ObjectId, input: UpdatePropertyInput): Promise<Property> {
+		await this.agentService.assertApprovedAgent(memberId, AgentType.HOTEL);
 		const result = await this.propertyModel
 			.findOneAndUpdate(
 				{

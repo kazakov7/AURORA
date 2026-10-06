@@ -8,9 +8,10 @@ export class DestinationUpdate {
 	@IsMongoId()
 	_id: string;
 
-	@Field(() => DestinationStatus)
+	@Field(() => DestinationStatus, { nullable: true })
+	@IsOptional()
 	@IsEnum(DestinationStatus)
-	destinationStatus: DestinationStatus;
+	destinationStatus?: DestinationStatus;
 
 	@Field(() => String, { nullable: true })
 	@IsOptional()

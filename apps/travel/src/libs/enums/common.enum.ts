@@ -45,6 +45,7 @@ export enum Messages {
 	AGENT_APPLICATION_EXISTS = 'Agent application already exists!',
 	AGENT_APPLICATION_NOT_FOUND = 'Agent application not found!',
 	AGENT_NOT_ALLOWED = 'You are not allowed to perform this agent action!',
+	PROVIDE_ALLOWED_FORMAT = "PROVIDE_ALLOWED_FORMAT",
 
 	// =========================
 	// COUNTRY / CITY / DESTINATION

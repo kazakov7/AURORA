@@ -19,6 +19,8 @@ import { StatisticModifier, T } from '../../libs/types/common';
 import { LikeService } from '../like/like.service';
 import { MemberService } from '../member/member.service';
 import { ViewService } from '../view/view.service';
+import { AgentService } from '../agent/agent.service';
+import { AgentType } from '../../libs/enums/agent.enum';
 
 @Injectable()
 export class TourService {
@@ -27,10 +29,12 @@ export class TourService {
 		private readonly memberService: MemberService,
 		private readonly likeService: LikeService,
 		private readonly viewService: ViewService,
+		private readonly agentService: AgentService,
 	) {}
 
 	public async createTour(input: TourInput): Promise<Tour> {
 		if (!input.memberId) throw new BadRequestException(Messages.NOT_AUTHENTICATED);
+		await this.agentService.assertApprovedAgent(input.memberId, AgentType.TOUR);
 		this.validateTourDates(input.tourStartDate, input.tourEndDate);
 
 		try {
@@ -85,6 +89,7 @@ export class TourService {
 	}
 
 	public async updateTour(memberId: Types.ObjectId, input: TourUpdateInput): Promise<Tour> {
+		await this.agentService.assertApprovedAgent(memberId, AgentType.TOUR);
 		const existingTour = await this.tourModel
 			.findOne({
 				_id: input._id,

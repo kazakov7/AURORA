@@ -1,0 +1,126 @@
+import { BadRequestException, ForbiddenException, Injectable, InternalServerErrorException } from '@nestjs/common';
+import { InjectConnection, InjectModel } from '@nestjs/mongoose';
+import { Connection, Model, Types } from 'mongoose';
+import { Agents, Agent } from '../../libs/dto/agent/agent';
+import { AgentApplicationsInquiry, AgentInput } from '../../libs/dto/agent/agent.input';
+import { RejectAgentApplicationInput } from '../../libs/dto/agent/agent.update';
+import { Direction, Messages } from '../../libs/enums/common.enum';
+import { AgentType, AgentVerificationStatus } from '../../libs/enums/agent.enum';
+import { MemberStatus, MemberType } from '../../libs/enums/member.enum';
+import { T } from '../../libs/types/common';
+import { lookupMember } from '../../libs/config';
+
+@Injectable()
+export class AgentService {
+	constructor(
+		@InjectModel('Agent') private readonly agentModel: Model<any>,
+		@InjectModel('Member') private readonly memberModel: Model<any>,
+		@InjectConnection() private readonly connection: Connection,
+	) {}
+
+	public async submitAgentApplication(memberId: Types.ObjectId, input: AgentInput): Promise<Agent> {
+		const member = await this.memberModel
+			.findOne({ _id: memberId, memberType: MemberType.USER, memberStatus: MemberStatus.ACTIVE })
+			.exec();
+		if (!member) throw new ForbiddenException(Messages.AGENT_NOT_ALLOWED);
+
+		try {
+			const result = await this.agentModel.create({ ...input, memberId });
+			return result as unknown as Agent;
+		} catch (error) {
+			if ((error as { code?: number }).code === 11000) {
+				throw new BadRequestException(Messages.AGENT_APPLICATION_EXISTS);
+			}
+			throw new BadRequestException(Messages.CREATE_FAILED);
+		}
+	}
+
+	public async getMyAgentApplications(memberId: Types.ObjectId, input: AgentApplicationsInquiry): Promise<Agents> {
+		return this.getAgentList({ memberId }, input);
+	}
+
+	public async getAgentApplications(input: AgentApplicationsInquiry): Promise<Agents> {
+		const match: T = {};
+		if (input.search?.agentType) match.agentType = input.search.agentType;
+		if (input.search?.verificationStatus) match.verificationStatus = input.search.verificationStatus;
+		return this.getAgentList(match, input);
+	}
+
+	public async approveAgentApplication(agentId: Types.ObjectId): Promise<Agent> {
+		const session = await this.connection.startSession();
+		try {
+			let agent: Agent | null = null;
+			await session.withTransaction(async () => {
+				const result = await this.agentModel
+					.findOneAndUpdate(
+						{ _id: agentId, verificationStatus: AgentVerificationStatus.PENDING },
+						{
+							verificationStatus: AgentVerificationStatus.APPROVED,
+							verifiedAt: new Date(),
+							rejectionReason: null,
+						},
+						{ new: true, session },
+					)
+					.exec();
+				if (!result) throw new BadRequestException(Messages.AGENT_APPLICATION_NOT_FOUND);
+
+				const member = await this.memberModel
+					.findOneAndUpdate(
+						{ _id: result.memberId, memberType: MemberType.USER, memberStatus: MemberStatus.ACTIVE },
+						{ memberType: MemberType.AGENT },
+						{ new: true, session },
+					)
+					.exec();
+				if (!member) throw new BadRequestException(Messages.AGENT_NOT_ALLOWED);
+				agent = result as unknown as Agent;
+			});
+
+			if (!agent) throw new InternalServerErrorException(Messages.UPDATE_FAILED);
+			return agent;
+		} finally {
+			await session.endSession();
+		}
+	}
+
+	public async rejectAgentApplication(input: RejectAgentApplicationInput): Promise<Agent> {
+		const result = await this.agentModel
+			.findOneAndUpdate(
+				{ _id: input._id, verificationStatus: AgentVerificationStatus.PENDING },
+				{ verificationStatus: AgentVerificationStatus.REJECTED, rejectionReason: input.rejectionReason },
+				{ new: true },
+			)
+			.exec();
+
+		if (!result) throw new BadRequestException(Messages.AGENT_APPLICATION_NOT_FOUND);
+		return result as unknown as Agent;
+	}
+
+	public async assertApprovedAgent(memberId: Types.ObjectId, agentType: AgentType): Promise<void> {
+		const agent = await this.agentModel
+			.exists({ memberId, agentType, verificationStatus: AgentVerificationStatus.APPROVED })
+			.exec();
+		if (!agent) throw new ForbiddenException(Messages.AGENT_NOT_VERIFIED);
+	}
+
+	private async getAgentList(match: T, input: AgentApplicationsInquiry): Promise<Agents> {
+		const sort: T = { [input.sort ?? 'createdAt']: input.direction ?? Direction.DESC };
+		const result = await this.agentModel
+			.aggregate([
+				{ $match: match },
+				{ $sort: sort },
+				{
+					$facet: {
+						list: [
+							{ $skip: (input.page - 1) * input.limit },
+							{ $limit: input.limit },
+							lookupMember,
+							{ $unwind: { path: '$memberData', preserveNullAndEmptyArrays: true } },
+						],
+						metaCounter: [{ $count: 'total' }],
+					},
+				},
+			])
+			.exec();
+		return result[0] as Agents;
+	}
+}

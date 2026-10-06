@@ -1,5 +1,5 @@
 import { Field, InputType } from '@nestjs/graphql';
-import { IsOptional, IsString, MaxLength } from 'class-validator';
+import { IsMongoId, IsNotEmpty, IsOptional, IsString, MaxLength } from 'class-validator';
 
 @InputType()
 export class AgentUpdate {
@@ -18,4 +18,18 @@ export class AgentUpdate {
 	@IsString()
 	@MaxLength(3000)
 	companyDesc?: string;
+}
+
+@InputType()
+export class RejectAgentApplicationInput {
+	@Field(() => String)
+	@IsMongoId()
+	@IsNotEmpty()
+	_id!: string;
+
+	@Field()
+	@IsString()
+	@IsNotEmpty()
+	@MaxLength(3000)
+	rejectionReason!: string;
 }
