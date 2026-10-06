@@ -8,7 +8,7 @@ export class RolesGuard implements CanActivate {
 	constructor(
 		private reflector: Reflector,
 		private authService: AuthService,
-	) {}
+	) { }
 
 	// @ts-ignore
 	async canActivate(context: ExecutionContext | any): Promise<boolean> {
