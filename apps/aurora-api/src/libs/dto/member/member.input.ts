@@ -1,5 +1,5 @@
 import { Field, InputType, Int } from '@nestjs/graphql';
-import { IsEmail, IsIn, IsNotEmpty, IsOptional, IsString, Length, Min } from 'class-validator';
+import { IsEmail, IsIn, IsNotEmpty, IsOptional, IsString, Length, Matches, Min } from 'class-validator';
 import { availableMemberSorts } from '../../config';
 import { Direction } from '../../enums/common.enum';
 import { MemberStatus, MemberType } from '../../enums/member.enum';
@@ -59,6 +59,26 @@ export class KakaoAuthInput {
 	@IsString()
 	@Field(() => String)
 	redirectUri!: string;
+}
+
+@InputType()
+export class TelegramAuthInput {
+	@IsNotEmpty()
+	@IsString()
+	@Field(() => String)
+	code!: string;
+
+	@IsNotEmpty()
+	@IsString()
+	@Field(() => String)
+	redirectUri!: string;
+
+	@IsNotEmpty()
+	@IsString()
+	@Length(43, 128)
+	@Matches(/^[A-Za-z0-9\-._~]+$/)
+	@Field(() => String)
+	codeVerifier!: string;
 }
 
 @InputType()

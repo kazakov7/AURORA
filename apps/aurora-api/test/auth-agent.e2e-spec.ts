@@ -48,10 +48,7 @@ describe('Auth, Member and Agent (e2e)', () => {
 		expect(login.body.errors).toBeUndefined();
 		const token = login.body.data.login.accessToken;
 
-		const unauthorized = await graphQL(
-			app,
-			`mutation { updateMember(input: { memberFullName: "Blocked" }) { _id } }`,
-		);
+		const unauthorized = await graphQL(app, `mutation { updateMember(input: { memberFullName: "Blocked" }) { _id } }`);
 		expect(unauthorized.body.errors?.[0].message).toContain('Bearer token');
 
 		const invalidToken = await graphQL(
@@ -73,11 +70,9 @@ describe('Auth, Member and Agent (e2e)', () => {
 	});
 
 	it('rejects invalid signup DTO and invalid ObjectId', async () => {
-		const invalidDto = await graphQL(
-			app,
-			`mutation Signup($input: MemberInput!) { signup(input: $input) { _id } }`,
-			{ input: { memberNick: 'x', memberPassword: '1' } },
-		);
+		const invalidDto = await graphQL(app, `mutation Signup($input: MemberInput!) { signup(input: $input) { _id } }`, {
+			input: { memberNick: 'x', memberPassword: '1' },
+		});
 		expect(invalidDto.body.errors).toBeDefined();
 
 		const invalidId = await graphQL(app, `query { getMember(input: "not-an-object-id") { _id } }`);
@@ -162,7 +157,9 @@ describe('Auth, Member and Agent (e2e)', () => {
 		expect(created.body.data.googleAuth.memberNick).not.toBe('googletravel');
 		expect(created.body.data.googleAuth.memberNick).toHaveLength(12);
 
-		await model(app, 'Member').findByIdAndUpdate(created.body.data.googleAuth._id, { memberStatus: MemberStatus.BLOCKED });
+		await model(app, 'Member').findByIdAndUpdate(created.body.data.googleAuth._id, {
+			memberStatus: MemberStatus.BLOCKED,
+		});
 		const blocked = await graphQL(app, googleMutation, { input: { credential: 'google-id-token' } });
 		expect(blocked.body.errors?.[0].message).toBe(Messages.MEMBER_BLOCKED);
 	});
@@ -192,7 +189,9 @@ describe('Auth, Member and Agent (e2e)', () => {
 		expect(stored.kakaoSubject).toBe('kakao-subject-1');
 		expect(stored.memberPassword).toBeUndefined();
 		expect(stored.memberImage).toBe('https://k.kakaocdn.net/kakao-profile.jpg');
-		const tokenPayload = JSON.parse(Buffer.from(first.body.data.kakaoAuth.accessToken.split('.')[1], 'base64url').toString());
+		const tokenPayload = JSON.parse(
+			Buffer.from(first.body.data.kakaoAuth.accessToken.split('.')[1], 'base64url').toString(),
+		);
 		expect(tokenPayload.googleSubject).toBeUndefined();
 		expect(tokenPayload.kakaoSubject).toBeUndefined();
 
@@ -222,9 +221,13 @@ describe('Auth, Member and Agent (e2e)', () => {
 		);
 		expect(passwordLogin.body.errors?.[0].message).toBe(Messages.WRONG_PASSWORD);
 
-		const providerField = await graphQL(app, `mutation KakaoAuth($input: KakaoAuthInput!) {
+		const providerField = await graphQL(
+			app,
+			`mutation KakaoAuth($input: KakaoAuthInput!) {
 			kakaoAuth(input: $input) { kakaoSubject }
-		}`, variables);
+		}`,
+			variables,
+		);
 		expect(providerField.body.errors?.[0].message).toContain('Cannot query field "kakaoSubject"');
 	});
 
@@ -245,13 +248,36 @@ describe('Auth, Member and Agent (e2e)', () => {
 		expect(created.body.data.kakaoAuth.memberNick).not.toBe('kakaouser');
 		expect(created.body.data.kakaoAuth.memberNick).toHaveLength(12);
 
-		await model(app, 'Member').findByIdAndUpdate(created.body.data.kakaoAuth._id, { memberStatus: MemberStatus.BLOCKED });
+		await model(app, 'Member').findByIdAndUpdate(created.body.data.kakaoAuth._id, {
+			memberStatus: MemberStatus.BLOCKED,
+		});
 		const blocked = await graphQL(app, kakaoMutation, variables);
 		expect(blocked.body.errors?.[0].message).toBe(Messages.MEMBER_BLOCKED);
 
-		await model(app, 'Member').findByIdAndUpdate(created.body.data.kakaoAuth._id, { memberStatus: MemberStatus.DELETED });
+		await model(app, 'Member').findByIdAndUpdate(created.body.data.kakaoAuth._id, {
+			memberStatus: MemberStatus.DELETED,
+		});
 		const deleted = await graphQL(app, kakaoMutation, variables);
 		expect(deleted.body.errors?.[0].message).toBe(Messages.MEMBER_NOT_FOUND);
+	});
+
+	it('uses the Kakao fallback nickname when the consented nickname cannot be normalized', async () => {
+		const authService = app.get(AuthService);
+		jest.spyOn(authService, 'verifyKakaoAuthorizationCode').mockResolvedValue({
+			subject: 'kakao-subject-emoji',
+			name: '🖤',
+		});
+		const result = await graphQL(
+			app,
+			`mutation KakaoAuth($input: KakaoAuthInput!) {
+				kakaoAuth(input: $input) { memberNick memberAuthType }
+			}`,
+			{ input: { code: 'kakao-code', redirectUri: 'https://app.aurora.test/auth/kakao' } },
+		);
+
+		expect(result.body.errors).toBeUndefined();
+		expect(result.body.data.kakaoAuth.memberAuthType).toBe('KAKAO');
+		expect(result.body.data.kakaoAuth.memberNick).toBe('kakaouser');
 	});
 
 	it('rejects invalid Kakao authorization codes and email collisions with password or Google accounts', async () => {
@@ -266,7 +292,11 @@ describe('Auth, Member and Agent (e2e)', () => {
 
 		jest.restoreAllMocks();
 		const memberService = app.get(MemberService);
-		await memberService.signup({ memberNick: 'passwordusr', memberPassword: 'pass1234', memberEmail: 'password@example.com' });
+		await memberService.signup({
+			memberNick: 'passwordusr',
+			memberPassword: 'pass1234',
+			memberEmail: 'password@example.com',
+		});
 		jest.spyOn(authService, 'verifyKakaoAuthorizationCode').mockResolvedValue({
 			subject: 'kakao-subject-3',
 			email: 'password@example.com',
@@ -286,6 +316,160 @@ describe('Auth, Member and Agent (e2e)', () => {
 		});
 		const googleCollision = await graphQL(app, kakaoMutation, variables);
 		expect(googleCollision.body.errors?.[0].message).toBe(Messages.KAKAO_EMAIL_CONFLICT);
+	});
+
+	it('creates and reuses a passwordless Telegram member with the normal AURORA JWT', async () => {
+		const authService = app.get(AuthService);
+		const telegramIdentity = {
+			subject: 'telegram-subject-1',
+			preferredUsername: 'kevin_dev',
+			name: 'Kevin Traveler',
+			image: 'https://t.me/i/userpic/320/kevin.jpg',
+		};
+		jest.spyOn(authService, 'verifyTelegramAuthorizationCode').mockResolvedValue(telegramIdentity);
+		const telegramMutation = `mutation TelegramAuth($input: TelegramAuthInput!) {
+			telegramAuth(input: $input) {
+				_id memberNick memberFullName memberImage memberType memberAuthType memberEmail accessToken lastLoginAt
+			}
+		}`;
+		const variables = {
+			input: {
+				code: 'telegram-code',
+				redirectUri: 'https://app.aurora.test/auth/telegram',
+				codeVerifier: 'a'.repeat(43),
+			},
+		};
+
+		const first = await graphQL(app, telegramMutation, variables);
+		expect(first.body.errors).toBeUndefined();
+		expect(first.body.data.telegramAuth).toEqual(
+			expect.objectContaining({
+				memberNick: 'kevindev',
+				memberFullName: 'Kevin Traveler',
+				memberImage: 'https://t.me/i/userpic/320/kevin.jpg',
+				memberType: 'USER',
+				memberAuthType: 'TELEGRAM',
+				memberEmail: null,
+			}),
+		);
+		expect(first.body.data.telegramAuth.accessToken).toBeTruthy();
+
+		const stored = await model(app, 'Member').findById(first.body.data.telegramAuth._id).lean();
+		expect(stored.telegramSubject).toBe('telegram-subject-1');
+		expect(stored.memberPassword).toBeUndefined();
+		const tokenPayload = JSON.parse(
+			Buffer.from(first.body.data.telegramAuth.accessToken.split('.')[1], 'base64url').toString(),
+		);
+		expect(tokenPayload.telegramSubject).toBeUndefined();
+		expect(tokenPayload.googleSubject).toBeUndefined();
+		expect(tokenPayload.kakaoSubject).toBeUndefined();
+
+		await model(app, 'Member').findByIdAndUpdate(first.body.data.telegramAuth._id, {
+			memberNick: 'customnick',
+			memberFullName: null,
+			memberImage: null,
+			lastLoginAt: new Date('2000-01-01'),
+		});
+		const second = await graphQL(app, telegramMutation, variables);
+		expect(second.body.errors).toBeUndefined();
+		expect(second.body.data.telegramAuth._id).toBe(first.body.data.telegramAuth._id);
+		expect(second.body.data.telegramAuth.memberNick).toBe('customnick');
+		expect(second.body.data.telegramAuth.memberFullName).toBe('Kevin Traveler');
+		expect(second.body.data.telegramAuth.memberImage).toBe('https://t.me/i/userpic/320/kevin.jpg');
+		expect(new Date(second.body.data.telegramAuth.lastLoginAt).getTime()).toBeGreaterThan(
+			new Date('2000-01-01').getTime(),
+		);
+
+		await model(app, 'Member').findByIdAndUpdate(first.body.data.telegramAuth._id, {
+			memberFullName: 'Aurora Name',
+			memberImage: 'https://aurora.example/custom.jpg',
+		});
+		telegramIdentity.name = 'Changed Telegram Name';
+		telegramIdentity.image = 'https://t.me/i/userpic/320/changed.jpg';
+		const third = await graphQL(app, telegramMutation, variables);
+		expect(third.body.data.telegramAuth.memberFullName).toBe('Aurora Name');
+		expect(third.body.data.telegramAuth.memberImage).toBe('https://aurora.example/custom.jpg');
+
+		const passwordLogin = await graphQL(
+			app,
+			`mutation { login(input: { memberNick: "customnick", memberPassword: "pass1234" }) { _id } }`,
+		);
+		expect(passwordLogin.body.errors?.[0].message).toBe(Messages.WRONG_PASSWORD);
+	});
+
+	it('uses Telegram username, name and fallback nickname candidates in priority order', async () => {
+		const memberService = app.get(MemberService);
+		await memberService.signup({ memberNick: 'claimeduser', memberPassword: 'pass1234' });
+		await memberService.signup({ memberNick: 'telegramuser', memberPassword: 'pass1234' });
+		const authService = app.get(AuthService);
+		const verifyTelegram = jest.spyOn(authService, 'verifyTelegramAuthorizationCode');
+		const mutation = `mutation TelegramAuth($input: TelegramAuthInput!) {
+			telegramAuth(input: $input) { _id memberNick memberImage }
+		}`;
+		const input = {
+			code: 'telegram-code',
+			redirectUri: 'https://app.aurora.test/auth/telegram',
+			codeVerifier: 'b'.repeat(43),
+		};
+
+		verifyTelegram.mockResolvedValueOnce({
+			subject: 'telegram-subject-name-fallback',
+			preferredUsername: 'claimed_user',
+			name: 'Travel Kevin',
+		});
+		const nameFallback = await graphQL(app, mutation, { input });
+		expect(nameFallback.body.errors).toBeUndefined();
+		expect(nameFallback.body.data.telegramAuth.memberNick).toBe('travelkevin');
+
+		verifyTelegram.mockResolvedValueOnce({
+			subject: 'telegram-subject-no-username',
+			preferredUsername: 'x',
+			name: 'Solo Traveler',
+		});
+		const nameOnly = await graphQL(app, mutation, { input });
+		expect(nameOnly.body.errors).toBeUndefined();
+		expect(nameOnly.body.data.telegramAuth.memberNick).toBe('solotraveler');
+
+		verifyTelegram.mockResolvedValueOnce({
+			subject: 'telegram-subject-fallback',
+			preferredUsername: 'this_username_is_too_long',
+			name: '🖤',
+		});
+		const fallback = await graphQL(app, mutation, { input });
+		expect(fallback.body.errors).toBeUndefined();
+		expect(fallback.body.data.telegramAuth.memberNick).not.toBe('telegramuser');
+		expect(fallback.body.data.telegramAuth.memberNick).toHaveLength(12);
+		expect(fallback.body.data.telegramAuth.memberImage).toBeNull();
+	});
+
+	it('keeps Telegram subjects internal and validates the PKCE verifier at the GraphQL boundary', async () => {
+		const invalidInput = await graphQL(
+			app,
+			`mutation TelegramAuth($input: TelegramAuthInput!) { telegramAuth(input: $input) { _id } }`,
+			{
+				input: {
+					code: 'telegram-code',
+					redirectUri: 'https://app.aurora.test/auth/telegram',
+					codeVerifier: 'too-short',
+				},
+			},
+		);
+		expect(invalidInput.body.errors).toBeDefined();
+
+		const providerField = await graphQL(
+			app,
+			`mutation TelegramAuth($input: TelegramAuthInput!) {
+				telegramAuth(input: $input) { telegramSubject }
+			}`,
+			{
+				input: {
+					code: 'telegram-code',
+					redirectUri: 'https://app.aurora.test/auth/telegram',
+					codeVerifier: 'c'.repeat(43),
+				},
+			},
+		);
+		expect(providerField.body.errors?.[0].message).toContain('Cannot query field "telegramSubject"');
 	});
 
 	it('handles application approve/reject, duplicate and role authorization', async () => {

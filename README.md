@@ -6,13 +6,13 @@ The API accepts a verified Google ID token through the GraphQL mutation below. C
 
 ```graphql
 mutation GoogleAuth($input: GoogleAuthInput!) {
-  googleAuth(input: $input) {
-    _id
-    memberNick
-    memberType
-    memberAuthType
-    accessToken
-  }
+	googleAuth(input: $input) {
+		_id
+		memberNick
+		memberType
+		memberAuthType
+		accessToken
+	}
 }
 ```
 
@@ -24,13 +24,13 @@ Configure `KAKAO_REST_API_KEY` and `KAKAO_CLIENT_SECRET` on the API. The client 
 
 ```graphql
 mutation KakaoAuth($input: KakaoAuthInput!) {
-  kakaoAuth(input: $input) {
-    _id
-    memberNick
-    memberType
-    memberAuthType
-    accessToken
-  }
+	kakaoAuth(input: $input) {
+		_id
+		memberNick
+		memberType
+		memberAuthType
+		accessToken
+	}
 }
 ```
 
@@ -38,14 +38,60 @@ Antigravity sends only:
 
 ```json
 {
-  "input": {
-    "code": "<authorization code returned by Kakao>",
-    "redirectUri": "https://your-app.example/auth/kakao/callback"
-  }
+	"input": {
+		"code": "<authorization code returned by Kakao>",
+		"redirectUri": "https://your-app.example/auth/kakao/callback"
+	}
 }
 ```
 
 In Kakao Developers, enable Kakao Login and OpenID Connect, register the exact redirect URI under the REST API key, enable the client secret, and enable consent for Nickname and Profile image. Antigravity must request the Kakao authorization scope `openid,profile_nickname,profile_image` (comma-separated for Kakao's REST authorization request). The API retrieves the consented nickname and HTTPS profile-image URL from Kakao's server-side user-information endpoint; it never receives provider tokens or profile values from Antigravity. Email is optional for AURORA Kakao accounts, but any supplied email that already belongs to another AURORA account is rejected rather than linked. The supplied `redirectUri` must exactly match the URI used to obtain the code and one registered in Kakao Developers.
+
+## Telegram authentication
+
+Configure `TELEGRAM_CLIENT_ID` and `TELEGRAM_CLIENT_SECRET` on the API. The client secret is backend-only and must never be included in the frontend bundle. Telegram authentication is lazily configured, so missing Telegram variables do not affect other API features; the `telegramAuth` mutation returns a configuration error until both are present.
+
+The frontend uses Telegram's OIDC Authorization Code Flow with PKCE (`S256`) against `https://oauth.telegram.org/auth`. It generates and retains a cryptographically random `state` and PKCE `code_verifier`, sends the derived `code_challenge`, requests only `openid profile`, and validates the returned `state` before calling AURORA. The `redirect_uri` must exactly match the value used in the authorization request and an allowed callback registered through BotFather.
+
+```text
+response_type=code
+client_id=<public Telegram client ID>
+redirect_uri=https://your-app.example/auth/telegram/callback
+scope=openid profile
+state=<random CSRF value>
+code_challenge=<base64url SHA-256(code_verifier)>
+code_challenge_method=S256
+```
+
+After validating `state`, the frontend sends the code, the same redirect URI, and the original verifier. This is the complete GraphQL contract:
+
+```graphql
+mutation TelegramAuth($input: TelegramAuthInput!) {
+	telegramAuth(input: $input) {
+		_id
+		memberNick
+		memberFullName
+		memberImage
+		memberType
+		memberAuthType
+		accessToken
+	}
+}
+```
+
+```json
+{
+	"input": {
+		"code": "<Telegram authorization code>",
+		"redirectUri": "https://your-app.example/auth/telegram/callback",
+		"codeVerifier": "<original 43-128 character PKCE verifier>"
+	}
+}
+```
+
+The API exchanges the code at `https://oauth.telegram.org/token` using HTTP Basic client authentication, verifies the returned ID token against Telegram's issuer, audience, expiry, subject, RS256 signature and official JWKS, and consumes only the `name`, `preferred_username`, and `picture` profile claims. Provider tokens and `telegramSubject` are never exposed through GraphQL or embedded in the AURORA JWT. There is no UserInfo call. AURORA intentionally does not request the phone or `telegram:bot_access` scopes.
+
+In BotFather, select the bot and configure its Login Widget/Telegram Login settings: register the production origin and exact callback URL, obtain the OIDC client ID and secret, and keep the signing algorithm at the RS256/default setting used by this backend. The frontend may receive the client ID, but never the client secret. Telegram publishes discovery metadata at `https://oauth.telegram.org/.well-known/openid-configuration` and signing keys at `https://oauth.telegram.org/.well-known/jwks.json`.
 
 The NestJS GraphQL backend for the AURORA travel marketplace.
 

@@ -32,6 +32,10 @@ export enum Messages {
 	KAKAO_TOKEN_EXCHANGE_FAILED = 'Kakao authentication is temporarily unavailable. Please try again.',
 	INVALID_KAKAO_IDENTITY_TOKEN = 'Kakao authentication failed. Please try again.',
 	KAKAO_EMAIL_CONFLICT = 'An account with this email already exists. Please sign in using your original authentication method.',
+	TELEGRAM_AUTH_NOT_CONFIGURED = 'Telegram authentication is not configured!',
+	INVALID_TELEGRAM_AUTHORIZATION_CODE = 'Telegram authorization code, redirect URI, or PKCE verifier is invalid or expired.',
+	TELEGRAM_TOKEN_EXCHANGE_FAILED = 'Telegram authentication is temporarily unavailable. Please try again.',
+	INVALID_TELEGRAM_IDENTITY_TOKEN = 'Telegram authentication failed. Please try again.',
 
 	// =========================
 	// MEMBER

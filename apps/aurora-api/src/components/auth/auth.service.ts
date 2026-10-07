@@ -30,6 +30,13 @@ export interface KakaoIdentity {
 	image?: string;
 }
 
+export interface TelegramIdentity {
+	subject: string;
+	preferredUsername?: string;
+	name?: string;
+	image?: string;
+}
+
 interface KakaoTokenResponse {
 	access_token?: string;
 	id_token?: string;
@@ -45,10 +52,17 @@ interface KakaoProfileResponse {
 	};
 }
 
+interface TelegramTokenResponse {
+	id_token?: string;
+}
+
 const KAKAO_TOKEN_ENDPOINT = 'https://kauth.kakao.com/oauth/token';
 const KAKAO_USER_INFO_ENDPOINT = 'https://kapi.kakao.com/v2/user/me';
 const KAKAO_ISSUER = 'https://kauth.kakao.com';
 const kakaoJwks = createRemoteJWKSet(new URL('https://kauth.kakao.com/.well-known/jwks.json'));
+const TELEGRAM_TOKEN_ENDPOINT = 'https://oauth.telegram.org/token';
+const TELEGRAM_ISSUER = 'https://oauth.telegram.org';
+const telegramJwks = createRemoteJWKSet(new URL('https://oauth.telegram.org/.well-known/jwks.json'));
 
 @Injectable()
 export class AuthService {
@@ -73,6 +87,7 @@ export class AuthService {
 		delete payload.memberPassword;
 		delete payload.googleSubject;
 		delete payload.kakaoSubject;
+		delete payload.telegramSubject;
 		delete payload.accessToken;
 
 		return await this.jwtService.signAsync(payload);
@@ -193,6 +208,76 @@ export class AuthService {
 		} catch (error) {
 			if (error instanceof UnauthorizedException) throw error;
 			return identity;
+		}
+	}
+
+	public async verifyTelegramAuthorizationCode(
+		code: string,
+		redirectUri: string,
+		codeVerifier: string,
+	): Promise<TelegramIdentity> {
+		const clientId = process.env.TELEGRAM_CLIENT_ID;
+		const clientSecret = process.env.TELEGRAM_CLIENT_SECRET;
+		if (!clientId || !clientSecret) {
+			throw new ServiceUnavailableException(Messages.TELEGRAM_AUTH_NOT_CONFIGURED);
+		}
+
+		const form = new URLSearchParams({
+			grant_type: 'authorization_code',
+			code,
+			redirect_uri: redirectUri,
+			client_id: clientId,
+			code_verifier: codeVerifier,
+		});
+
+		let token: TelegramTokenResponse;
+		try {
+			const basicCredentials = Buffer.from(`${clientId}:${clientSecret}`).toString('base64');
+			const response = await firstValueFrom(
+				this.httpService.post<TelegramTokenResponse>(TELEGRAM_TOKEN_ENDPOINT, form.toString(), {
+					headers: {
+						Authorization: `Basic ${basicCredentials}`,
+						'Content-Type': 'application/x-www-form-urlencoded',
+					},
+				}),
+			);
+			token = response.data;
+		} catch (error) {
+			//@ts-ignore
+			const status = error?.response?.status;
+			if (status >= 400 && status < 500) {
+				throw new BadRequestException(Messages.INVALID_TELEGRAM_AUTHORIZATION_CODE);
+			}
+			throw new InternalServerErrorException(Messages.TELEGRAM_TOKEN_EXCHANGE_FAILED);
+		}
+
+		if (!token?.id_token) throw new UnauthorizedException(Messages.INVALID_TELEGRAM_IDENTITY_TOKEN);
+		return await this.verifyTelegramIdentityToken(token.id_token, clientId);
+	}
+
+	private async verifyTelegramIdentityToken(idToken: string, clientId: string): Promise<TelegramIdentity> {
+		try {
+			const { payload } = await jwtVerify(idToken, telegramJwks, {
+				issuer: TELEGRAM_ISSUER,
+				audience: clientId,
+				algorithms: ['RS256'],
+			});
+			if (typeof payload.sub !== 'string' || !payload.sub) {
+				throw new UnauthorizedException(Messages.INVALID_TELEGRAM_IDENTITY_TOKEN);
+			}
+
+			return {
+				subject: payload.sub,
+				preferredUsername:
+					typeof payload.preferred_username === 'string' && payload.preferred_username
+						? payload.preferred_username
+						: undefined,
+				name: typeof payload.name === 'string' && payload.name ? payload.name : undefined,
+				image: typeof payload.picture === 'string' && payload.picture ? payload.picture : undefined,
+			};
+		} catch (error) {
+			if (error instanceof UnauthorizedException) throw error;
+			throw new UnauthorizedException(Messages.INVALID_TELEGRAM_IDENTITY_TOKEN);
 		}
 	}
 }

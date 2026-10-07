@@ -1,7 +1,14 @@
 import { Args, Mutation, Resolver, Query } from '@nestjs/graphql';
 import { MemberService } from './member.service';
 import { Member, Members } from '../../libs/dto/member/member';
-import { GoogleAuthInput, KakaoAuthInput, LoginInput, MemberInput, MembersInquiry } from '../../libs/dto/member/member.input';
+import {
+	GoogleAuthInput,
+	KakaoAuthInput,
+	LoginInput,
+	MemberInput,
+	MembersInquiry,
+	TelegramAuthInput,
+} from '../../libs/dto/member/member.input';
 import { UseGuards } from '@nestjs/common';
 import { AuthGuard } from '../auth/guards/auth.guard';
 import { MemberUpdate } from '../../libs/dto/member/member.update';
@@ -36,6 +43,11 @@ export class MemberResolver {
 	@Mutation(() => Member)
 	public async kakaoAuth(@Args('input') input: KakaoAuthInput): Promise<Member> {
 		return await this.memberService.kakaoAuth(input);
+	}
+
+	@Mutation(() => Member)
+	public async telegramAuth(@Args('input') input: TelegramAuthInput): Promise<Member> {
+		return await this.memberService.telegramAuth(input);
 	}
 
 	@UseGuards(AuthGuard)
