@@ -1,5 +1,23 @@
 # AURORA Backend
 
+## Google authentication
+
+The API accepts a verified Google ID token through the GraphQL mutation below. Configure the public Google Web client ID on the API as `GOOGLE_WEB_CLIENT_ID`; Antigravity must use the same public Web client ID. Do not add a Google client secret to this project.
+
+```graphql
+mutation GoogleAuth($input: GoogleAuthInput!) {
+  googleAuth(input: $input) {
+    _id
+    memberNick
+    memberType
+    memberAuthType
+    accessToken
+  }
+}
+```
+
+The client sends only `{ "input": { "credential": "<Google ID token>" } }`. On success, store and use `accessToken` through the same AURORA session flow used after `login`. The API verifies the credential, issuer, audience, expiry, Google subject, and verified email; it does not trust browser profile data. A Google attempt for an email already owned by a non-Google account is rejected and must not be auto-linked.
+
 The NestJS GraphQL backend for the AURORA travel marketplace.
 
 <p align="center">

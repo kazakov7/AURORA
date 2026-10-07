@@ -33,6 +33,12 @@ const MemberSchema = new Schema(
 			trim: true,
 		},
 
+		googleSubject: {
+			type: String,
+			trim: true,
+			immutable: true,
+		},
+
 		memberPassword: {
 			type: String,
 			select: false,
@@ -129,6 +135,7 @@ const MemberSchema = new Schema(
 MemberSchema.index({ memberPhone: 1 }, { unique: true, partialFilterExpression: { memberPhone: { $type: 'string' } } });
 MemberSchema.index({ memberEmail: 1 }, { unique: true, partialFilterExpression: { memberEmail: { $type: 'string' } } });
 MemberSchema.index({ memberNick: 1 }, { unique: true, partialFilterExpression: { memberNick: { $type: 'string' } } });
+MemberSchema.index({ googleSubject: 1 }, { unique: true, partialFilterExpression: { googleSubject: { $type: 'string' } } });
 MemberSchema.index({ memberType: 1, memberStatus: 1, memberRank: 1 }, { name: 'members_ranking_idx' });
 MemberSchema.index({ memberStatus: 1, createdAt: 1 }, { name: 'members_status_created_idx' });
 

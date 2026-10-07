@@ -1,7 +1,7 @@
 import { Args, Mutation, Resolver, Query } from '@nestjs/graphql';
 import { MemberService } from './member.service';
 import { Member, Members } from '../../libs/dto/member/member';
-import { LoginInput, MemberInput, MembersInquiry } from '../../libs/dto/member/member.input';
+import { GoogleAuthInput, LoginInput, MemberInput, MembersInquiry } from '../../libs/dto/member/member.input';
 import { UseGuards } from '@nestjs/common';
 import { AuthGuard } from '../auth/guards/auth.guard';
 import { MemberUpdate } from '../../libs/dto/member/member.update';
@@ -26,6 +26,11 @@ export class MemberResolver {
 	public async login(@Args('input') input: LoginInput): Promise<Member> {
 		console.log('Mutation: login', input);
 		return await this.memberService.login(input);
+	}
+
+	@Mutation(() => Member)
+	public async googleAuth(@Args('input') input: GoogleAuthInput): Promise<Member> {
+		return await this.memberService.googleAuth(input);
 	}
 
 	@UseGuards(AuthGuard)

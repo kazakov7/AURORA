@@ -1,9 +1,17 @@
-import { Injectable } from '@nestjs/common';
+import { Injectable, ServiceUnavailableException, UnauthorizedException } from '@nestjs/common';
 import * as bcrypt from 'bcrypt';
 import { JwtService } from '@nestjs/jwt';
+import { OAuth2Client } from 'google-auth-library';
 import { Member } from '../../libs/dto/member/member';
 import { T } from '../../libs/types/common';
 import { shapeIntoMongoObjectId } from '../../libs/config';
+import { Messages } from '../../libs/enums/common.enum';
+
+export interface GoogleIdentity {
+	subject: string;
+	email: string;
+	name?: string;
+}
 @Injectable()
 export class AuthService {
 	constructor(private jwtService: JwtService) {}
@@ -29,5 +37,29 @@ export class AuthService {
 		const member = await this.jwtService.verifyAsync(token);
 		member._id = shapeIntoMongoObjectId(member._id);
 		return member;
+	}
+
+	public async verifyGoogleCredential(credential: string): Promise<GoogleIdentity> {
+		const clientId = process.env.GOOGLE_WEB_CLIENT_ID;
+		if (!clientId) throw new ServiceUnavailableException(Messages.GOOGLE_AUTH_NOT_CONFIGURED);
+
+		try {
+			const client = new OAuth2Client(clientId);
+			const ticket = await client.verifyIdToken({ idToken: credential, audience: clientId });
+			const payload = ticket.getPayload();
+
+			if (!payload?.sub || !payload.email || payload.email_verified !== true) {
+				throw new UnauthorizedException(Messages.INVALID_GOOGLE_CREDENTIAL);
+			}
+
+			return {
+				subject: payload.sub,
+				email: payload.email.toLowerCase(),
+				name: payload.name,
+			};
+		} catch (error) {
+			if (error instanceof UnauthorizedException) throw error;
+			throw new UnauthorizedException(Messages.INVALID_GOOGLE_CREDENTIAL);
+		}
 	}
 }

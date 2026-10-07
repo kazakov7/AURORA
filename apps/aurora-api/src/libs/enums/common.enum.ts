@@ -24,6 +24,9 @@ export enum Messages {
 	TOKEN_NOT_EXIST = 'Bearer token is not provided!',
 	TOKEN_EXPIRED = 'Your session has expired, please login again!',
 	NOT_AUTHORIZED = 'You are not authorized to perform this action!',
+	GOOGLE_AUTH_NOT_CONFIGURED = 'Google authentication is not configured!',
+	INVALID_GOOGLE_CREDENTIAL = 'Google authentication failed. Please try again.',
+	GOOGLE_EMAIL_CONFLICT = 'An account with this email already exists. Please sign in using your original authentication method.',
 
 	// =========================
 	// MEMBER

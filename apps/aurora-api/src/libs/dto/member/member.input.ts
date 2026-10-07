@@ -39,6 +39,15 @@ export class LoginInput {
 	@Field(() => String)
 	memberPassword!: string;
 }
+
+@InputType()
+export class GoogleAuthInput {
+	@IsNotEmpty()
+	@IsString()
+	@Field(() => String)
+	credential!: string;
+}
+
 @InputType()
 class MISearch {
 	@IsOptional()
