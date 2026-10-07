@@ -18,6 +18,35 @@ mutation GoogleAuth($input: GoogleAuthInput!) {
 
 The client sends only `{ "input": { "credential": "<Google ID token>" } }`. On success, store and use `accessToken` through the same AURORA session flow used after `login`. The API verifies the credential, issuer, audience, expiry, Google subject, and verified email; it does not trust browser profile data. A Google attempt for an email already owned by a non-Google account is rejected and must not be auto-linked.
 
+## Kakao authentication
+
+Configure `KAKAO_REST_API_KEY` and `KAKAO_CLIENT_SECRET` on the API. The client secret remains server-only. The API exchanges the authorization code directly with Kakao, requires the returned OIDC ID token, and verifies its RS256 signature using Kakao's published JWKS as well as its issuer, audience, expiration, and subject.
+
+```graphql
+mutation KakaoAuth($input: KakaoAuthInput!) {
+  kakaoAuth(input: $input) {
+    _id
+    memberNick
+    memberType
+    memberAuthType
+    accessToken
+  }
+}
+```
+
+Antigravity sends only:
+
+```json
+{
+  "input": {
+    "code": "<authorization code returned by Kakao>",
+    "redirectUri": "https://your-app.example/auth/kakao/callback"
+  }
+}
+```
+
+In Kakao Developers, enable Kakao Login and OpenID Connect, register the exact redirect URI under the REST API key, enable the client secret, and enable consent for Nickname and Profile image. Antigravity must request the Kakao authorization scope `openid,profile_nickname,profile_image` (comma-separated for Kakao's REST authorization request). The API retrieves the consented nickname and HTTPS profile-image URL from Kakao's server-side user-information endpoint; it never receives provider tokens or profile values from Antigravity. Email is optional for AURORA Kakao accounts, but any supplied email that already belongs to another AURORA account is rejected rather than linked. The supplied `redirectUri` must exactly match the URI used to obtain the code and one registered in Kakao Developers.
+
 The NestJS GraphQL backend for the AURORA travel marketplace.
 
 <p align="center">

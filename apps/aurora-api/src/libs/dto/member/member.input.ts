@@ -49,6 +49,19 @@ export class GoogleAuthInput {
 }
 
 @InputType()
+export class KakaoAuthInput {
+	@IsNotEmpty()
+	@IsString()
+	@Field(() => String)
+	code!: string;
+
+	@IsNotEmpty()
+	@IsString()
+	@Field(() => String)
+	redirectUri!: string;
+}
+
+@InputType()
 class MISearch {
 	@IsOptional()
 	@Field(() => MemberStatus, { nullable: true })

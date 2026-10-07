@@ -38,6 +38,7 @@
 		"class-validator": "^0.15.1",
 		"google-auth-library": "^10.9.1",
 		"graphql-upload": "^13.0.0",
+		"jose": "^5.10.0",
 		"moment": "^2.31.0",
 		"mongoose": "^8.24.5",
 		"reflect-metadata": "^0.2.2",

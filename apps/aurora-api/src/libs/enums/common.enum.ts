@@ -27,6 +27,11 @@ export enum Messages {
 	GOOGLE_AUTH_NOT_CONFIGURED = 'Google authentication is not configured!',
 	INVALID_GOOGLE_CREDENTIAL = 'Google authentication failed. Please try again.',
 	GOOGLE_EMAIL_CONFLICT = 'An account with this email already exists. Please sign in using your original authentication method.',
+	KAKAO_AUTH_NOT_CONFIGURED = 'Kakao authentication is not configured!',
+	INVALID_KAKAO_AUTHORIZATION_CODE = 'Kakao authorization code is invalid or expired.',
+	KAKAO_TOKEN_EXCHANGE_FAILED = 'Kakao authentication is temporarily unavailable. Please try again.',
+	INVALID_KAKAO_IDENTITY_TOKEN = 'Kakao authentication failed. Please try again.',
+	KAKAO_EMAIL_CONFLICT = 'An account with this email already exists. Please sign in using your original authentication method.',
 
 	// =========================
 	// MEMBER

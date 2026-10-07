@@ -2,8 +2,8 @@ import { BadRequestException, ConflictException, Injectable, InternalServerError
 import { InjectModel } from '@nestjs/mongoose';
 import { Member, Members } from '../../libs/dto/member/member';
 import { Model, Types } from 'mongoose';
-import { AuthService, GoogleIdentity } from '../auth/auth.service';
-import { GoogleAuthInput, LoginInput, MemberInput, MembersInquiry } from '../../libs/dto/member/member.input';
+import { AuthService, GoogleIdentity, KakaoIdentity } from '../auth/auth.service';
+import { GoogleAuthInput, KakaoAuthInput, LoginInput, MemberInput, MembersInquiry } from '../../libs/dto/member/member.input';
 import { Direction, Messages } from '../../libs/enums/common.enum';
 import { Message } from '../../libs/dto/message/message';
 import { MemberAuthType, MemberStatus, MemberType } from '../../libs/enums/member.enum';
@@ -15,6 +15,17 @@ import { LikeService } from '../like/like.service';
 import { MemberUpdate } from '../../libs/dto/member/member.update';
 import { Follower, Following, MeFollowed } from '../../libs/dto/follow/follow';
 import { randomBytes } from 'crypto';
+
+type SocialIdentity = GoogleIdentity | KakaoIdentity;
+type SocialSubjectField = 'googleSubject' | 'kakaoSubject';
+
+interface SocialAuthConfig {
+	authType: MemberAuthType;
+	subjectField: SocialSubjectField;
+	emailConflictMessage: Messages;
+	nicknameFallback: string;
+}
+
 @Injectable()
 export class MemberService {
 	constructor(
@@ -47,7 +58,7 @@ export class MemberService {
 		} else if (response.memberStatus === MemberStatus.BLOCKED) {
 			throw new InternalServerErrorException(Messages.MEMBER_BLOCKED);
 		}
-		if (response.memberAuthType === MemberAuthType.GOOGLE || !response.memberPassword) {
+		if (!response.memberPassword) {
 			throw new InternalServerErrorException(Messages.WRONG_PASSWORD);
 		}
 
@@ -64,16 +75,37 @@ export class MemberService {
 
 	public async googleAuth(input: GoogleAuthInput): Promise<Member> {
 		const identity = await this.authService.verifyGoogleCredential(input.credential);
-		const existingGoogleMember = await this.memberModel.findOne({ googleSubject: identity.subject }).exec();
-		if (existingGoogleMember) return await this.completeGoogleLogin(existingGoogleMember);
-
-		const existingEmailMember = await this.memberModel.findOne({ memberEmail: identity.email }).exec();
-		if (existingEmailMember) throw new ConflictException(Messages.GOOGLE_EMAIL_CONFLICT);
-
-		return await this.createGoogleMember(identity);
+		return await this.authenticateSocialMember(identity, {
+			authType: MemberAuthType.GOOGLE,
+			subjectField: 'googleSubject',
+			emailConflictMessage: Messages.GOOGLE_EMAIL_CONFLICT,
+			nicknameFallback: 'googleuser',
+		});
 	}
 
-	private async completeGoogleLogin(member: Member): Promise<Member> {
+	public async kakaoAuth(input: KakaoAuthInput): Promise<Member> {
+		const identity = await this.authService.verifyKakaoAuthorizationCode(input.code, input.redirectUri);
+		return await this.authenticateSocialMember(identity, {
+			authType: MemberAuthType.KAKAO,
+			subjectField: 'kakaoSubject',
+			emailConflictMessage: Messages.KAKAO_EMAIL_CONFLICT,
+			nicknameFallback: 'kakaouser',
+		});
+	}
+
+	private async authenticateSocialMember(identity: SocialIdentity, config: SocialAuthConfig): Promise<Member> {
+		const existingSocialMember = await this.memberModel.findOne({ [config.subjectField]: identity.subject }).exec();
+		if (existingSocialMember) return await this.completeSocialLogin(existingSocialMember, identity.image);
+
+		if (identity.email) {
+			const existingEmailMember = await this.memberModel.findOne({ memberEmail: identity.email }).exec();
+			if (existingEmailMember) throw new ConflictException(config.emailConflictMessage);
+		}
+
+		return await this.createSocialMember(identity, config);
+	}
+
+	private async completeSocialLogin(member: Member, profileImage?: string): Promise<Member> {
 		if (member.memberStatus === MemberStatus.DELETED) {
 			throw new InternalServerErrorException(Messages.MEMBER_NOT_FOUND);
 		}
@@ -81,25 +113,30 @@ export class MemberService {
 			throw new InternalServerErrorException(Messages.MEMBER_BLOCKED);
 		}
 
-		await this.memberModel.findByIdAndUpdate(member._id, { lastLoginAt: new Date() }).exec();
-		member.accessToken = await this.authService.createToken(member);
-		return member;
+		const update: T = { lastLoginAt: new Date() };
+		if (!member.memberImage && profileImage) update.memberImage = profileImage;
+		const updatedMember = await this.memberModel.findByIdAndUpdate(member._id, update, { new: true }).exec();
+		if (!updatedMember) throw new InternalServerErrorException(Messages.UPDATE_FAILED);
+
+		updatedMember.accessToken = await this.authService.createToken(updatedMember);
+		return updatedMember;
 	}
 
-	private async createGoogleMember(identity: GoogleIdentity): Promise<Member> {
+	private async createSocialMember(identity: SocialIdentity, config: SocialAuthConfig): Promise<Member> {
 		for (let attempt = 0; attempt < 10; attempt++) {
-			const memberNick = this.createGoogleMemberNick(identity, attempt);
+			const memberNick = this.createSocialMemberNick(identity, config.nicknameFallback, attempt);
 			const existingNick = await this.memberModel.exists({ memberNick });
 			if (existingNick) continue;
 			try {
 				const member = await this.memberModel.create({
 					memberType: MemberType.USER,
 					memberStatus: MemberStatus.ACTIVE,
-					memberAuthType: MemberAuthType.GOOGLE,
+					memberAuthType: config.authType,
 					memberNick,
 					memberEmail: identity.email,
 					memberFullName: identity.name,
-					googleSubject: identity.subject,
+					memberImage: identity.image,
+					[config.subjectField]: identity.subject,
 					lastLoginAt: new Date(),
 				});
 				member.accessToken = await this.authService.createToken(member);
@@ -107,11 +144,11 @@ export class MemberService {
 			} catch (error) {
 				const duplicateField = Object.keys(error?.keyPattern ?? {})[0];
 				if (duplicateField === 'memberNick') continue;
-				if (duplicateField === 'googleSubject') {
-					const existingMember = await this.memberModel.findOne({ googleSubject: identity.subject }).exec();
-					if (existingMember) return await this.completeGoogleLogin(existingMember);
+				if (duplicateField === config.subjectField) {
+					const existingMember = await this.memberModel.findOne({ [config.subjectField]: identity.subject }).exec();
+					if (existingMember) return await this.completeSocialLogin(existingMember);
 				}
-				if (duplicateField === 'memberEmail') throw new ConflictException(Messages.GOOGLE_EMAIL_CONFLICT);
+				if (duplicateField === 'memberEmail') throw new ConflictException(config.emailConflictMessage);
 				throw error;
 			}
 		}
@@ -119,8 +156,8 @@ export class MemberService {
 		throw new BadRequestException(Messages.CREATE_FAILED);
 	}
 
-	private createGoogleMemberNick(identity: GoogleIdentity, attempt: number): string {
-		const source = identity.name || identity.email.split('@')[0];
+	private createSocialMemberNick(identity: SocialIdentity, nicknameFallback: string, attempt: number): string {
+		const source = identity.name || identity.email?.split('@')[0] || nicknameFallback;
 		let base = source
 			.normalize('NFD')
 			.replace(/[\u0300-\u036f]/g, '')
