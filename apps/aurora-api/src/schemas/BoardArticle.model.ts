@@ -44,6 +44,18 @@ const BoardArticleSchema = new Schema(
 			default: 0,
 		},
 
+		articleRating: {
+			type: Number,
+			default: 0,
+			min: 0,
+			max: 5,
+		},
+
+		articleReviews: {
+			type: Number,
+			default: 0,
+		},
+
 		memberId: {
 			type: Schema.Types.ObjectId,
 			required: true,

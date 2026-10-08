@@ -6,7 +6,21 @@ import { Messages } from './enums/common.enum';
 export const HOLD_DURATION_MS = 15 * 60 * 1000;
 export const KRW = 'KRW';
 export const availableAgentSorts = ['createdAt', 'updatedAt', 'agentType', 'verificationStatus'];
-export const availableMemberSorts = ['createdAt', 'updatedAt', 'memberLikes', 'memberViews'];
+export const availableMemberSorts = [
+	'createdAt',
+	'updatedAt',
+	'lastLoginAt',
+	'memberNick',
+	'memberRank',
+	'memberPoints',
+	'memberFollowers',
+	'memberFollowings',
+	'memberLikes',
+	'memberViews',
+	'memberProperties',
+	'memberTours',
+	'memberArticles',
+];
 export const availablePropertySorts = [
 	'createdAt',
 	'updatedAt',

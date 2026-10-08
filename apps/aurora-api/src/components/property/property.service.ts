@@ -89,8 +89,9 @@ export class PropertyService {
 		}
 
 		targetProperty.memberData = await this.memberService.getMember(
-			null,
+			memberId,
 			targetProperty.memberId as unknown as Types.ObjectId,
+			false,
 		);
 
 		return targetProperty;

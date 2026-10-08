@@ -1,4 +1,4 @@
-import { Field, Int, ObjectType } from '@nestjs/graphql';
+import { Field, Float, Int, ObjectType } from '@nestjs/graphql';
 
 import type { ObjectId, Types } from 'mongoose';
 import { Member, TotalCounter } from '../member/member';
@@ -33,6 +33,12 @@ export class BoardArticle {
 
 	@Field(() => Int)
 	articleComments!: number;
+
+	@Field(() => Float)
+	articleRating!: number;
+
+	@Field(() => Int)
+	articleReviews!: number;
 
 	@Field(() => String)
 	memberId!: Types.ObjectId;

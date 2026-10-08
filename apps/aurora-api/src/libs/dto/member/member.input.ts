@@ -1,8 +1,8 @@
 import { Field, InputType, Int } from '@nestjs/graphql';
-import { IsEmail, IsIn, IsNotEmpty, IsOptional, IsString, Length, Matches, Min } from 'class-validator';
+import { IsEmail, IsEnum, IsIn, IsInt, IsNotEmpty, IsOptional, IsString, Length, Matches, Min } from 'class-validator';
 import { availableMemberSorts } from '../../config';
 import { Direction } from '../../enums/common.enum';
-import { MemberStatus, MemberType } from '../../enums/member.enum';
+import { MemberAuthType, MemberStatus, MemberType } from '../../enums/member.enum';
 
 @InputType()
 export class MemberInput {
@@ -84,14 +84,22 @@ export class TelegramAuthInput {
 @InputType()
 class MISearch {
 	@IsOptional()
+	@IsEnum(MemberStatus)
 	@Field(() => MemberStatus, { nullable: true })
 	memberStatus?: MemberStatus;
 
 	@IsOptional()
+	@IsEnum(MemberType)
 	@Field(() => MemberType, { nullable: true })
 	memberType?: MemberType;
 
 	@IsOptional()
+	@IsEnum(MemberAuthType)
+	@Field(() => MemberAuthType, { nullable: true })
+	memberAuthType?: MemberAuthType;
+
+	@IsOptional()
+	@IsString()
 	@Field(() => String, { nullable: true })
 	text?: string;
 }
@@ -99,11 +107,13 @@ class MISearch {
 @InputType()
 export class MembersInquiry {
 	@IsNotEmpty()
+	@IsInt()
 	@Min(1)
 	@Field(() => Int)
 	page!: number;
 
 	@IsNotEmpty()
+	@IsInt()
 	@Min(1)
 	@Field(() => Int)
 	limit!: number;
@@ -117,7 +127,7 @@ export class MembersInquiry {
 	@Field(() => Direction, { nullable: true })
 	direction?: Direction;
 
-	@IsNotEmpty()
-	@Field(() => MISearch)
-	search!: MISearch;
+	@IsOptional()
+	@Field(() => MISearch, { nullable: true })
+	search?: MISearch;
 }

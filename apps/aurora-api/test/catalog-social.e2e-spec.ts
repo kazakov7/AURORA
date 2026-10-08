@@ -235,4 +235,62 @@ describe('Catalog and social domains (e2e)', () => {
 		expect(review.body.errors).toBeUndefined();
 		expect(await model(app, 'Review').countDocuments({ memberId: user._id })).toBe(1);
 	});
+
+	it('returns refreshed property-like and host-follow state from the hotel detail query', async () => {
+		const viewer = await seedMember(app, 'hotelviewer');
+		const host = await seedMember(app, 'hotelhost', MemberType.AGENT);
+		const destination = await model(app, 'Destination').create({
+			destinationName: 'Singapore',
+			destinationSlug: 'singapore',
+			destinationCountry: 'SG',
+			destinationStatus: DestinationStatus.ACTIVE,
+		});
+		const property = await model(app, 'Property').create({
+			memberId: host._id,
+			destinationId: destination._id,
+			propertyType: 'HOTEL',
+			propertyStatus: PropertyStatus.ACTIVE,
+			propertyName: 'Aurora Singapore Hotel',
+			propertyAddress: 'Marina Bay',
+			pricePerNight: 180000,
+			currency: 'KRW',
+			maxGuests: 2,
+		});
+		const detailQuery = `query HotelDetail($id: String!) {
+			getProperty(propertyId: $id) {
+				_id propertyLikes meLiked { myFavorite }
+				memberData { memberNick meFollowed { myFollowing } }
+			}
+		}`;
+
+		const initial = await graphQL(app, detailQuery, { id: property._id.toString() }, viewer.accessToken);
+		expect(initial.body.errors).toBeUndefined();
+		expect(initial.body.data.getProperty.meLiked).toEqual([]);
+		expect(initial.body.data.getProperty.memberData.meFollowed).toEqual([]);
+
+		const liked = await graphQL(
+			app,
+			`mutation LikeHotel($id: String!) { likeTargetProperty(propertyId: $id) { _id propertyLikes } }`,
+			{ id: property._id.toString() },
+			viewer.accessToken,
+		);
+		expect(liked.body.errors).toBeUndefined();
+
+		const followed = await graphQL(
+			app,
+			`mutation FollowHost($id: String!) { subscribe(input: $id) { _id } }`,
+			{ id: host._id },
+			viewer.accessToken,
+		);
+		expect(followed.body.errors).toBeUndefined();
+
+		const refreshed = await graphQL(app, detailQuery, { id: property._id.toString() }, viewer.accessToken);
+		expect(refreshed.body.errors).toBeUndefined();
+		expect(refreshed.body.data.getProperty.propertyLikes).toBe(1);
+		expect(refreshed.body.data.getProperty.meLiked).toEqual([expect.objectContaining({ myFavorite: true })]);
+		expect(refreshed.body.data.getProperty.memberData.meFollowed).toEqual([
+			expect.objectContaining({ myFollowing: true }),
+		]);
+		expect((await model(app, 'Member').findById(host._id).lean()).memberViews).toBe(0);
+	});
 });

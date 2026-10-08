@@ -70,6 +70,15 @@ export class MemberResolver {
 		return this.memberService.getMember(memberId, targetId);
 	}
 
+	@UseGuards(WithoutGuard)
+	@Query(() => Members)
+	public async getAllMembers(
+		@Args('input') input: MembersInquiry,
+		@AuthMember('_id') memberId: Types.ObjectId | null,
+	): Promise<Members> {
+		return await this.memberService.getAllMembers(memberId, input);
+	}
+
 	// ADMIN
 	@Roles(MemberType.ADMIN)
 	@UseGuards(RolesGuard)

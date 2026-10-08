@@ -27,8 +27,8 @@ ReviewSchema.index(
 	{ memberId: 1, reviewGroup: 1, reviewRefId: 1 },
 	{
 		unique: true,
-		partialFilterExpression: { reviewGroup: ReviewGroup.DESTINATION, reviewStatus: ReviewStatus.ACTIVE },
-		name: 'reviews_destination_member_uq',
+		partialFilterExpression: { reviewStatus: ReviewStatus.ACTIVE },
+		name: 'reviews_member_target_uq',
 	},
 );
 ReviewSchema.index({ reviewGroup: 1, reviewRefId: 1, reviewStatus: 1, createdAt: 1 }, { name: 'reviews_target_idx' });

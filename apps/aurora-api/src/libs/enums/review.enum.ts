@@ -4,6 +4,7 @@ export enum ReviewGroup {
 	PROPERTY = 'PROPERTY',
 	TOUR = 'TOUR',
 	DESTINATION = 'DESTINATION',
+	ARTICLE = 'ARTICLE',
 }
 
 registerEnumType(ReviewGroup, {

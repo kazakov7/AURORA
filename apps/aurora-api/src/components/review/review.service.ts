@@ -3,19 +3,62 @@ import { InjectModel } from '@nestjs/mongoose';
 import { Model, Types } from 'mongoose';
 import { lookupMember } from '../../libs/config';
 import { Reviews, Review } from '../../libs/dto/review/review';
-import { DestinationReviewInput, DestinationReviewsInquiry } from '../../libs/dto/review/review.input';
+import { DestinationReviewInput, DestinationReviewsInquiry, RatingInput } from '../../libs/dto/review/review.input';
 import { DestinationReviewUpdate } from '../../libs/dto/review/review.update';
 import { Messages } from '../../libs/enums/common.enum';
 import { ReviewGroup, ReviewStatus } from '../../libs/enums/review.enum';
 import { T } from '../../libs/types/common';
 import { DestinationService } from '../destination/destination.service';
+import { Property } from '../../libs/dto/property/property';
+import { Tour } from '../../libs/dto/tour/tour';
+import { BoardArticle } from '../../libs/dto/board-article/board-article';
+import { PropertyStatus } from '../../libs/enums/property.enum';
+import { TourStatus } from '../../libs/enums/tour.enum';
+import { BoardArticleStatus } from '../../libs/enums/board-article.enum';
 
 @Injectable()
 export class ReviewService {
 	constructor(
 		@InjectModel('Review') private readonly reviewModel: Model<Review>,
+		@InjectModel('Property') private readonly propertyModel: Model<Property>,
+		@InjectModel('Tour') private readonly tourModel: Model<Tour>,
+		@InjectModel('BoardArticle') private readonly articleModel: Model<BoardArticle>,
 		private readonly destinationService: DestinationService,
 	) {}
+
+	public async submitRating(memberId: Types.ObjectId, input: RatingInput): Promise<Review> {
+		const reviewRefId = input.reviewRefId as unknown as Types.ObjectId;
+		await this.assertRatingTarget(input.reviewGroup, reviewRefId);
+
+		let result: Review;
+		try {
+			result = (await this.reviewModel.create({
+				memberId,
+				reviewGroup: input.reviewGroup,
+				reviewRefId,
+				reviewRating: input.reviewRating,
+			})) as unknown as Review;
+		} catch (error) {
+			if ((error as { code?: number }).code === 11000) {
+				throw new BadRequestException(Messages.RATING_ALREADY_EXISTS);
+			}
+			throw new BadRequestException(Messages.CREATE_FAILED);
+		}
+
+		await this.refreshRatingStats(input.reviewGroup, reviewRefId);
+		return result;
+	}
+
+	public async getMyRating(
+		memberId: Types.ObjectId,
+		reviewGroup: ReviewGroup,
+		reviewRefId: Types.ObjectId,
+	): Promise<Review | null> {
+		return await this.reviewModel
+			.findOne({ memberId, reviewGroup, reviewRefId, reviewStatus: ReviewStatus.ACTIVE })
+			.lean<Review>()
+			.exec();
+	}
 
 	public async createDestinationReview(
 		memberId: Types.ObjectId,
@@ -139,5 +182,78 @@ export class ReviewService {
 
 		const stats = result[0];
 		await this.destinationService.setDestinationReviewStats(destinationId, stats?.count ?? 0, stats?.rating ?? 0);
+	}
+
+	private async assertRatingTarget(reviewGroup: ReviewGroup, reviewRefId: Types.ObjectId): Promise<void> {
+		let exists = false;
+		switch (reviewGroup) {
+			case ReviewGroup.PROPERTY:
+				exists = Boolean(
+					await this.propertyModel.exists({
+						_id: reviewRefId,
+						propertyStatus: PropertyStatus.ACTIVE,
+						deletedAt: null,
+					}),
+				);
+				break;
+			case ReviewGroup.TOUR:
+				exists = Boolean(
+					await this.tourModel.exists({ _id: reviewRefId, tourStatus: TourStatus.ACTIVE, deletedAt: null }),
+				);
+				break;
+			case ReviewGroup.ARTICLE:
+				exists = Boolean(
+					await this.articleModel.exists({
+						_id: reviewRefId,
+						articleStatus: BoardArticleStatus.PUBLISHED,
+						deletedAt: null,
+					}),
+				);
+				break;
+			case ReviewGroup.DESTINATION:
+				await this.destinationService.getActiveDestination(reviewRefId);
+				exists = true;
+				break;
+		}
+
+		if (!exists) throw new BadRequestException(Messages.RATING_TARGET_NOT_FOUND);
+	}
+
+	private async refreshRatingStats(reviewGroup: ReviewGroup, reviewRefId: Types.ObjectId): Promise<void> {
+		const [stats] = await this.reviewModel
+			.aggregate<{ count: number; rating: number }>([
+				{
+					$match: {
+						reviewGroup,
+						reviewRefId,
+						reviewStatus: ReviewStatus.ACTIVE,
+					},
+				},
+				{ $group: { _id: null, count: { $sum: 1 }, rating: { $avg: '$reviewRating' } } },
+			])
+			.exec();
+		const count = stats?.count ?? 0;
+		const rating = stats?.rating ?? 0;
+
+		switch (reviewGroup) {
+			case ReviewGroup.PROPERTY:
+				await this.propertyModel.updateOne(
+					{ _id: reviewRefId },
+					{ propertyReviews: count, propertyRating: rating },
+				);
+				break;
+			case ReviewGroup.TOUR:
+				await this.tourModel.updateOne({ _id: reviewRefId }, { tourReviews: count, tourRating: rating });
+				break;
+			case ReviewGroup.ARTICLE:
+				await this.articleModel.updateOne(
+					{ _id: reviewRefId },
+					{ articleReviews: count, articleRating: rating },
+				);
+				break;
+			case ReviewGroup.DESTINATION:
+				await this.destinationService.setDestinationReviewStats(reviewRefId, count, rating);
+				break;
+		}
 	}
 }
