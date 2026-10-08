@@ -7,10 +7,14 @@ import { ChatsInquiry } from '../../libs/dto/chat/chat.input';
 import { AuthMember } from '../auth/decorators/authMember.decorator';
 import { AuthGuard } from '../auth/guards/auth.guard';
 import { ChatService } from './chat.service';
+import { ChatGateway } from './chat.gateway';
 
 @Resolver()
 export class ChatResolver {
-	constructor(private readonly chatService: ChatService) { }
+	constructor(
+		private readonly chatService: ChatService,
+		private readonly chatGateway: ChatGateway,
+	) { }
 
 	@UseGuards(AuthGuard)
 	@Mutation(() => Chat)
@@ -33,7 +37,29 @@ export class ChatResolver {
 
 	@UseGuards(AuthGuard)
 	@Query(() => Chat)
-	public async getGlobalChat(): Promise<Chat> {
+	public async getGlobalChat(@AuthMember('_id') memberId: Types.ObjectId): Promise<Chat> {
+		await this.chatService.assertMemberCanChat(memberId);
 		return await this.chatService.getGlobalChat();
+	}
+
+	@UseGuards(AuthGuard)
+	@Mutation(() => Chat)
+	public async markChatAsRead(
+		@Args('chatId') chatId: string,
+		@AuthMember('_id') memberId: Types.ObjectId,
+	): Promise<Chat> {
+		return await this.chatService.markChatAsRead(memberId, shapeIntoMongoObjectId(chatId));
+	}
+
+	@UseGuards(AuthGuard)
+	@Mutation(() => Boolean)
+	public async deleteMyChat(
+		@Args('chatId') chatId: string,
+		@AuthMember('_id') memberId: Types.ObjectId,
+	): Promise<boolean> {
+		const targetChatId = shapeIntoMongoObjectId(chatId);
+		const deleted = await this.chatService.deleteMyChat(memberId, targetChatId);
+		this.chatGateway.emitChatDeleted(memberId, targetChatId);
+		return deleted;
 	}
 }

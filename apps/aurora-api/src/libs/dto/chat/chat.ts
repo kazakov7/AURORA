@@ -1,4 +1,4 @@
-import { Field, ObjectType } from '@nestjs/graphql';
+import { Field, Int, ObjectType } from '@nestjs/graphql';
 import { ObjectId } from 'mongoose';
 import { ChatType } from '../../enums/chat.enum';
 import { Member, TotalCounter } from '../member/member';
@@ -25,6 +25,12 @@ export class Chat {
 
 	@Field(() => Date, { nullable: true })
 	lastMessageAt?: Date;
+
+	@Field(() => Int, { nullable: true })
+	unreadCount?: number;
+
+	@Field(() => Date, { nullable: true })
+	clearedAt?: Date;
 
 	@Field(() => Date)
 	createdAt: Date;

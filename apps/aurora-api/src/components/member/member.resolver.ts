@@ -67,7 +67,8 @@ export class MemberResolver {
 		console.log('Query: getMember');
 
 		const targetId = shapeIntoMongoObjectId(input);
-		return this.memberService.getMember(memberId, targetId);
+		const shouldRecordView = memberId ? !memberId.equals(targetId) : false;
+		return this.memberService.getMember(memberId, targetId, shouldRecordView);
 	}
 
 	@UseGuards(WithoutGuard)

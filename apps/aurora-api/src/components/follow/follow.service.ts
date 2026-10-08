@@ -40,9 +40,19 @@ export class FollowService {
 		const targetMember = await this.memberService.getMember(null, followingId);
 		if (!targetMember) throw new InternalServerErrorException(Messages.NO_DATA_FOUND);
 
-		const result = await this.registerSubscription(followerId, followingId);
+		const existingSubscription = await this.followModel.findOne({ followerId, followingId }).exec();
+		if (existingSubscription) return existingSubscription as Follower;
 
-		//error
+		let result: Follower;
+		try {
+			result = (await this.followModel.create({ followingId, followerId })) as Follower;
+		} catch (err: any) {
+			if (err?.code !== 11000) throw new BadRequestException(Messages.CREATE_FAILED);
+			const concurrentSubscription = await this.followModel.findOne({ followerId, followingId }).exec();
+			if (!concurrentSubscription) throw new BadRequestException(Messages.CREATE_FAILED);
+			return concurrentSubscription as Follower;
+		}
+
 		await this.memberService.memberStatusEditor({
 			_id: followerId,
 			targetKey: 'memberFollowings',
@@ -54,20 +64,6 @@ export class FollowService {
 			modifier: 1,
 		});
 		return result;
-	}
-	public async registerSubscription(
-		followerid: Types.ObjectId,
-		followingId: Types.ObjectId,
-	): Promise<Follower> {
-		try {
-			return await this.followModel.create({
-				followingId: followingId,
-				followerId: followerid,
-			});
-		} catch (err) {
-			console.log('error: registerSubscribe', err);
-			throw new BadRequestException(Messages.CREATE_FAILED);
-		}
 	}
 
 	public async unsubscribe(

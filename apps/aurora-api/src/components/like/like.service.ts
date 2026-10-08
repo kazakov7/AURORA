@@ -1,7 +1,7 @@
 import { BadRequestException, Injectable } from '@nestjs/common';
 import { Like, MeLiked } from '../../libs/dto/like/like';
-import { InjectModel } from '@nestjs/mongoose';
-import { Model, Types } from 'mongoose';
+import { InjectConnection, InjectModel } from '@nestjs/mongoose';
+import { Connection, Model, Types } from 'mongoose';
 import { LikeInput } from '../../libs/dto/like/like.input';
 import { InputType } from '@nestjs/graphql';
 import { Messages } from '../../libs/enums/common.enum';
@@ -20,37 +20,67 @@ export class LikeService {
 	constructor(
 		@InjectModel('Like')
 		private readonly likeModel: Model<Like>,
+		@InjectModel('Property') private readonly propertyModel: Model<any>,
+		@InjectModel('Tour') private readonly tourModel: Model<any>,
+		@InjectModel('Destination') private readonly destinationModel: Model<any>,
+		@InjectModel('BoardArticle') private readonly articleModel: Model<any>,
+		@InjectModel('Member') private readonly memberModel: Model<any>,
+		@InjectConnection() private readonly connection: Connection,
 	) { }
 
 	public async toggleLike(input: LikeInput): Promise<number> {
-		const search: T = {
-			memberId: input.memberId,
-			likeRefId: input.likeRefId,
-		},
-			exist = await this.likeModel.findOne(search).exec();
-		let modifier = 1;
-
-		if (exist) {
-			await this.likeModel.findOneAndDelete(search).exec();
-			modifier = -1;
-		} else {
-			try {
-				await this.likeModel.create(input);
-			} catch (err) {
-				//@ts-ignore
-				console.log('error', err.message);
-				throw new BadRequestException(Messages.CREATE_FAILED);
-			}
+		const session = await this.connection.startSession();
+		try {
+			let modifier = 0;
+			await session.withTransaction(async () => {
+				modifier = await this.toggleLikeInTransaction(input, session);
+				await this.syncTargetLikeCounter(input.likeGroup, input.likeRefId as Types.ObjectId, session);
+			});
+			return modifier;
+		} finally {
+			await session.endSession();
 		}
-
-		return modifier;
 	}
 
 	public async checkLikeExistence(input: LikeInput): Promise<MeLiked[]> {
-		const { memberId, likeRefId } = input;
-		const result = await this.likeModel.findOne({ memberId: memberId, likeRefId: likeRefId }).exec();
+		const { memberId, likeRefId, likeGroup } = input;
+		const result = await this.likeModel.findOne({ memberId, likeRefId, likeGroup }).exec();
 		console.log(result);
 		return result ? [{ memberId: memberId, likeRefId: likeRefId, myFavorite: true }] : [];
+	}
+
+	private async toggleLikeInTransaction(input: LikeInput, session: any): Promise<number> {
+		const search = { memberId: input.memberId, likeGroup: input.likeGroup, likeRefId: input.likeRefId };
+		const removed = await this.likeModel.findOneAndDelete(search, { session }).exec();
+		if (removed) return -1;
+
+		try {
+			await this.likeModel.create([{ ...input }], { session });
+			return 1;
+		} catch (error) {
+			if ((error as { code?: number }).code !== 11000) throw new BadRequestException(Messages.CREATE_FAILED);
+			const concurrentLike = await this.likeModel.findOneAndDelete(search, { session }).exec();
+			if (concurrentLike) return -1;
+			throw new BadRequestException(Messages.CREATE_FAILED);
+		}
+	}
+
+	private async syncTargetLikeCounter(likeGroup: LikeGroup, likeRefId: Types.ObjectId, session: any): Promise<void> {
+		const count = await this.likeModel.countDocuments({ likeGroup, likeRefId }).session(session).exec();
+		const target = this.getLikeTarget(likeGroup);
+		if (!target) return;
+		await target.model.updateOne({ _id: likeRefId }, { $set: { [target.field]: count } }, { session }).exec();
+	}
+
+	private getLikeTarget(likeGroup: LikeGroup): { model: Model<any>; field: string } | null {
+		switch (likeGroup) {
+			case LikeGroup.PROPERTY: return { model: this.propertyModel, field: 'propertyLikes' };
+			case LikeGroup.TOUR: return { model: this.tourModel, field: 'tourLikes' };
+			case LikeGroup.DESTINATION: return { model: this.destinationModel, field: 'destinationLikes' };
+			case LikeGroup.ARTICLE: return { model: this.articleModel, field: 'articleLikes' };
+			case LikeGroup.MEMBER: return { model: this.memberModel, field: 'memberLikes' };
+			default: return null;
+		}
 	}
 
 	public async getFavoriteProperties(

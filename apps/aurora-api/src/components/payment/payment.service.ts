@@ -67,16 +67,14 @@ export class PaymentService implements OnModuleInit, OnModuleDestroy {
 		bookingId: Types.ObjectId,
 		bookingCategory: BookingCategory,
 	): Promise<any> {
-		const booking = await this.bookingModel
-			.findOneAndUpdate(
-				{ _id: bookingId, memberId, bookingCategory, bookingStatus: BookingStatus.PENDING },
-				{ bookingStatus: BookingStatus.CANCELLED, cancelledAt: new Date() },
-				{ new: true },
-			)
-			.exec();
+		const booking = await this.cancelPendingBookingAtomically({
+			_id: bookingId,
+			memberId,
+			bookingCategory,
+			bookingStatus: BookingStatus.PENDING,
+		});
 
 		if (!booking) throw new BadRequestException(Messages.BOOKING_CANNOT_CANCEL);
-		await this.releaseTourSeats(booking);
 		await this.cancelPendingPaymentIntents(booking._id as Types.ObjectId, 'Booking cancelled by member');
 		return booking;
 	}
@@ -110,17 +108,14 @@ export class PaymentService implements OnModuleInit, OnModuleDestroy {
 			.lean()
 			.exec();
 
-		for (const expiredBooking of expiredBookings) {
-			const booking = await this.bookingModel
-				.findOneAndUpdate(
-					{ _id: expiredBooking._id, bookingStatus: BookingStatus.PENDING, expiresAt: { $lte: new Date() } },
-					{ bookingStatus: BookingStatus.CANCELLED, cancelledAt: new Date() },
-					{ new: true },
-				)
-				.exec();
+ 		for (const expiredBooking of expiredBookings) {
+			const booking = await this.cancelPendingBookingAtomically({
+				_id: expiredBooking._id,
+				bookingStatus: BookingStatus.PENDING,
+				expiresAt: { $lte: new Date() },
+			});
 
 			if (!booking) continue;
-			await this.releaseTourSeats(booking);
 			await this.cancelPendingPaymentIntents(booking._id as Types.ObjectId, 'Booking hold expired');
 		}
 	}
@@ -358,22 +353,36 @@ export class PaymentService implements OnModuleInit, OnModuleDestroy {
 	}
 
 	private async cancelPendingBookingBySystem(bookingId: Types.ObjectId, failureReason: string): Promise<void> {
-		const booking = await this.bookingModel
-			.findOneAndUpdate(
-				{ _id: bookingId, bookingStatus: BookingStatus.PENDING },
-				{ bookingStatus: BookingStatus.CANCELLED, cancelledAt: new Date() },
-				{ new: true },
-			)
-			.exec();
+		const booking = await this.cancelPendingBookingAtomically({ _id: bookingId, bookingStatus: BookingStatus.PENDING });
 		if (!booking) return;
-		await this.releaseTourSeats(booking);
 		await this.cancelPendingPaymentIntents(booking._id as Types.ObjectId, failureReason);
 	}
 
-	private async releaseTourSeats(booking: any): Promise<void> {
+	private async cancelPendingBookingAtomically(search: any): Promise<any | null> {
+		const session = await this.connection.startSession();
+		try {
+			let cancelledBooking: any | null = null;
+			await session.withTransaction(async () => {
+				cancelledBooking = await this.bookingModel
+					.findOneAndUpdate(search, { bookingStatus: BookingStatus.CANCELLED, cancelledAt: new Date() }, { new: true, session })
+					.exec();
+				if (!cancelledBooking || cancelledBooking.bookingCategory !== BookingCategory.TOUR) return;
+				await this.releaseTourSeats(cancelledBooking, session);
+			});
+			return cancelledBooking;
+		} finally {
+			await session.endSession();
+		}
+	}
+
+	private async releaseTourSeats(booking: any, session?: any): Promise<void> {
 		if (booking.bookingCategory !== BookingCategory.TOUR) return;
 		await this.tourModel
-			.updateOne({ _id: booking.bookingRefId }, { $inc: { tourReservedSeats: -booking.bookingGuests } })
+			.updateOne(
+				{ _id: booking.bookingRefId },
+				[{ $set: { tourReservedSeats: { $max: [0, { $subtract: [{ $ifNull: ['$tourReservedSeats', 0] }, booking.bookingGuests] }] } } }] as any,
+				{ session },
+			)
 			.exec();
 	}
 

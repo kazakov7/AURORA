@@ -116,7 +116,7 @@ export class BoardArticleService {
 		const { _id, targetKey, modifier } = input;
 
 		return (await this.boardArticleModel
-			.findByIdAndUpdate(_id, { $inc: { [targetKey]: modifier } } as any, {
+			.findByIdAndUpdate(_id, [{ $set: { [targetKey]: { $max: [0, { $add: [{ $ifNull: [`$${targetKey}`, 0] }, modifier] }] } } }] as any, {
 				new: true,
 			})
 			.exec()) as unknown as BoardArticle;
@@ -171,12 +171,8 @@ export class BoardArticleService {
 		};
 
 		// LIKE TOGGLE via Like modules
-		const modifier: number = await this.likeService.toggleLike(input);
-		const result = await this.boardArticleStatsEditor({
-			_id: likeRefId,
-			targetKey: 'articleLikes',
-			modifier: modifier,
-		});
+		await this.likeService.toggleLike(input);
+		const result = await this.boardArticleModel.findById(likeRefId).exec();
 
 		if (!result) throw new InternalServerErrorException(Messages.SOMETHING_WENT_WRONG);
 		return result;

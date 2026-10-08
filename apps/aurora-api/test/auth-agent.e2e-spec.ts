@@ -539,4 +539,116 @@ describe('Auth, Member and Agent (e2e)', () => {
 		expect(rejected.body.errors).toBeUndefined();
 		expect(rejected.body.data.rejectAgentApplication.verificationStatus).toBe('REJECTED');
 	});
+
+	it('preserves rejected applications while allowing one safe resubmission', async () => {
+		const applicant = await seedMember(app, 'resubmitusr');
+		const concurrentApplicant = await seedMember(app, 'concurrentusr');
+		const admin = await seedMember(app, 'resubmitadm', MemberType.ADMIN);
+		const submitMutation = `mutation Submit($input: AgentInput!) {
+			submitAgentApplication(input: $input) { _id verificationStatus rejectionReason createdAt }
+		}`;
+		const firstInput = {
+			agentType: 'HOTEL',
+			companyName: 'First Aurora Hotel',
+			businessNumber: 'RESUBMIT-001',
+			companyAddress: 'Seoul',
+		};
+
+		const first = await graphQL(app, submitMutation, { input: firstInput }, applicant.accessToken);
+		expect(first.body.errors).toBeUndefined();
+		const firstId = first.body.data.submitAgentApplication._id;
+
+		const rejected = await graphQL(
+			app,
+			`mutation Reject($input: RejectAgentApplicationInput!) {
+				rejectAgentApplication(input: $input) { _id verificationStatus rejectionReason }
+			}`,
+			{ input: { _id: firstId, rejectionReason: 'Please provide current registration documents.' } },
+			admin.accessToken,
+		);
+		expect(rejected.body.errors).toBeUndefined();
+		expect(rejected.body.data.rejectAgentApplication.rejectionReason).toBe('Please provide current registration documents.');
+
+		const resubmitted = await graphQL(
+			app,
+			submitMutation,
+			{
+				input: {
+					...firstInput,
+					companyName: 'Renewed Aurora Hotel',
+					businessNumber: 'RESUBMIT-002',
+				},
+			},
+			applicant.accessToken,
+		);
+		expect(resubmitted.body.errors).toBeUndefined();
+		const resubmittedId = resubmitted.body.data.submitAgentApplication._id;
+		expect(resubmittedId).not.toBe(firstId);
+		expect(resubmitted.body.data.submitAgentApplication.verificationStatus).toBe('PENDING');
+
+		const myApplications = await graphQL(
+			app,
+			`query MyApplications($input: AgentApplicationsInquiry!) {
+				getMyAgentApplications(input: $input) { list { _id verificationStatus rejectionReason } }
+			}`,
+			{ input: { page: 1, limit: 10 } },
+			applicant.accessToken,
+		);
+		expect(myApplications.body.errors).toBeUndefined();
+		expect(myApplications.body.data.getMyAgentApplications.list.map((item: { _id: string }) => item._id)).toEqual([resubmittedId, firstId]);
+		expect(myApplications.body.data.getMyAgentApplications.list[1]).toMatchObject({
+			verificationStatus: 'REJECTED',
+			rejectionReason: 'Please provide current registration documents.',
+		});
+
+		const duplicate = await graphQL(app, submitMutation, { input: firstInput }, applicant.accessToken);
+		expect(duplicate.body.errors?.[0].message).toContain('application already exists');
+
+		const historicalRejection = await graphQL(
+			app,
+			`mutation Reject($input: RejectAgentApplicationInput!) { rejectAgentApplication(input: $input) { _id } }`,
+			{ input: { _id: firstId, rejectionReason: 'Changed reason' } },
+			admin.accessToken,
+		);
+		expect(historicalRejection.body.errors?.[0].message).toContain('application not found');
+
+		const concurrentInput = {
+			agentType: 'TOUR',
+			companyName: 'Concurrent Aurora Tours',
+			businessNumber: 'CONCURRENT-001',
+			companyAddress: 'Busan',
+		};
+		const concurrentResults = await Promise.all([
+			graphQL(app, submitMutation, { input: concurrentInput }, concurrentApplicant.accessToken),
+			graphQL(app, submitMutation, { input: concurrentInput }, concurrentApplicant.accessToken),
+		]);
+		expect(concurrentResults.filter((result) => !result.body.errors)).toHaveLength(1);
+		expect(concurrentResults.filter((result) => result.body.errors?.[0].message.includes('application already exists'))).toHaveLength(1);
+
+		const approved = await graphQL(
+			app,
+			`mutation Approve($input: String!) { approveAgentApplication(input: $input) { _id verificationStatus } }`,
+			{ input: resubmittedId },
+			admin.accessToken,
+		);
+		expect(approved.body.errors).toBeUndefined();
+		expect(approved.body.data.approveAgentApplication.verificationStatus).toBe('APPROVED');
+		expect((await model(app, 'Member').findById(applicant._id).lean()).memberType).toBe(MemberType.AGENT);
+
+		const adminList = await graphQL(
+			app,
+			`query Applications($input: AgentApplicationsInquiry!) {
+				getAgentApplications(input: $input) { list { _id verificationStatus rejectionReason } }
+			}`,
+			{ input: { page: 1, limit: 20 } },
+			admin.accessToken,
+		);
+		expect(adminList.body.errors).toBeUndefined();
+		const history = adminList.body.data.getAgentApplications.list.filter((item: { _id: string }) => item._id === firstId || item._id === resubmittedId);
+		expect(history).toHaveLength(2);
+		expect(history.find((item: { _id: string }) => item._id === firstId)).toMatchObject({
+			verificationStatus: 'REJECTED',
+			rejectionReason: 'Please provide current registration documents.',
+		});
+	});
 });

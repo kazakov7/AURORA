@@ -85,7 +85,11 @@ export class DestinationService {
 
 	public async destinationStatsEditor(input: StatisticModifier): Promise<Destination> {
 		const result = await this.destinationModel
-			.findByIdAndUpdate(input._id, { $inc: { [input.targetKey]: input.modifier } }, { new: true })
+			.findByIdAndUpdate(
+				input._id,
+				[{ $set: { [input.targetKey]: { $max: [0, { $add: [{ $ifNull: [`$${input.targetKey}`, 0] }, input.modifier] }] } } }] as any,
+				{ new: true },
+			)
 			.exec();
 
 		return result as unknown as Destination;
@@ -110,16 +114,12 @@ export class DestinationService {
 
 	public async likeTargetDestination(memberId: Types.ObjectId, destinationId: Types.ObjectId): Promise<Destination> {
 		await this.getActiveDestination(destinationId);
-		const modifier = await this.likeService.toggleLike({
+		await this.likeService.toggleLike({
 			memberId,
 			likeRefId: destinationId,
 			likeGroup: LikeGroup.DESTINATION,
 		});
-		const result = await this.destinationStatsEditor({
-			_id: destinationId,
-			targetKey: 'destinationLikes',
-			modifier,
-		});
+		const result = await this.destinationModel.findById(destinationId).exec();
 
 		if (!result) throw new InternalServerErrorException(Messages.SOMETHING_WENT_WRONG);
 		return result;

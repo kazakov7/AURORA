@@ -91,7 +91,11 @@ export class TourService {
 
 	public async tourStatsEditor(input: StatisticModifier): Promise<Tour> {
 		const result = await this.tourModel
-			.findByIdAndUpdate(input._id, { $inc: { [input.targetKey]: input.modifier } }, { new: true })
+			.findByIdAndUpdate(
+				input._id,
+				[{ $set: { [input.targetKey]: { $max: [0, { $add: [{ $ifNull: [`$${input.targetKey}`, 0] }, input.modifier] }] } } }] as any,
+				{ new: true },
+			)
 			.exec();
 
 		return result as unknown as Tour;
@@ -218,8 +222,8 @@ export class TourService {
 		});
 		if (!target) throw new InternalServerErrorException(Messages.TOUR_NOT_FOUND);
 
-		const modifier = await this.likeService.toggleLike({ memberId, likeRefId, likeGroup: LikeGroup.TOUR });
-		const result = await this.tourStatsEditor({ _id: likeRefId, targetKey: 'tourLikes', modifier });
+		await this.likeService.toggleLike({ memberId, likeRefId, likeGroup: LikeGroup.TOUR });
+		const result = await this.tourModel.findById(likeRefId).exec();
 		if (!result) throw new InternalServerErrorException(Messages.SOMETHING_WENT_WRONG);
 		return result;
 	}

@@ -162,14 +162,26 @@ export class CommentService {
 			throw new InternalServerErrorException(Messages.REMOVE_FAILED);
 		}
 
-		if (result.commentGroup === CommentGroup.DESTINATION) {
-			await this.destinationService.destinationStatsEditor({
-				_id: result.commentRefId as unknown as Types.ObjectId,
-				targetKey: 'destinationComments',
-				modifier: -1,
-			});
-		}
+
+		await this.decrementTargetCommentCounter(result.commentGroup, result.commentRefId as unknown as Types.ObjectId);
 
 		return result;
+	}
+
+	private async decrementTargetCommentCounter(commentGroup: CommentGroup, commentRefId: Types.ObjectId): Promise<void> {
+		switch (commentGroup) {
+			case CommentGroup.PROPERTY:
+				await this.propertyService.propertyStatsEditor({ _id: commentRefId, targetKey: 'propertyComments', modifier: -1 });
+				break;
+			case CommentGroup.TOUR:
+				await this.tourService.tourStatsEditor({ _id: commentRefId, targetKey: 'tourComments', modifier: -1 });
+				break;
+			case CommentGroup.DESTINATION:
+				await this.destinationService.destinationStatsEditor({ _id: commentRefId, targetKey: 'destinationComments', modifier: -1 });
+				break;
+			case CommentGroup.ARTICLE:
+				await this.boardArticleService.boardArticleStatsEditor({ _id: commentRefId, targetKey: 'articleComments', modifier: -1 });
+				break;
+		}
 	}
 }

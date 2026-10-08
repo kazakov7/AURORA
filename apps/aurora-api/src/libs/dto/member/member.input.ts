@@ -14,7 +14,7 @@ export class MemberInput {
 
 	@Field({ nullable: true })
 	@IsNotEmpty()
-	@Length(4, 12)
+	@Length(5, 12)
 	memberPassword: string;
 
 	@Field({ nullable: true })

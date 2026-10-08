@@ -175,6 +175,7 @@ export enum Messages {
 	MESSAGE_NOT_ALLOWED = 'You are not allowed to send messages here!',
 	CANNOT_MESSAGE_YOURSELF = 'You cannot send a message to yourself!',
 	USER_BLOCKED_MESSAGE = 'You cannot message this member!',
+	MESSAGE_RATE_LIMITED = 'Please wait before sending another message.',
 
 	// =========================
 	// NOTIFICATION

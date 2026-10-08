@@ -99,7 +99,11 @@ export class PropertyService {
 
 	public async propertyStatsEditor(input: StatisticModifier): Promise<Property> {
 		const result = await this.propertyModel
-			.findByIdAndUpdate(input._id, { $inc: { [input.targetKey]: input.modifier } }, { new: true })
+			.findByIdAndUpdate(
+				input._id,
+				[{ $set: { [input.targetKey]: { $max: [0, { $add: [{ $ifNull: [`$${input.targetKey}`, 0] }, input.modifier] }] } } }] as any,
+				{ new: true },
+			)
 			.exec();
 
 		return result as unknown as Property;
@@ -215,11 +219,10 @@ export class PropertyService {
 		});
 		if (!target) throw new InternalServerErrorException(Messages.PROPERTY_NOT_FOUND);
 
-		const modifier = await this.likeService.toggleLike({ memberId, likeRefId, likeGroup: LikeGroup.PROPERTY });
-		const result = await this.propertyStatsEditor({ _id: likeRefId, targetKey: 'propertyLikes', modifier });
-
+		await this.likeService.toggleLike({ memberId, likeRefId, likeGroup: LikeGroup.PROPERTY });
+		const result = await this.propertyModel.findById(likeRefId).exec();
 		if (!result) throw new InternalServerErrorException(Messages.SOMETHING_WENT_WRONG);
-		return result;
+		return result as unknown as Property;
 	}
 
 	public async getAgentProperties(memberId: Types.ObjectId, input: AgentPropertiesInquiry): Promise<Properties> {

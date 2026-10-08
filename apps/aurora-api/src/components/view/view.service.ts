@@ -1,4 +1,4 @@
-import { Injectable } from '@nestjs/common';
+import { Injectable, OnModuleInit } from '@nestjs/common';
 import { InjectModel } from '@nestjs/mongoose';
 import { Model, Types } from 'mongoose';
 import { View } from '../../libs/dto/view/view';
@@ -13,31 +13,49 @@ import { Tours } from '../../libs/dto/tour/tour';
 import { OrdinaryTourInquiry } from '../../libs/dto/tour/tour.input';
 
 @Injectable()
-export class ViewService {
+export class ViewService implements OnModuleInit {
 	constructor(
 		@InjectModel('View')
 		private readonly viewModel: Model<View>,
 	) { }
 
-	public async recordView(input: ViewInput): Promise<View | null> {
-		const viewExist = await this.checkViewExistence(input);
-
-		if (!viewExist) {
-			console.log('- New View Insert -');
-
-			return await this.viewModel.create(input);
-		} else return null;
+	public async onModuleInit(): Promise<void> {
+		await this.removeDuplicateAuthenticatedViews();
+		await this.viewModel.collection.createIndex(
+			{ memberId: 1, viewGroup: 1, viewRefId: 1 },
+			{
+				unique: true,
+				partialFilterExpression: { memberId: { $type: 'objectId' } },
+				name: 'views_unique_member_group_target_uq',
+			},
+		);
 	}
 
-	private async checkViewExistence(input: ViewInput): Promise<View | null> {
-		const { memberId, viewRefId } = input;
+	public async recordView(input: ViewInput): Promise<View | null> {
+		try {
+			const result = await this.viewModel.updateOne(
+				{ memberId: input.memberId, viewGroup: input.viewGroup, viewRefId: input.viewRefId },
+				{ $setOnInsert: input },
+				{ upsert: true },
+			).exec();
+			return result.upsertedCount === 1 ? ({ ...input } as View) : null;
+		} catch (error) {
+			if ((error as { code?: number }).code === 11000) return null;
+			throw error;
+		}
+	}
 
-		const search: T = {
-			memberId: memberId,
-			viewRefId: viewRefId,
-		};
+	private async removeDuplicateAuthenticatedViews(): Promise<void> {
+		const duplicates = await this.viewModel.aggregate<{ ids: Types.ObjectId[] }>([
+			{ $match: { memberId: { $type: 'objectId' } } },
+			{ $sort: { createdAt: 1, _id: 1 } },
+			{ $group: { _id: { memberId: '$memberId', viewGroup: '$viewGroup', viewRefId: '$viewRefId' }, ids: { $push: '$_id' }, count: { $sum: 1 } } },
+			{ $match: { count: { $gt: 1 } } },
+		]).exec();
 
-		return await this.viewModel.findOne(search).exec();
+		for (const duplicate of duplicates) {
+			await this.viewModel.deleteMany({ _id: { $in: duplicate.ids.slice(1) } }).exec();
+		}
 	}
 
 	public async getVisitedProperties(

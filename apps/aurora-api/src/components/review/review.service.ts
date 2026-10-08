@@ -29,6 +29,10 @@ export class ReviewService {
 	public async submitRating(memberId: Types.ObjectId, input: RatingInput): Promise<Review> {
 		const reviewRefId = input.reviewRefId as unknown as Types.ObjectId;
 		await this.assertRatingTarget(input.reviewGroup, reviewRefId);
+		const existingRating = await this.reviewModel
+			.exists({ memberId, reviewGroup: input.reviewGroup, reviewRefId, reviewStatus: ReviewStatus.ACTIVE })
+			.exec();
+		if (existingRating) throw new BadRequestException(Messages.RATING_ALREADY_EXISTS);
 
 		let result: Review;
 		try {

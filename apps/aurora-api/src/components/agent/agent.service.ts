@@ -8,7 +8,7 @@ import { Direction, Messages } from '../../libs/enums/common.enum';
 import { AgentType, AgentVerificationStatus } from '../../libs/enums/agent.enum';
 import { MemberStatus, MemberType } from '../../libs/enums/member.enum';
 import { T } from '../../libs/types/common';
-import { lookupMember } from '../../libs/config';
+import { lookupMember, shapeIntoMongoObjectId } from '../../libs/config';
 
 @Injectable()
 export class AgentService {
@@ -16,13 +16,21 @@ export class AgentService {
 		@InjectModel('Agent') private readonly agentModel: Model<any>,
 		@InjectModel('Member') private readonly memberModel: Model<any>,
 		@InjectConnection() private readonly connection: Connection,
-	) {}
+	) { }
 
 	public async submitAgentApplication(memberId: Types.ObjectId, input: AgentInput): Promise<Agent> {
 		const member = await this.memberModel
 			.findOne({ _id: memberId, memberType: MemberType.USER, memberStatus: MemberStatus.ACTIVE })
 			.exec();
 		if (!member) throw new ForbiddenException(Messages.AGENT_NOT_ALLOWED);
+
+		const existingActiveApplication = await this.agentModel
+			.exists({
+				memberId,
+				verificationStatus: { $in: [AgentVerificationStatus.PENDING, AgentVerificationStatus.APPROVED] },
+			})
+			.exec();
+		if (existingActiveApplication) throw new BadRequestException(Messages.AGENT_APPLICATION_EXISTS);
 
 		try {
 			const result = await this.agentModel.create({ ...input, memberId });
@@ -33,6 +41,16 @@ export class AgentService {
 			}
 			throw new BadRequestException(Messages.CREATE_FAILED);
 		}
+	}
+
+
+	public async getMemberAgent(memberId: string): Promise<Agent> {
+
+		const result = await this.agentModel
+			.findOne({ memberId: shapeIntoMongoObjectId(memberId), verificationStatus: AgentVerificationStatus.APPROVED })
+			.exec();
+
+		return result as unknown as Agent;
 	}
 
 	public async getMyAgentApplications(memberId: Types.ObjectId, input: AgentApplicationsInquiry): Promise<Agents> {
@@ -77,6 +95,11 @@ export class AgentService {
 
 			if (!agent) throw new InternalServerErrorException(Messages.UPDATE_FAILED);
 			return agent;
+		} catch (error) {
+			if ((error as { code?: number }).code === 11000) {
+				throw new BadRequestException(Messages.AGENT_APPLICATION_EXISTS);
+			}
+			throw error;
 		} finally {
 			await session.endSession();
 		}
@@ -103,7 +126,9 @@ export class AgentService {
 	}
 
 	private async getAgentList(match: T, input: AgentApplicationsInquiry): Promise<Agents> {
-		const sort: T = { [input.sort ?? 'createdAt']: input.direction ?? Direction.DESC };
+		const sortField = input.sort ?? 'createdAt';
+		const sortDirection = input.direction ?? Direction.DESC;
+		const sort: T = { [sortField]: sortDirection, ...(sortField === '_id' ? {} : { _id: sortDirection }) };
 		const result = await this.agentModel
 			.aggregate([
 				{ $match: match },

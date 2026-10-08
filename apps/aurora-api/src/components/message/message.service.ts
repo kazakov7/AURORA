@@ -13,10 +13,12 @@ export class MessageService {
 	constructor(
 		@InjectModel('Message') private readonly messageModel: Model<any>,
 		@InjectModel('Chat') private readonly chatModel: Model<any>,
+		@InjectModel('ChatRead') private readonly chatReadModel: Model<any>,
 		@InjectModel('Member') private readonly memberModel: Model<any>,
 	) { }
 
 	public async createMessage(memberId: Types.ObjectId, input: MessageInput): Promise<Message> {
+		await this.assertMemberCanMessage(memberId);
 		const chatId = new Types.ObjectId(input.chatId.toString());
 		const chat = await this.assertChatAccess(memberId, chatId);
 		const messageContent = input.messageContent?.trim();
@@ -59,11 +61,17 @@ export class MessageService {
 	}
 
 	public async getMessages(memberId: Types.ObjectId, input: MessagesCursorInquiry): Promise<Messages> {
+		await this.assertMemberCanMessage(memberId);
 		const chatId = new Types.ObjectId(input.chatId.toString());
 		await this.assertChatAccess(memberId, chatId);
 
+		const chatReadState: any = await this.chatReadModel.findOne({ chatId, memberId }).lean().exec();
+		const createdAt: T = {};
+		if (input.before) createdAt.$lt = input.before;
+		if (chatReadState?.clearedAt) createdAt.$gt = chatReadState.clearedAt;
+
 		const match: T = { chatId };
-		if (input.before) match.createdAt = { $lt: input.before };
+		if (Object.keys(createdAt).length) match.createdAt = createdAt;
 
 		const messages = await this.messageModel
 			.find(match)
@@ -107,5 +115,14 @@ export class MessageService {
 		if (!isParticipant) throw new InternalServerErrorException(ErrorMessages.MESSAGE_NOT_ALLOWED);
 
 		return chat;
+	}
+
+	private async assertMemberCanMessage(memberId: Types.ObjectId): Promise<void> {
+		const member = await this.memberModel
+			.findOne({ _id: memberId, memberStatus: 'ACTIVE', deletedAt: null })
+			.select('_id')
+			.lean()
+			.exec();
+		if (!member) throw new BadRequestException(ErrorMessages.USER_BLOCKED_MESSAGE);
 	}
 }

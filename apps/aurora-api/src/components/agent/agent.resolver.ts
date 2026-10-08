@@ -25,6 +25,11 @@ export class AgentResolver {
 		return this.agentService.submitAgentApplication(memberId, input);
 	}
 
+	@Query(() => Agent, { nullable: true })
+	public async getMemberAgent(@Args('memberId') memberId: string): Promise<Agent> {
+		return this.agentService.getMemberAgent(memberId);
+	}
+
 	@UseGuards(AuthGuard)
 	@Query(() => Agents)
 	public async getMyAgentApplications(

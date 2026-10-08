@@ -12,6 +12,9 @@ import { ChatService } from './chat.service';
 export class ChatGateway {
 	@WebSocketServer()
 	server: Server;
+	private readonly messageRateWindowMs = 10_000;
+	private readonly messageRateLimit = 10;
+	private readonly memberMessageTimestamps = new Map<string, number[]>();
 
 	constructor(
 		private readonly authService: AuthService,
@@ -40,6 +43,7 @@ export class ChatGateway {
 	public async joinChat(@MessageBody() payload: { chatId?: string }, @ConnectedSocket() client: Socket) {
 		try {
 			const memberId = this.getMemberId(client);
+			await this.chatService.assertMemberCanChat(memberId);
 			const chatId = this.getObjectId(payload?.chatId);
 			await this.chatService.assertChatAccess(memberId, chatId);
 			await client.join(this.chatRoom(chatId));
@@ -66,6 +70,7 @@ export class ChatGateway {
 	public async sendMessage(@MessageBody() payload: MessageInput, @ConnectedSocket() client: Socket) {
 		try {
 			const memberId = this.getMemberId(client);
+			if (!this.canSendMessage(memberId)) throw new Error(Messages.MESSAGE_RATE_LIMITED);
 			const message = await this.messageService.createMessage(memberId, payload);
 			const recipients = await this.messageService.getChatRecipients(message.chatId as unknown as Types.ObjectId);
 
@@ -84,6 +89,11 @@ export class ChatGateway {
 	public emitNotification(memberId: Types.ObjectId, notification: Notification): void {
 		if (!this.server) return;
 		this.server.to(this.memberRoom(memberId)).emit('notification:new', notification);
+	}
+
+	public emitChatDeleted(memberId: Types.ObjectId, chatId: Types.ObjectId): void {
+		if (!this.server) return;
+		this.server.to(this.memberRoom(memberId)).emit('chat:deleted', { chatId: chatId.toString() });
 	}
 
 	private extractToken(client: Socket): string | undefined {
@@ -116,5 +126,17 @@ export class ChatGateway {
 
 	private errorResult(err: any) {
 		return { ok: false, message: err?.message ?? Messages.SOMETHING_WENT_WRONG };
+	}
+
+	private canSendMessage(memberId: Types.ObjectId): boolean {
+		const now = Date.now();
+		const key = memberId.toString();
+		const recent = (this.memberMessageTimestamps.get(key) ?? []).filter(
+			(timestamp) => now - timestamp < this.messageRateWindowMs,
+		);
+		if (recent.length >= this.messageRateLimit) return false;
+		recent.push(now);
+		this.memberMessageTimestamps.set(key, recent);
+		return true;
 	}
 }
