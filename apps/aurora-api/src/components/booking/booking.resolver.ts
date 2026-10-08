@@ -83,4 +83,13 @@ export class BookingResolver {
 	): Promise<Bookings> {
 		return this.bookingService.getAgentTourBookings(memberId, input);
 	}
+
+	@Roles(MemberType.ADMIN)
+	@UseGuards(RolesGuard)
+	@Query(() => Bookings)
+	public async getAllBookingsByAdmin(
+		@Args('input') input: BookingsInquiry,
+	): Promise<Bookings> {
+		return this.bookingService.getAllBookingsByAdmin(input);
+	}
 }

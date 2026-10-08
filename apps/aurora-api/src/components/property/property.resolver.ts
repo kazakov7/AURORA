@@ -109,9 +109,10 @@ export class PropertyResolver {
 	@Mutation(() => Property)
 	public async updatePropertyStatusByAdmin(
 		@Args('input') input: UpdatePropertyStatusInput,
+		@AuthMember('_id') adminId: Types.ObjectId,
 	): Promise<Property> {
 		input._id = shapeIntoMongoObjectId(input._id);
-		return this.propertyService.updatePropertyStatusByAdmin(input);
+		return this.propertyService.updatePropertyStatusByAdmin(input, adminId);
 	}
 
 	@Roles(MemberType.ADMIN)

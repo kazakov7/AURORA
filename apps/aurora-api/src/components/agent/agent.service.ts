@@ -9,6 +9,8 @@ import { AgentType, AgentVerificationStatus } from '../../libs/enums/agent.enum'
 import { MemberStatus, MemberType } from '../../libs/enums/member.enum';
 import { T } from '../../libs/types/common';
 import { lookupMember, shapeIntoMongoObjectId } from '../../libs/config';
+import { NotificationService } from '../notification/notification.service';
+import { NotificationGroup, NotificationType } from '../../libs/enums/notification.enum';
 
 @Injectable()
 export class AgentService {
@@ -16,6 +18,7 @@ export class AgentService {
 		@InjectModel('Agent') private readonly agentModel: Model<any>,
 		@InjectModel('Member') private readonly memberModel: Model<any>,
 		@InjectConnection() private readonly connection: Connection,
+		private readonly notificationService: NotificationService,
 	) { }
 
 	public async submitAgentApplication(memberId: Types.ObjectId, input: AgentInput): Promise<Agent> {
@@ -34,6 +37,15 @@ export class AgentService {
 
 		try {
 			const result = await this.agentModel.create({ ...input, memberId });
+			await this.notificationService.notifyActiveAdmins({
+				authorId: memberId,
+				notificationType: NotificationType.SYSTEM,
+				notificationGroup: NotificationGroup.SYSTEM,
+				notificationRefId: result._id,
+				notificationTitle: 'New agent application',
+				notificationDesc: 'A member submitted an agent verification application.',
+				notificationEventKey: `agent-application:${result._id}`,
+			});
 			return result as unknown as Agent;
 		} catch (error) {
 			if ((error as { code?: number }).code === 11000) {
@@ -64,7 +76,7 @@ export class AgentService {
 		return this.getAgentList(match, input);
 	}
 
-	public async approveAgentApplication(agentId: Types.ObjectId): Promise<Agent> {
+	public async approveAgentApplication(agentId: Types.ObjectId, adminId?: Types.ObjectId): Promise<Agent> {
 		const session = await this.connection.startSession();
 		try {
 			let agent: Agent | null = null;
@@ -94,6 +106,17 @@ export class AgentService {
 			});
 
 			if (!agent) throw new InternalServerErrorException(Messages.UPDATE_FAILED);
+			const approvedAgent = agent as unknown as Agent;
+			await this.notificationService.createNotification({
+				receiverId: approvedAgent.memberId as unknown as Types.ObjectId,
+				authorId: adminId,
+				notificationType: NotificationType.SYSTEM,
+				notificationGroup: NotificationGroup.SYSTEM,
+				notificationRefId: approvedAgent._id as unknown as Types.ObjectId,
+				notificationTitle: 'Agent application approved',
+				notificationDesc: 'Your agent application has been approved.',
+				notificationEventKey: `agent-approved:${approvedAgent._id}`,
+			});
 			return agent;
 		} catch (error) {
 			if ((error as { code?: number }).code === 11000) {
@@ -105,7 +128,7 @@ export class AgentService {
 		}
 	}
 
-	public async rejectAgentApplication(input: RejectAgentApplicationInput): Promise<Agent> {
+	public async rejectAgentApplication(input: RejectAgentApplicationInput, adminId?: Types.ObjectId): Promise<Agent> {
 		const result = await this.agentModel
 			.findOneAndUpdate(
 				{ _id: input._id, verificationStatus: AgentVerificationStatus.PENDING },
@@ -115,6 +138,16 @@ export class AgentService {
 			.exec();
 
 		if (!result) throw new BadRequestException(Messages.AGENT_APPLICATION_NOT_FOUND);
+		await this.notificationService.createNotification({
+			receiverId: result.memberId as Types.ObjectId,
+			authorId: adminId,
+			notificationType: NotificationType.SYSTEM,
+			notificationGroup: NotificationGroup.SYSTEM,
+			notificationRefId: result._id as Types.ObjectId,
+			notificationTitle: 'Agent application update',
+			notificationDesc: 'Your agent application was not approved.',
+			notificationEventKey: `agent-rejected:${result._id}`,
+		});
 		return result as unknown as Agent;
 	}
 

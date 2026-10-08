@@ -22,6 +22,8 @@ import { ViewService } from '../view/view.service';
 import { AgentService } from '../agent/agent.service';
 import { AgentType } from '../../libs/enums/agent.enum';
 import { DestinationService } from '../destination/destination.service';
+import { NotificationService } from '../notification/notification.service';
+import { NotificationGroup, NotificationType } from '../../libs/enums/notification.enum';
 
 @Injectable()
 export class TourService {
@@ -32,6 +34,7 @@ export class TourService {
 		private readonly viewService: ViewService,
 		private readonly agentService: AgentService,
 		private readonly destinationService: DestinationService,
+		private readonly notificationService: NotificationService,
 	) { }
 
 	public async createTour(input: TourInput): Promise<Tour> {
@@ -222,7 +225,13 @@ export class TourService {
 		});
 		if (!target) throw new InternalServerErrorException(Messages.TOUR_NOT_FOUND);
 
-		await this.likeService.toggleLike({ memberId, likeRefId, likeGroup: LikeGroup.TOUR });
+		const modifier = await this.likeService.toggleLike({ memberId, likeRefId, likeGroup: LikeGroup.TOUR });
+		if (modifier === 1) await this.notificationService.createNotification({
+			receiverId: target.memberId as Types.ObjectId, authorId: memberId, notificationType: NotificationType.LIKE,
+			notificationGroup: NotificationGroup.TOUR, notificationRefId: likeRefId,
+			notificationTitle: 'New tour like', notificationDesc: 'Someone liked your tour.',
+			notificationEventKey: `tour-like:${memberId}:${likeRefId}`,
+		});
 		const result = await this.tourModel.findById(likeRefId).exec();
 		if (!result) throw new InternalServerErrorException(Messages.SOMETHING_WENT_WRONG);
 		return result;
@@ -245,12 +254,18 @@ export class TourService {
 		return this.getTourList(match, input);
 	}
 
-	public async updateTourStatusByAdmin(input: UpdateTourStatusInput): Promise<Tour> {
+	public async updateTourStatusByAdmin(input: UpdateTourStatusInput, adminId?: Types.ObjectId): Promise<Tour> {
 		const result = await this.tourModel
 			.findOneAndUpdate({ _id: input._id, deletedAt: null }, { tourStatus: input.tourStatus }, { new: true })
 			.exec();
 
 		if (!result) throw new InternalServerErrorException(Messages.UPDATE_FAILED);
+		await this.notificationService.createNotification({
+			receiverId: result.memberId as Types.ObjectId, authorId: adminId, notificationType: NotificationType.SYSTEM,
+			notificationGroup: NotificationGroup.SYSTEM, notificationRefId: result._id as Types.ObjectId,
+			notificationTitle: 'Tour listing status updated', notificationDesc: `Your tour listing status is now ${result.tourStatus}.`,
+			notificationEventKey: `tour-status:${result._id}:${result.tourStatus}`,
+		});
 		return result as unknown as Tour;
 	}
 

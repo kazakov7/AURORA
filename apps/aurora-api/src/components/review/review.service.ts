@@ -15,6 +15,8 @@ import { BoardArticle } from '../../libs/dto/board-article/board-article';
 import { PropertyStatus } from '../../libs/enums/property.enum';
 import { TourStatus } from '../../libs/enums/tour.enum';
 import { BoardArticleStatus } from '../../libs/enums/board-article.enum';
+import { NotificationService } from '../notification/notification.service';
+import { NotificationGroup, NotificationType } from '../../libs/enums/notification.enum';
 
 @Injectable()
 export class ReviewService {
@@ -24,6 +26,7 @@ export class ReviewService {
 		@InjectModel('Tour') private readonly tourModel: Model<Tour>,
 		@InjectModel('BoardArticle') private readonly articleModel: Model<BoardArticle>,
 		private readonly destinationService: DestinationService,
+		private readonly notificationService: NotificationService,
 	) {}
 
 	public async submitRating(memberId: Types.ObjectId, input: RatingInput): Promise<Review> {
@@ -50,7 +53,23 @@ export class ReviewService {
 		}
 
 		await this.refreshRatingStats(input.reviewGroup, reviewRefId);
+		await this.notifyReviewOwner(memberId, input.reviewGroup, reviewRefId, result);
 		return result;
+	}
+
+	private async notifyReviewOwner(memberId: Types.ObjectId, group: ReviewGroup, refId: Types.ObjectId, review: Review): Promise<void> {
+		const target = group === ReviewGroup.PROPERTY
+			? await this.propertyModel.findById(refId).select('memberId').lean().exec()
+			: group === ReviewGroup.TOUR
+				? await this.tourModel.findById(refId).select('memberId').lean().exec()
+				: null;
+		if (!target?.memberId) return;
+		await this.notificationService.createNotification({
+			receiverId: target.memberId as Types.ObjectId, authorId: memberId, notificationType: NotificationType.REVIEW,
+			notificationGroup: group === ReviewGroup.PROPERTY ? NotificationGroup.PROPERTY : NotificationGroup.TOUR,
+			notificationRefId: refId, notificationTitle: 'New review received',
+			notificationDesc: 'A traveler left a review for your listing.', notificationEventKey: `review:${review._id}`,
+		});
 	}
 
 	public async getMyRating(

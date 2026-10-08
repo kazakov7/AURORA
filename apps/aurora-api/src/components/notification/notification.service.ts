@@ -17,6 +17,7 @@ export interface CreateNotificationInput {
 	notificationRefId?: Types.ObjectId;
 	notificationTitle: string;
 	notificationDesc?: string;
+	notificationEventKey?: string;
 }
 
 @Injectable()
@@ -27,17 +28,20 @@ export class NotificationService {
 		private readonly chatGateway: ChatGateway,
 	) { }
 
-	public async createNotification(input: CreateNotificationInput): Promise<Notification> {
+	public async createNotification(input: CreateNotificationInput): Promise<Notification | null> {
+		if (input.authorId?.equals(input.receiverId)) return null;
 		const receiver = await this.memberModel
 			.findOne({ _id: input.receiverId, memberStatus: MemberStatus.ACTIVE, deletedAt: null })
 			.exec();
-		if (!receiver) throw new InternalServerErrorException(Messages.MEMBER_NOT_FOUND);
+		// A completed business transition must never be rolled back just because a
+		// recipient was deactivated between the action and notification dispatch.
+		if (!receiver) return null;
 
 		if (input.authorId) {
 			const author = await this.memberModel
 				.findOne({ _id: input.authorId, memberStatus: MemberStatus.ACTIVE, deletedAt: null })
 				.exec();
-			if (!author) throw new InternalServerErrorException(Messages.MEMBER_NOT_FOUND);
+			if (!author) return null;
 		}
 
 		if (input.notificationType === NotificationType.SYSTEM && input.notificationGroup !== NotificationGroup.SYSTEM) {
@@ -45,8 +49,17 @@ export class NotificationService {
 		}
 
 		try {
-			const notification = await this.notificationModel.create(input);
-			this.chatGateway.emitNotification(input.receiverId, notification);
+			const result = await this.notificationModel.findOneAndUpdate(
+				input.notificationEventKey
+					? { receiverId: input.receiverId, notificationEventKey: input.notificationEventKey }
+					: { _id: new Types.ObjectId() },
+				{ $setOnInsert: { ...input, notificationStatus: NotificationStatus.WAIT } },
+				{ new: true, upsert: true, rawResult: true },
+			).exec();
+			const notification = result.value as Notification;
+			if (notification && !result.lastErrorObject?.updatedExisting) {
+				this.chatGateway.emitNotification(input.receiverId, notification);
+			}
 			return notification;
 		} catch (err) {
 			console.error('Notification creation failed:', err);
@@ -67,7 +80,23 @@ export class NotificationService {
 				{ $sort: sort },
 				{
 					$facet: {
-						list: [{ $skip: (input.page - 1) * input.limit }, { $limit: input.limit }],
+						list: [
+							{ $skip: (input.page - 1) * input.limit },
+							{ $limit: input.limit },
+							{
+								$lookup: {
+									from: 'members', localField: 'authorId', foreignField: '_id', as: 'authorData',
+								},
+							},
+							{ $unwind: { path: '$authorData', preserveNullAndEmptyArrays: true } },
+							{
+								$project: {
+									'authorData.memberNick': 1, 'authorData.memberFullName': 1, 'authorData.memberImage': 1,
+									receiverId: 1, authorId: 1, notificationType: 1, notificationStatus: 1,
+									notificationGroup: 1, notificationRefId: 1, notificationTitle: 1, notificationDesc: 1, createdAt: 1,
+								},
+							},
+						],
 						metaCounter: [{ $count: 'total' }],
 					},
 				},
@@ -100,5 +129,18 @@ export class NotificationService {
 			)
 			.exec();
 		return result.modifiedCount;
+	}
+
+	public async notifyActiveAdmins(
+		input: Omit<CreateNotificationInput, 'receiverId'>,
+		excludedReceiverIds: Types.ObjectId[] = [],
+	): Promise<void> {
+		const admins = await this.memberModel.find({ memberType: 'ADMIN', memberStatus: MemberStatus.ACTIVE, deletedAt: null }).select('_id').lean().exec();
+		const excludedReceiverIdSet = new Set(excludedReceiverIds.map((receiverId) => receiverId.toString()));
+		await Promise.all((admins as any[]).filter((admin) => !excludedReceiverIdSet.has(admin._id.toString())).map((admin) => this.createNotification({
+			...input,
+			receiverId: admin._id as Types.ObjectId,
+			notificationEventKey: input.notificationEventKey ? `${input.notificationEventKey}:${admin._id}` : undefined,
+		})));
 	}
 }

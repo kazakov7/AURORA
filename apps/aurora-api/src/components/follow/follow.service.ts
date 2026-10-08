@@ -20,6 +20,8 @@ import {
 	lookupFollowingData,
 } from '../../libs/config';
 import { Direction, Messages } from '../../libs/enums/common.enum';
+import { NotificationService } from '../notification/notification.service';
+import { NotificationGroup, NotificationType } from '../../libs/enums/notification.enum';
 
 @Injectable()
 export class FollowService {
@@ -27,6 +29,7 @@ export class FollowService {
 		@InjectModel('Follow')
 		private readonly followModel: Model<Follower | Following>,
 		private memberService: MemberService,
+		private readonly notificationService: NotificationService,
 	) { }
 
 	public async subscribe(
@@ -62,6 +65,16 @@ export class FollowService {
 			_id: followingId,
 			targetKey: 'memberFollowers',
 			modifier: 1,
+		});
+		await this.notificationService.createNotification({
+			receiverId: followingId,
+			authorId: followerId,
+			notificationType: NotificationType.FOLLOW,
+			notificationGroup: NotificationGroup.MEMBER,
+			notificationRefId: result._id as unknown as Types.ObjectId,
+			notificationTitle: 'You have a new follower',
+			notificationDesc: 'Someone started following you.',
+			notificationEventKey: `follow:${result._id}`,
 		});
 		return result;
 	}

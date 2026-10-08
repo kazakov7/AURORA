@@ -103,9 +103,9 @@ export class TourResolver {
 	@Roles(MemberType.ADMIN)
 	@UseGuards(RolesGuard)
 	@Mutation(() => Tour)
-	public async updateTourStatusByAdmin(@Args('input') input: UpdateTourStatusInput): Promise<Tour> {
+	public async updateTourStatusByAdmin(@Args('input') input: UpdateTourStatusInput, @AuthMember('_id') adminId: Types.ObjectId): Promise<Tour> {
 		input._id = shapeIntoMongoObjectId(input._id);
-		return this.tourService.updateTourStatusByAdmin(input);
+		return this.tourService.updateTourStatusByAdmin(input, adminId);
 	}
 
 	@Roles(MemberType.ADMIN)

@@ -3,6 +3,21 @@ import { NotificationGroup, NotificationStatus, NotificationType } from '../../e
 import { TotalCounter } from '../member/member';
 
 @ObjectType()
+export class NotificationAuthor {
+	@Field(() => String)
+	_id: string;
+
+	@Field(() => String, { nullable: true })
+	memberNick?: string;
+
+	@Field(() => String, { nullable: true })
+	memberFullName?: string;
+
+	@Field(() => String, { nullable: true })
+	memberImage?: string;
+}
+
+@ObjectType()
 export class Notification {
 	@Field(() => String)
 	_id: string;
@@ -12,6 +27,9 @@ export class Notification {
 
 	@Field(() => String, { nullable: true })
 	authorId?: string;
+
+	@Field(() => NotificationAuthor, { nullable: true })
+	authorData?: NotificationAuthor;
 
 	@Field(() => NotificationType)
 	notificationType: NotificationType;

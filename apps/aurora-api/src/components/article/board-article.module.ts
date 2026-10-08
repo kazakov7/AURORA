@@ -7,6 +7,7 @@ import { ViewModule } from '../view/view.module';
 import BoardArticleSchema from '../../schemas/BoardArticle.model';
 import { LikeModule } from '../like/like.module';
 import { MongooseModule } from '@nestjs/mongoose';
+import { NotificationModule } from '../notification/notification.module';
 
 @Module({
 	imports: [
@@ -15,6 +16,7 @@ import { MongooseModule } from '@nestjs/mongoose';
 		ViewModule,
 		MemberModule,
 		LikeModule,
+		NotificationModule,
 	],
 	providers: [BoardArticleService, BoardArticleResolver],
 	exports: [BoardArticleService],

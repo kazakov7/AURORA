@@ -10,6 +10,7 @@ import { LikeModule } from '../like/like.module';
 import { BookingModule } from '../booking/booking.module';
 import { AgentModule } from '../agent/agent.module';
 import { DestinationModule } from '../destination/destination.module';
+import { NotificationModule } from '../notification/notification.module';
 
 @Module({
 	imports: [
@@ -21,6 +22,7 @@ import { DestinationModule } from '../destination/destination.module';
 		BookingModule,
 		AgentModule,
 		DestinationModule,
+		NotificationModule,
 	],
 	providers: [PropertyResolver, PropertyService],
 	exports: [PropertyService],

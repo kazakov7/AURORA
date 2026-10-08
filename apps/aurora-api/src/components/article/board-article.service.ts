@@ -28,6 +28,8 @@ import { LikeGroup } from '../../libs/enums/like.enum';
 import { LikeModule } from '../like/like.module';
 import { LikeService } from '../like/like.service';
 import { Direction, Messages } from '../../libs/enums/common.enum';
+import { NotificationService } from '../notification/notification.service';
+import { NotificationGroup, NotificationType } from '../../libs/enums/notification.enum';
 
 @Injectable()
 export class BoardArticleService {
@@ -37,6 +39,7 @@ export class BoardArticleService {
 		private memberService: MemberService,
 		private likeService: LikeService,
 		private viewService: ViewService,
+		private readonly notificationService: NotificationService,
 	) { }
 
 	public async createBoardArticle(
@@ -171,7 +174,13 @@ export class BoardArticleService {
 		};
 
 		// LIKE TOGGLE via Like modules
-		await this.likeService.toggleLike(input);
+		const modifier = await this.likeService.toggleLike(input);
+		if (modifier === 1) await this.notificationService.createNotification({
+			receiverId: target.memberId as Types.ObjectId, authorId: memberId, notificationType: NotificationType.LIKE,
+			notificationGroup: NotificationGroup.ARTICLE, notificationRefId: likeRefId,
+			notificationTitle: 'New community like', notificationDesc: 'Someone liked your community story.',
+			notificationEventKey: `article-like:${memberId}:${likeRefId}`,
+		});
 		const result = await this.boardArticleModel.findById(likeRefId).exec();
 
 		if (!result) throw new InternalServerErrorException(Messages.SOMETHING_WENT_WRONG);

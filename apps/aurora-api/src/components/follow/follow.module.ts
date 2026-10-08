@@ -5,12 +5,14 @@ import { AuthModule } from '../auth/auth.module';
 import { MemberModule } from '../member/member.module';
 import { FollowResolver } from './follow.resolver';
 import { FollowService } from './follow.service';
+import { NotificationModule } from '../notification/notification.module';
 
 @Module({
 	imports: [
 		MongooseModule.forFeature([{ name: 'Follow', schema: FollowSchema }]),
 		AuthModule,
 		MemberModule,
+		NotificationModule,
 	],
 	providers: [FollowResolver, FollowService],
 	exports: [FollowService],

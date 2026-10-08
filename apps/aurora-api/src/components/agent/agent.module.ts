@@ -5,6 +5,7 @@ import { AgentService } from './agent.service';
 import AgentSchema from '../../schemas/Agent.model';
 import MemberSchema from '../../schemas/Member.model';
 import { AuthModule } from '../auth/auth.module';
+import { NotificationModule } from '../notification/notification.module';
 
 @Module({
 	imports: [
@@ -13,6 +14,7 @@ import { AuthModule } from '../auth/auth.module';
 			{ name: 'Member', schema: MemberSchema },
 		]),
 		AuthModule,
+		NotificationModule,
 	],
 	providers: [AgentResolver, AgentService],
 	exports: [AgentService],

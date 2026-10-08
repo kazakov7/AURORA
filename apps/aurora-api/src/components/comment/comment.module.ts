@@ -10,17 +10,25 @@ import { BoardArticleModule } from '../article/board-article.module';
 import { PropertyModule } from '../property/property.module';
 import { TourModule } from '../tour/tour.module';
 import { DestinationModule } from '../destination/destination.module';
+import { NotificationModule } from '../notification/notification.module';
+import PropertySchema from '../../schemas/Property.model';
+import TourSchema from '../../schemas/Tour.model';
+import BoardArticleSchema from '../../schemas/BoardArticle.model';
 
 
 @Module({
 	imports: [
-		MongooseModule.forFeature([{ name: 'Comment', schema: CommentSchema }]),
+		MongooseModule.forFeature([
+			{ name: 'Comment', schema: CommentSchema }, { name: 'Property', schema: PropertySchema },
+			{ name: 'Tour', schema: TourSchema }, { name: 'BoardArticle', schema: BoardArticleSchema },
+		]),
 		AuthModule,
 		MemberModule,
 		BoardArticleModule,
 		PropertyModule,
 		TourModule,
 		DestinationModule,
+		NotificationModule,
 	],
 	providers: [CommentResolver, CommentService],
 	exports: [CommentService],

@@ -364,7 +364,7 @@ export class MemberService {
 		return result[0] as Members;
 	}
 
-	public async updateMemberByAdmin(input: MemberUpdate): Promise<Member> {
+	public async updateMemberByAdmin(input: MemberUpdate, _adminId?: Types.ObjectId): Promise<Member> {
 		const result = await this.memberModel
 			.findOneAndUpdate({ _id: input._id }, input, { new: true })
 			.exec();
@@ -372,7 +372,6 @@ export class MemberService {
 		if (!result) {
 			throw new InternalServerErrorException(Messages.UPDATE_FAILED);
 		}
-
 		return result;
 	}
 }

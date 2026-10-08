@@ -42,11 +42,21 @@ const NotificationSchema = new Schema(
 		},
 
 		notificationRefId: Schema.Types.ObjectId,
+
+		// A deterministic event key makes webhook retries and concurrent mutations
+		// safe without changing the public GraphQL contract.
+		notificationEventKey: {
+			type: String,
+		},
 	},
 	{ timestamps: { createdAt: true, updatedAt: false }, collection: 'notifications' },
 );
 
 NotificationSchema.index({ receiverId: 1, notificationStatus: 1, createdAt: 1 }, { name: 'notifications_inbox_idx' });
 NotificationSchema.index({ notificationGroup: 1, notificationRefId: 1, createdAt: 1 }, { name: 'notifications_target_idx' });
+NotificationSchema.index(
+	{ receiverId: 1, notificationEventKey: 1 },
+	{ unique: true, partialFilterExpression: { notificationEventKey: { $type: 'string' } }, name: 'notifications_receiver_event_uq' },
+);
 
 export default NotificationSchema;

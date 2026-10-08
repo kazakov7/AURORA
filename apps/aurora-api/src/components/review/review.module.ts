@@ -8,6 +8,7 @@ import { ReviewService } from './review.service';
 import PropertySchema from '../../schemas/Property.model';
 import TourSchema from '../../schemas/Tour.model';
 import BoardArticleSchema from '../../schemas/BoardArticle.model';
+import { NotificationModule } from '../notification/notification.module';
 
 @Module({
 	imports: [
@@ -19,6 +20,7 @@ import BoardArticleSchema from '../../schemas/BoardArticle.model';
 		]),
 		AuthModule,
 		DestinationModule,
+		NotificationModule,
 	],
 	providers: [ReviewResolver, ReviewService],
 	exports: [ReviewService],

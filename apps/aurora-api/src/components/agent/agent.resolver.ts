@@ -49,15 +49,15 @@ export class AgentResolver {
 	@Roles(MemberType.ADMIN)
 	@UseGuards(RolesGuard)
 	@Mutation(() => Agent)
-	public async approveAgentApplication(@Args('input') agentId: string): Promise<Agent> {
-		return this.agentService.approveAgentApplication(shapeIntoMongoObjectId(agentId));
+	public async approveAgentApplication(@Args('input') agentId: string, @AuthMember('_id') adminId: Types.ObjectId): Promise<Agent> {
+		return this.agentService.approveAgentApplication(shapeIntoMongoObjectId(agentId), adminId);
 	}
 
 	@Roles(MemberType.ADMIN)
 	@UseGuards(RolesGuard)
 	@Mutation(() => Agent)
-	public async rejectAgentApplication(@Args('input') input: RejectAgentApplicationInput): Promise<Agent> {
+	public async rejectAgentApplication(@Args('input') input: RejectAgentApplicationInput, @AuthMember('_id') adminId: Types.ObjectId): Promise<Agent> {
 		input._id = shapeIntoMongoObjectId(input._id) as unknown as string;
-		return this.agentService.rejectAgentApplication(input);
+		return this.agentService.rejectAgentApplication(input, adminId);
 	}
 }

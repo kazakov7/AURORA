@@ -19,6 +19,8 @@ import { BoardArticleService } from '../article/board-article.service';
 import { Direction, Messages } from '../../libs/enums/common.enum';
 import { TourService } from '../tour/tour.service';
 import { DestinationService } from '../destination/destination.service';
+import { NotificationService } from '../notification/notification.service';
+import { NotificationGroup, NotificationType } from '../../libs/enums/notification.enum';
 
 @Injectable()
 export class CommentService {
@@ -30,6 +32,10 @@ export class CommentService {
 		private propertyService: PropertyService,
 		private tourService: TourService,
 		private destinationService: DestinationService,
+		@InjectModel('Property') private readonly propertyModel: Model<any>,
+		@InjectModel('Tour') private readonly tourModel: Model<any>,
+		@InjectModel('BoardArticle') private readonly articleModel: Model<any>,
+		private readonly notificationService: NotificationService,
 	) { }
 
 	public async createComment(
@@ -84,8 +90,27 @@ export class CommentService {
 		}
 
 		if (!result) throw new InternalServerErrorException(Messages.CREATE_FAILED);
+		await this.notifyContentOwner(memberId, result as Comment);
 
 		return result as unknown as Comment;
+	}
+
+	private async notifyContentOwner(authorId: Types.ObjectId, comment: Comment): Promise<void> {
+		const targets: Record<string, { model: Model<any>; group: NotificationGroup }> = {
+			[CommentGroup.PROPERTY]: { model: this.propertyModel, group: NotificationGroup.PROPERTY },
+			[CommentGroup.TOUR]: { model: this.tourModel, group: NotificationGroup.TOUR },
+			[CommentGroup.ARTICLE]: { model: this.articleModel, group: NotificationGroup.ARTICLE },
+		};
+		const target = targets[comment.commentGroup];
+		if (!target) return;
+		const content = await target.model.findById(comment.commentRefId).select('memberId').lean().exec() as any;
+		if (!content?.memberId) return;
+		await this.notificationService.createNotification({
+			receiverId: content.memberId as Types.ObjectId, authorId, notificationType: NotificationType.COMMENT,
+			notificationGroup: target.group, notificationRefId: comment.commentRefId as unknown as Types.ObjectId,
+			notificationTitle: 'New comment on your content', notificationDesc: 'Someone left a comment on your content.',
+			notificationEventKey: `comment:${comment._id}`,
+		});
 	}
 
 	public async updateComment(

@@ -23,6 +23,8 @@ import { ViewService } from '../view/view.service';
 import { AgentService } from '../agent/agent.service';
 import { AgentType } from '../../libs/enums/agent.enum';
 import { DestinationService } from '../destination/destination.service';
+import { NotificationService } from '../notification/notification.service';
+import { NotificationGroup, NotificationType } from '../../libs/enums/notification.enum';
 
 @Injectable()
 export class PropertyService {
@@ -34,6 +36,7 @@ export class PropertyService {
 		private readonly bookingService: BookingService,
 		private readonly agentService: AgentService,
 		private readonly destinationService: DestinationService,
+		private readonly notificationService: NotificationService,
 	) { }
 
 	public async createProperty(input: CreatePropertyInput): Promise<Property> {
@@ -219,7 +222,13 @@ export class PropertyService {
 		});
 		if (!target) throw new InternalServerErrorException(Messages.PROPERTY_NOT_FOUND);
 
-		await this.likeService.toggleLike({ memberId, likeRefId, likeGroup: LikeGroup.PROPERTY });
+		const modifier = await this.likeService.toggleLike({ memberId, likeRefId, likeGroup: LikeGroup.PROPERTY });
+		if (modifier === 1) await this.notificationService.createNotification({
+			receiverId: target.memberId as Types.ObjectId, authorId: memberId, notificationType: NotificationType.LIKE,
+			notificationGroup: NotificationGroup.PROPERTY, notificationRefId: likeRefId,
+			notificationTitle: 'New hotel like', notificationDesc: 'Someone liked your hotel.',
+			notificationEventKey: `property-like:${memberId}:${likeRefId}`,
+		});
 		const result = await this.propertyModel.findById(likeRefId).exec();
 		if (!result) throw new InternalServerErrorException(Messages.SOMETHING_WENT_WRONG);
 		return result as unknown as Property;
@@ -279,12 +288,18 @@ export class PropertyService {
 		return result[0] as Properties;
 	}
 
-	public async updatePropertyStatusByAdmin(input: UpdatePropertyStatusInput): Promise<Property> {
+	public async updatePropertyStatusByAdmin(input: UpdatePropertyStatusInput, adminId?: Types.ObjectId): Promise<Property> {
 		const result = await this.propertyModel
 			.findOneAndUpdate({ _id: input._id, deletedAt: null }, { propertyStatus: input.propertyStatus }, { new: true })
 			.exec();
 
 		if (!result) throw new InternalServerErrorException(Messages.UPDATE_FAILED);
+		await this.notificationService.createNotification({
+			receiverId: result.memberId as Types.ObjectId, authorId: adminId, notificationType: NotificationType.SYSTEM,
+			notificationGroup: NotificationGroup.SYSTEM, notificationRefId: result._id as Types.ObjectId,
+			notificationTitle: 'Hotel listing status updated', notificationDesc: `Your hotel listing status is now ${result.propertyStatus}.`,
+			notificationEventKey: `property-status:${result._id}:${result.propertyStatus}`,
+		});
 		return result as unknown as Property;
 	}
 

@@ -8,6 +8,7 @@ import { AuthModule } from '../auth/auth.module';
 import { PaymentController } from './payment.controller';
 import { PaymentResolver } from './payment.resolver';
 import { PaymentService } from './payment.service';
+import { NotificationModule } from '../notification/notification.module';
 
 @Module({
 	imports: [
@@ -18,6 +19,7 @@ import { PaymentService } from './payment.service';
 			{ name: 'Tour', schema: TourSchema },
 		]),
 		AuthModule,
+		NotificationModule,
 	],
 	controllers: [PaymentController],
 	providers: [PaymentResolver, PaymentService],
