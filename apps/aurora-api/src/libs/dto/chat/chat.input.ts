@@ -1,6 +1,6 @@
 import { Field, Int, InputType } from '@nestjs/graphql';
 import { ObjectId } from 'mongoose';
-import { IsIn, IsNotEmpty, IsOptional, Min } from 'class-validator';
+import { IsIn, IsInt, IsNotEmpty, IsOptional, Max, Min } from 'class-validator';
 import { ChatType } from '../../enums/chat.enum';
 import { Direction } from '../../enums/common.enum';
 import { availableChatSorts } from '../../config';
@@ -41,12 +41,15 @@ class ChatSearch {
 @InputType()
 export class ChatsInquiry {
 	@IsNotEmpty()
+	@IsInt()
 	@Min(1)
 	@Field(() => Int)
 	page: number;
 
 	@IsNotEmpty()
+	@IsInt()
 	@Min(1)
+	@Max(100)
 	@Field(() => Int)
 	limit: number;
 

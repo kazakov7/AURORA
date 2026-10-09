@@ -293,4 +293,39 @@ describe('Catalog and social domains (e2e)', () => {
 		]);
 		expect((await model(app, 'Member').findById(host._id).lean()).memberViews).toBe(0);
 	});
+
+	it('returns persisted like/follow state for the viewer in home rankings', async () => {
+		const owner = await seedMember(app, 'rankowner');
+		const viewer = await seedMember(app, 'rankviewer');
+		const destination = await model(app, 'Destination').create({
+			destinationName: 'Japan', destinationSlug: 'japan', destinationCountry: 'JP', destinationStatus: DestinationStatus.ACTIVE,
+		});
+		const property = await model(app, 'Property').create({
+			memberId: owner._id, destinationId: destination._id, propertyType: 'HOTEL', propertyStatus: PropertyStatus.ACTIVE,
+			propertyName: 'Kyoto Aura', propertyAddress: 'Kyoto', pricePerNight: 150000, currency: 'KRW', maxGuests: 2,
+		});
+		const publication = await model(app, 'RankingPublication').create({ isActive: true, publishedAt: new Date(), calculatedAt: new Date(), snapshotCount: 2 });
+		const snapshot = (rankingType: string, entityId: unknown) => ({
+			publicationId: publication._id, rankingType, scope: 'GLOBAL', periodDays: 30, calculatedAt: new Date(), entries: [{ entityId, score: 1 }],
+		});
+		await model(app, 'RankingSnapshot').create([snapshot('TOP_PROPERTIES', property._id), snapshot('TOP_TRAVELERS', owner._id)]);
+
+		const liked = await graphQL(app, `mutation Like($propertyId: String!) { likeTargetProperty(propertyId: $propertyId) { _id } }`, { propertyId: property._id.toString() }, viewer.accessToken);
+		expect(liked.body.errors).toBeUndefined();
+		const followed = await graphQL(app, `mutation Follow($input: String!) { subscribe(input: $input) { _id } }`, { input: owner._id }, viewer.accessToken);
+		expect(followed.body.errors).toBeUndefined();
+
+		const rankingQuery = `query Home($input: RankingInquiry) {
+			getTopProperties(input: $input) { list { _id meLiked { myFavorite } } }
+			getTopTravelers(input: $input) { list { _id meFollowed { myFollowing } } }
+		}`;
+		const authed = await graphQL(app, rankingQuery, { input: { limit: 4 } }, viewer.accessToken);
+		expect(authed.body.errors).toBeUndefined();
+		expect(authed.body.data.getTopProperties.list[0].meLiked).toEqual([{ myFavorite: true }]);
+		expect(authed.body.data.getTopTravelers.list[0].meFollowed).toEqual([{ myFollowing: true }]);
+
+		const guest = await graphQL(app, rankingQuery, { input: { limit: 4 } });
+		expect(guest.body.errors).toBeUndefined();
+		expect(guest.body.data.getTopProperties.list[0].meLiked).toBeNull();
+	});
 });

@@ -5,16 +5,18 @@ import {
 	ServiceUnavailableException,
 	UnauthorizedException,
 } from '@nestjs/common';
+import { InjectModel } from '@nestjs/mongoose';
 import { HttpService } from '@nestjs/axios';
 import * as bcrypt from 'bcrypt';
 import { JwtService } from '@nestjs/jwt';
 import { OAuth2Client } from 'google-auth-library';
 import { createRemoteJWKSet, jwtVerify } from 'jose';
 import { firstValueFrom } from 'rxjs';
+import { Model, Types } from 'mongoose';
 import { Member } from '../../libs/dto/member/member';
 import { T } from '../../libs/types/common';
-import { shapeIntoMongoObjectId } from '../../libs/config';
 import { Messages } from '../../libs/enums/common.enum';
+import { MemberStatus } from '../../libs/enums/member.enum';
 
 export interface GoogleIdentity {
 	subject: string;
@@ -69,6 +71,7 @@ export class AuthService {
 	constructor(
 		private jwtService: JwtService,
 		private httpService: HttpService,
+		@InjectModel('Member') private readonly memberModel: Model<Member>,
 	) { }
 	public async hashPassword(memberPassword: string): Promise<string> {
 		const salt = await bcrypt.genSalt();
@@ -93,9 +96,32 @@ export class AuthService {
 		return await this.jwtService.signAsync(payload);
 	}
 	public async verifyToken(token: string): Promise<Member> {
-		const member = await this.jwtService.verifyAsync(token);
-		member._id = shapeIntoMongoObjectId(member._id);
-		return member;
+		let payload: T;
+		try {
+			payload = await this.jwtService.verifyAsync(token);
+		} catch (error) {
+			if ((error as { name?: string }).name === 'TokenExpiredError') {
+				throw new UnauthorizedException(Messages.TOKEN_EXPIRED);
+			}
+			throw new UnauthorizedException(Messages.NOT_AUTHENTICATED);
+		}
+
+		if (!payload?._id || !Types.ObjectId.isValid(payload._id)) {
+			throw new UnauthorizedException(Messages.NOT_AUTHENTICATED);
+		}
+
+		const member = await this.memberModel
+			.findOne({
+				_id: payload._id,
+				memberStatus: MemberStatus.ACTIVE,
+				deletedAt: null,
+			})
+			.select('_id memberType memberStatus memberNick')
+			.lean()
+			.exec();
+		if (!member) throw new UnauthorizedException(Messages.NOT_AUTHENTICATED);
+
+		return member as unknown as Member;
 	}
 
 	public async verifyGoogleCredential(credential: string): Promise<GoogleIdentity> {

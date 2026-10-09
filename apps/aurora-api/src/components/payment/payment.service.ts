@@ -41,12 +41,15 @@ export class PaymentService implements OnModuleInit, OnModuleDestroy {
 		memberId: Types.ObjectId,
 		input: StartPropertyPaymentInput,
 	): Promise<PaymentCheckout> {
-		const existing = await this.getPaymentByKey(input.idempotencyKey);
-		if (existing) return this.shapeCheckout(existing);
-
-		await this.expirePendingBookings();
 		const propertyId = new Types.ObjectId(input.propertyId);
 		this.validateBookingDates(input.checkIn, input.checkOut);
+		const existing = await this.getPaymentByKey(input.idempotencyKey);
+		if (existing) {
+			await this.assertPaymentMatchesRequest(existing, memberId, BookingCategory.PROPERTY, propertyId, input);
+			return this.shapeCheckout(existing);
+		}
+
+		await this.expirePendingBookings();
 		let booking = await this.findReusablePropertyHold(memberId, propertyId, input);
 		if (!booking) booking = await this.createPropertyHold(memberId, propertyId, input);
 		const pendingPayment = await this.findPendingPaymentForBooking(booking._id as Types.ObjectId);
@@ -56,11 +59,14 @@ export class PaymentService implements OnModuleInit, OnModuleDestroy {
 	}
 
 	public async startTourPayment(memberId: Types.ObjectId, input: StartTourPaymentInput): Promise<PaymentCheckout> {
+		const tourId = new Types.ObjectId(input.tourId);
 		const existing = await this.getPaymentByKey(input.idempotencyKey);
-		if (existing) return this.shapeCheckout(existing);
+		if (existing) {
+			await this.assertPaymentMatchesRequest(existing, memberId, BookingCategory.TOUR, tourId, input);
+			return this.shapeCheckout(existing);
+		}
 
 		await this.expirePendingBookings();
-		const tourId = new Types.ObjectId(input.tourId);
 		let booking = await this.findReusableTourHold(memberId, tourId, input);
 		if (!booking) booking = await this.createTourHold(memberId, tourId, input);
 		const pendingPayment = await this.findPendingPaymentForBooking(booking._id as Types.ObjectId);
@@ -100,7 +106,7 @@ export class PaymentService implements OnModuleInit, OnModuleDestroy {
 		const paymentIntent = event.data.object as Stripe.PaymentIntent;
 		switch (event.type) {
 			case 'payment_intent.succeeded':
-				await this.confirmPaidBooking(paymentIntent.id);
+				await this.confirmPaidBooking(paymentIntent);
 				break;
 			case 'payment_intent.payment_failed':
 			case 'payment_intent.canceled':
@@ -196,7 +202,7 @@ export class PaymentService implements OnModuleInit, OnModuleDestroy {
 			return booking;
 		} catch (error) {
 			if ((error as { code?: number }).code === 11000) {
-				const booking = await this.bookingModel.findOne({ memberId, checkoutKey: input.idempotencyKey }).exec();
+				const booking = await this.findMatchingPropertyHold(memberId, propertyId, input);
 				if (booking) return booking;
 			}
 			throw error;
@@ -206,59 +212,62 @@ export class PaymentService implements OnModuleInit, OnModuleDestroy {
 	}
 
 	private async createTourHold(memberId: Types.ObjectId, tourId: Types.ObjectId, input: StartTourPaymentInput): Promise<any> {
-		const today = new Date();
-		today.setHours(0, 0, 0, 0);
-		const tour: any = await this.tourModel
-			.findOneAndUpdate(
-				{
-					_id: tourId,
-					tourStatus: TourStatus.ACTIVE,
-					deletedAt: null,
-					tourStartDate: { $gte: today },
-					$expr: { $lte: [{ $add: ['$tourReservedSeats', input.bookingGuests] }, '$tourCapacity'] },
-				},
-				{ $inc: { tourReservedSeats: input.bookingGuests } },
-				{ new: true },
-			)
-			.lean()
-			.exec();
-		if (!tour) throw new BadRequestException(Messages.TOUR_FULL);
+		const session = await this.connection.startSession();
 		try {
-			this.validateCheckoutAmount(tour.tourPrice, tour.tourCurrency);
-		} catch (error) {
-			await this.tourModel.updateOne({ _id: tourId }, { $inc: { tourReservedSeats: -input.bookingGuests } }).exec();
-			throw error;
-		}
+			let booking: any;
+			await session.withTransaction(async () => {
+				const today = new Date();
+				today.setHours(0, 0, 0, 0);
+				const tour: any = await this.tourModel
+					.findOneAndUpdate(
+						{
+							_id: tourId,
+							tourStatus: TourStatus.ACTIVE,
+							deletedAt: null,
+							tourStartDate: { $gte: today },
+							$expr: { $lte: [{ $add: ['$tourReservedSeats', input.bookingGuests] }, '$tourCapacity'] },
+						},
+						{ $inc: { tourReservedSeats: input.bookingGuests } },
+						{ new: true, session },
+					)
+					.lean()
+					.exec();
+				if (!tour) throw new BadRequestException(Messages.TOUR_FULL);
+				this.validateCheckoutAmount(tour.tourPrice, tour.tourCurrency);
 
-		try {
-			return await this.bookingModel.create({
-				memberId,
-				bookingCategory: BookingCategory.TOUR,
-				bookingStatus: BookingStatus.PENDING,
-				bookingRefId: tourId,
-				checkoutKey: input.idempotencyKey,
-				bookingGuests: input.bookingGuests,
-				bookingTotalPrice: tour.tourPrice * input.bookingGuests,
-				bookingCurrency: tour.tourCurrency,
-				priceSnapshot: {
-					tourId,
-					tourName: tour.tourName,
-					pricePerPerson: tour.tourPrice,
-					currency: tour.tourCurrency,
-					tourStartDate: tour.tourStartDate,
-					tourEndDate: tour.tourEndDate,
-					seats: input.bookingGuests,
-				},
-				bookingNote: input.bookingNote,
-				expiresAt: this.getHoldExpiry(),
+				const result = await this.bookingModel.create([{
+					memberId,
+					bookingCategory: BookingCategory.TOUR,
+					bookingStatus: BookingStatus.PENDING,
+					bookingRefId: tourId,
+					checkoutKey: input.idempotencyKey,
+					bookingGuests: input.bookingGuests,
+					bookingTotalPrice: tour.tourPrice * input.bookingGuests,
+					bookingCurrency: tour.tourCurrency,
+					priceSnapshot: {
+						tourId,
+						tourName: tour.tourName,
+						pricePerPerson: tour.tourPrice,
+						currency: tour.tourCurrency,
+						tourStartDate: tour.tourStartDate,
+						tourEndDate: tour.tourEndDate,
+						seats: input.bookingGuests,
+					},
+					bookingNote: input.bookingNote,
+					expiresAt: this.getHoldExpiry(),
+				}], { session });
+				booking = result[0];
 			});
+			return booking;
 		} catch (error) {
-			await this.tourModel.updateOne({ _id: tourId }, { $inc: { tourReservedSeats: -input.bookingGuests } }).exec();
 			if ((error as { code?: number }).code === 11000) {
-				const booking = await this.bookingModel.findOne({ memberId, checkoutKey: input.idempotencyKey }).exec();
+				const booking = await this.findMatchingTourHold(memberId, tourId, input);
 				if (booking) return booking;
 			}
+			if (error instanceof BadRequestException) throw error;
 			throw new BadRequestException(Messages.CREATE_FAILED);
+		} finally {
+			await session.endSession();
 		}
 	}
 
@@ -288,26 +297,43 @@ export class PaymentService implements OnModuleInit, OnModuleDestroy {
 		} catch (error) {
 			if ((error as { code?: number }).code === 11000) {
 				const payment = await this.getPaymentByKey(idempotencyKey);
-				if (payment) return this.shapeCheckout(payment);
+				if (payment && this.paymentBelongsToBooking(payment, booking, memberId)) {
+					return this.shapeCheckout(payment);
+				}
 			}
 			await this.cancelPendingBookingBySystem(booking._id as Types.ObjectId, 'Unable to create payment');
 			throw new BadRequestException(Messages.PAYMENT_FAILED);
 		}
 	}
 
-	private async confirmPaidBooking(providerPaymentId: string): Promise<void> {
+	private async confirmPaidBooking(paymentIntent: Stripe.PaymentIntent): Promise<void> {
 		const session = await this.connection.startSession();
 		let shouldRefund = false;
+		let refundBookingId: Types.ObjectId | null = null;
 		let confirmedBooking: any | null = null;
 		try {
 			await session.withTransaction(async () => {
-				const payment = await this.paymentModel.findOne({ providerPaymentId }).session(session).exec();
+				const payment = await this.paymentModel.findOne({ providerPaymentId: paymentIntent.id }).session(session).exec();
 				if (
 					!payment ||
 					payment.paymentStatus === PaymentStatus.SUCCEEDED ||
 					payment.paymentStatus === PaymentStatus.REFUNDED
 				)
 					return;
+				refundBookingId = payment.bookingId as Types.ObjectId;
+				const expectedCharge = this.getStripeCharge(payment.paymentAmount, payment.paymentCurrency);
+				const receivedAmount = paymentIntent.amount_received ?? paymentIntent.amount;
+				if (receivedAmount !== expectedCharge.amount || paymentIntent.currency?.toLowerCase() !== expectedCharge.currency) {
+					shouldRefund = true;
+					await this.paymentModel
+						.updateOne(
+							{ _id: payment._id, paymentStatus: { $in: [PaymentStatus.PENDING, PaymentStatus.FAILED] } },
+							{ paymentStatus: PaymentStatus.FAILED, failureReason: 'Payment amount or currency mismatch' },
+							{ session },
+						)
+						.exec();
+					return;
+				}
 				const booking = await this.bookingModel
 					.findOneAndUpdate(
 						{ _id: payment.bookingId, bookingStatus: BookingStatus.PENDING, expiresAt: { $gt: new Date() } },
@@ -328,7 +354,10 @@ export class PaymentService implements OnModuleInit, OnModuleDestroy {
 		} finally {
 			await session.endSession();
 		}
-		if (shouldRefund) await this.refundPayment(providerPaymentId);
+		if (shouldRefund) {
+			await this.refundPayment(paymentIntent.id);
+			if (refundBookingId) await this.cancelPendingBookingBySystem(refundBookingId, 'Payment verification failed');
+		}
 		if (confirmedBooking) await this.notifyBookingTransition(confirmedBooking, BookingStatus.CONFIRMED);
 	}
 
@@ -344,7 +373,12 @@ export class PaymentService implements OnModuleInit, OnModuleDestroy {
 	private async refundPayment(providerPaymentId: string): Promise<void> {
 		try {
 			const intent = await this.stripe.paymentIntents.retrieve(providerPaymentId);
-			if (intent.latest_charge) await this.stripe.refunds.create({ payment_intent: providerPaymentId });
+			if (intent.latest_charge) {
+				await this.stripe.refunds.create(
+					{ payment_intent: providerPaymentId },
+					{ idempotencyKey: `booking-refund:${providerPaymentId}` },
+				);
+			}
 			await this.paymentModel.updateOne({ providerPaymentId }, { paymentStatus: PaymentStatus.REFUNDED, refundedAt: new Date() }).exec();
 		} catch (error) {
 			throw new InternalServerErrorException(Messages.PAYMENT_REFUND_FAILED);
@@ -374,28 +408,45 @@ export class PaymentService implements OnModuleInit, OnModuleDestroy {
 			? await this.propertyModel.findById(booking.bookingRefId).select('memberId').lean().exec()
 			: await this.tourModel.findById(booking.bookingRefId).select('memberId').lean().exec();
 		const eventKey = `booking:${status.toLowerCase()}:${booking._id}`;
-		const title = status === BookingStatus.CONFIRMED ? 'Booking confirmed' : 'Booking cancelled';
-		const desc = status === BookingStatus.CONFIRMED
-			? 'Your booking payment has been confirmed.'
-			: 'A booking has been cancelled.';
+		const isConfirmed = status === BookingStatus.CONFIRMED;
+		const guestId = booking.memberId as Types.ObjectId;
 		const input = {
 			notificationType: NotificationType.BOOKING,
 			notificationGroup: NotificationGroup.BOOKING,
 			notificationRefId: booking._id as Types.ObjectId,
-			notificationTitle: title,
-			notificationDesc: desc,
 		};
-		const recipientIds = [booking.memberId as Types.ObjectId, owner?.memberId as Types.ObjectId]
+		// The guest is the author of owner/admin notifications so clients can tell
+		// a received reservation apart from the receiver's own booking.
+		const guestInput = {
+			...input,
+			notificationTitle: isConfirmed ? 'Booking confirmed' : 'Booking cancelled',
+			notificationDesc: isConfirmed ? 'Your booking payment has been confirmed.' : 'Your booking has been cancelled.',
+		};
+		const ownerInput = {
+			...input,
+			authorId: guestId,
+			notificationTitle: isConfirmed ? 'New reservation confirmed' : 'Reservation cancelled',
+			notificationDesc: isConfirmed
+				? 'A traveler confirmed a reservation for your listing.'
+				: 'A reservation for your listing has been cancelled.',
+		};
+		const adminInput = {
+			...input,
+			authorId: guestId,
+			notificationTitle: isConfirmed ? 'Booking confirmed' : 'Booking cancelled',
+			notificationDesc: isConfirmed ? 'A platform booking has been confirmed.' : 'A platform booking has been cancelled.',
+		};
+		const recipientIds = [guestId, owner?.memberId as Types.ObjectId]
 			.filter((recipientId): recipientId is Types.ObjectId => Boolean(recipientId) && !actorId?.equals(recipientId))
 			.filter((recipientId, index, recipients) => recipients.findIndex((value) => value.equals(recipientId)) === index);
 
 		await Promise.all(recipientIds.map((receiverId) => this.notificationService.createNotification({
-			...input,
+			...(receiverId.equals(guestId) ? guestInput : ownerInput),
 			receiverId,
 			notificationEventKey: `${eventKey}:${receiverId}`,
 		})));
 		await this.notificationService.notifyActiveAdmins(
-			{ ...input, notificationEventKey: eventKey },
+			{ ...adminInput, notificationEventKey: eventKey },
 			[...recipientIds, ...(actorId ? [actorId] : [])],
 		);
 	}
@@ -443,6 +494,26 @@ export class PaymentService implements OnModuleInit, OnModuleDestroy {
 			.exec();
 	}
 
+	private async findMatchingPropertyHold(
+		memberId: Types.ObjectId,
+		propertyId: Types.ObjectId,
+		input: StartPropertyPaymentInput,
+	): Promise<any> {
+		return this.bookingModel
+			.findOne({
+				memberId,
+				bookingCategory: BookingCategory.PROPERTY,
+				bookingRefId: propertyId,
+				bookingStatus: BookingStatus.PENDING,
+				checkoutKey: input.idempotencyKey,
+				checkIn: input.checkIn,
+				checkOut: input.checkOut,
+				bookingGuests: input.bookingGuests,
+				expiresAt: { $gt: new Date() },
+			})
+			.exec();
+	}
+
 	private async findReusableTourHold(memberId: Types.ObjectId, tourId: Types.ObjectId, input: StartTourPaymentInput): Promise<any> {
 		return this.bookingModel
 			.findOne({
@@ -454,6 +525,55 @@ export class PaymentService implements OnModuleInit, OnModuleDestroy {
 				expiresAt: { $gt: new Date() },
 			})
 			.exec();
+	}
+
+	private async findMatchingTourHold(memberId: Types.ObjectId, tourId: Types.ObjectId, input: StartTourPaymentInput): Promise<any> {
+		return this.bookingModel
+			.findOne({
+				memberId,
+				bookingCategory: BookingCategory.TOUR,
+				bookingRefId: tourId,
+				bookingStatus: BookingStatus.PENDING,
+				checkoutKey: input.idempotencyKey,
+				bookingGuests: input.bookingGuests,
+				expiresAt: { $gt: new Date() },
+			})
+			.exec();
+	}
+
+	private async assertPaymentMatchesRequest(
+		payment: any,
+		memberId: Types.ObjectId,
+		bookingCategory: BookingCategory,
+		bookingRefId: Types.ObjectId,
+		input: StartPropertyPaymentInput | StartTourPaymentInput,
+	): Promise<void> {
+		if (!this.objectIdEquals(payment.memberId, memberId)) throw new BadRequestException(Messages.PAYMENT_FAILED);
+		const match: any = {
+			_id: payment.bookingId,
+			memberId,
+			bookingCategory,
+			bookingRefId,
+			bookingGuests: input.bookingGuests,
+		};
+		if (bookingCategory === BookingCategory.PROPERTY) {
+			const propertyInput = input as StartPropertyPaymentInput;
+			match.checkIn = propertyInput.checkIn;
+			match.checkOut = propertyInput.checkOut;
+		}
+		if (!(await this.bookingModel.exists(match).exec())) throw new BadRequestException(Messages.PAYMENT_FAILED);
+	}
+
+	private paymentBelongsToBooking(payment: any, booking: any, memberId: Types.ObjectId): boolean {
+		return this.objectIdEquals(payment.memberId, memberId) && this.objectIdEquals(payment.bookingId, booking._id);
+	}
+
+	private objectIdEquals(value: unknown, expected: Types.ObjectId): boolean {
+		try {
+			return new Types.ObjectId(value as any).equals(expected);
+		} catch (error) {
+			return false;
+		}
 	}
 
 	private async getPaymentByKey(idempotencyKey: string): Promise<any> {

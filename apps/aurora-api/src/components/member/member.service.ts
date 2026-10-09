@@ -1,4 +1,4 @@
-import { BadRequestException, ConflictException, Injectable, InternalServerErrorException } from '@nestjs/common';
+import { BadRequestException, ConflictException, Injectable, InternalServerErrorException, UnauthorizedException } from '@nestjs/common';
 import { InjectModel } from '@nestjs/mongoose';
 import { Member, Members } from '../../libs/dto/member/member';
 import { Model, PipelineStage, Types } from 'mongoose';
@@ -23,9 +23,11 @@ import { MemberUpdate } from '../../libs/dto/member/member.update';
 import { Follower, Following, MeFollowed } from '../../libs/dto/follow/follow';
 import { randomBytes } from 'crypto';
 import { lookUpAuthMemberFollowData } from '../../libs/config';
+import { ChatGateway } from '../chat/chat.gateway';
 
 type SocialIdentity = GoogleIdentity | KakaoIdentity | TelegramIdentity;
 type SocialSubjectField = 'googleSubject' | 'kakaoSubject' | 'telegramSubject';
+const INVALID_LOGIN_PASSWORD_HASH = '$2b$10$gsxeUygdgTkpCOraF15ReuvE4CMMhw6CJY4uHPfECoboFv.fKiQfe';
 
 interface SocialAuthConfig {
 	authType: MemberAuthType;
@@ -45,6 +47,7 @@ export class MemberService {
 		private authService: AuthService,
 		private viewService: ViewService,
 		private likeService: LikeService,
+		private readonly chatGateway: ChatGateway,
 	) { }
 
 	public async signup(input: MemberInput): Promise<Member> {
@@ -62,18 +65,14 @@ export class MemberService {
 	public async login(input: LoginInput): Promise<Member> {
 		const { memberNick, memberPassword } = input;
 		const response = await this.memberModel.findOne({ memberNick: memberNick }).select('+memberPassword').exec();
+		const isMatch = await this.authService.comparePasswords(
+			memberPassword,
+			response?.memberPassword ?? INVALID_LOGIN_PASSWORD_HASH,
+		);
 
-		if (!response || response.memberStatus === MemberStatus.DELETED) {
-			throw new InternalServerErrorException(Messages.MEMBER_NOT_FOUND);
-		} else if (response.memberStatus === MemberStatus.BLOCKED) {
-			throw new InternalServerErrorException(Messages.MEMBER_BLOCKED);
+		if (!response || response.memberStatus !== MemberStatus.ACTIVE || !response.memberPassword || !isMatch) {
+			throw new UnauthorizedException(Messages.NOT_AUTHENTICATED);
 		}
-		if (!response.memberPassword) {
-			throw new InternalServerErrorException(Messages.WRONG_PASSWORD);
-		}
-
-		const isMatch = await this.authService.comparePasswords(input.memberPassword, response.memberPassword!);
-		if (!isMatch) throw new InternalServerErrorException(Messages.WRONG_PASSWORD);
 
 		await this.memberModel.findByIdAndUpdate(response._id, {
 			lastLoginAt: new Date(),
@@ -136,11 +135,8 @@ export class MemberService {
 		identity: SocialIdentity,
 		config: SocialAuthConfig,
 	): Promise<Member> {
-		if (member.memberStatus === MemberStatus.DELETED) {
-			throw new InternalServerErrorException(Messages.MEMBER_NOT_FOUND);
-		}
-		if (member.memberStatus === MemberStatus.BLOCKED) {
-			throw new InternalServerErrorException(Messages.MEMBER_BLOCKED);
+		if (member.memberStatus !== MemberStatus.ACTIVE) {
+			throw new UnauthorizedException(Messages.NOT_AUTHENTICATED);
 		}
 
 		const update: T = { lastLoginAt: new Date() };
@@ -269,6 +265,10 @@ export class MemberService {
 				result.memberViews++;
 			}
 		}
+		// Own profile reads refresh the JWT so role changes (e.g. agent approval) apply without re-login.
+		if (memberId?.equals(targetId) && result.memberStatus === MemberStatus.ACTIVE) {
+			result.accessToken = await this.authService.createToken(result);
+		}
 		if (memberId) result.meFollowed = await this.checkSubscription(memberId, targetId);
 
 		return result;
@@ -371,6 +371,9 @@ export class MemberService {
 
 		if (!result) {
 			throw new InternalServerErrorException(Messages.UPDATE_FAILED);
+		}
+		if (result.memberStatus !== MemberStatus.ACTIVE || result.deletedAt) {
+			this.chatGateway.disconnectMember(result._id as unknown as Types.ObjectId);
 		}
 		return result;
 	}

@@ -161,7 +161,7 @@ describe('Auth, Member and Agent (e2e)', () => {
 			memberStatus: MemberStatus.BLOCKED,
 		});
 		const blocked = await graphQL(app, googleMutation, { input: { credential: 'google-id-token' } });
-		expect(blocked.body.errors?.[0].message).toBe(Messages.MEMBER_BLOCKED);
+		expect(blocked.body.errors?.[0].message).toBe(Messages.NOT_AUTHENTICATED);
 	});
 
 	it('creates and reuses passwordless Kakao members with the normal AURORA access token', async () => {
@@ -219,7 +219,7 @@ describe('Auth, Member and Agent (e2e)', () => {
 			app,
 			`mutation { login(input: { memberNick: "${second.body.data.kakaoAuth.memberNick}", memberPassword: "pass1234" }) { _id } }`,
 		);
-		expect(passwordLogin.body.errors?.[0].message).toBe(Messages.WRONG_PASSWORD);
+		expect(passwordLogin.body.errors?.[0].message).toBe(Messages.NOT_AUTHENTICATED);
 
 		const providerField = await graphQL(
 			app,
@@ -252,13 +252,13 @@ describe('Auth, Member and Agent (e2e)', () => {
 			memberStatus: MemberStatus.BLOCKED,
 		});
 		const blocked = await graphQL(app, kakaoMutation, variables);
-		expect(blocked.body.errors?.[0].message).toBe(Messages.MEMBER_BLOCKED);
+		expect(blocked.body.errors?.[0].message).toBe(Messages.NOT_AUTHENTICATED);
 
 		await model(app, 'Member').findByIdAndUpdate(created.body.data.kakaoAuth._id, {
 			memberStatus: MemberStatus.DELETED,
 		});
 		const deleted = await graphQL(app, kakaoMutation, variables);
-		expect(deleted.body.errors?.[0].message).toBe(Messages.MEMBER_NOT_FOUND);
+		expect(deleted.body.errors?.[0].message).toBe(Messages.NOT_AUTHENTICATED);
 	});
 
 	it('uses the Kakao fallback nickname when the consented nickname cannot be normalized', async () => {
@@ -394,7 +394,7 @@ describe('Auth, Member and Agent (e2e)', () => {
 			app,
 			`mutation { login(input: { memberNick: "customnick", memberPassword: "pass1234" }) { _id } }`,
 		);
-		expect(passwordLogin.body.errors?.[0].message).toBe(Messages.WRONG_PASSWORD);
+		expect(passwordLogin.body.errors?.[0].message).toBe(Messages.NOT_AUTHENTICATED);
 	});
 
 	it('uses Telegram username, name and fallback nickname candidates in priority order', async () => {

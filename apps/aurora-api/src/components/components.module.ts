@@ -20,6 +20,7 @@ import { FollowModule } from './follow/follow.module';
 import { TravelHistoryModule } from './travel-history/travel-history.module';
 import { ImageUploaderModule } from './image-uploader/image-uploader.module';
 import { RankingModule } from './ranking/ranking.module';
+import { SupportModule } from './support/support.module';
 
 @Module({
 	imports: [
@@ -44,6 +45,7 @@ import { RankingModule } from './ranking/ranking.module';
 		TravelHistoryModule,
 		ImageUploaderModule,
 		RankingModule,
+		SupportModule,
 	],
 })
 export class ComponentsModule { }

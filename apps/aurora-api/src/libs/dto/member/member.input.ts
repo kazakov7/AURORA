@@ -1,5 +1,5 @@
 import { Field, InputType, Int } from '@nestjs/graphql';
-import { IsEmail, IsEnum, IsIn, IsInt, IsNotEmpty, IsOptional, IsString, Length, Matches, Min } from 'class-validator';
+import { IsEmail, IsEnum, IsIn, IsInt, IsNotEmpty, IsOptional, IsString, Length, Matches, Max, Min } from 'class-validator';
 import { availableMemberSorts } from '../../config';
 import { Direction } from '../../enums/common.enum';
 import { MemberAuthType, MemberStatus, MemberType } from '../../enums/member.enum';
@@ -115,6 +115,7 @@ export class MembersInquiry {
 	@IsNotEmpty()
 	@IsInt()
 	@Min(1)
+	@Max(100)
 	@Field(() => Int)
 	limit!: number;
 

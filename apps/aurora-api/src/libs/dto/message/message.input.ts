@@ -1,6 +1,6 @@
 import { Field, Int, InputType } from '@nestjs/graphql';
 import { ObjectId } from 'mongoose';
-import { IsIn, IsNotEmpty, IsOptional, IsString, Length, Max, MaxLength, Min } from 'class-validator';
+import { IsIn, IsInt, IsNotEmpty, IsOptional, IsString, Length, Max, MaxLength, Min } from 'class-validator';
 import { MessageType } from '../../enums/message.enum';
 // import { availableMessageSorts } from '../../config';
 
@@ -86,6 +86,7 @@ export class MessagesCursorInquiry {
 	chatId: ObjectId;
 
 	@IsNotEmpty()
+	@IsInt()
 	@Min(1)
 	@Max(100)
 	@Field(() => Int)

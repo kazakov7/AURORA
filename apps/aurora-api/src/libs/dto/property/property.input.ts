@@ -8,6 +8,7 @@ import {
 	IsNumber,
 	IsOptional,
 	IsString,
+	Max,
 	MaxLength,
 	Min,
 } from 'class-validator';
@@ -176,12 +177,15 @@ export class PISearch {
 @InputType()
 export class PropertiesInquiry {
 	@IsNotEmpty()
+	@IsInt()
 	@Min(1)
 	@Field(() => Int)
 	page!: number;
 
 	@IsNotEmpty()
+	@IsInt()
 	@Min(1)
+	@Max(100)
 	@Field(() => Int)
 	limit!: number;
 
@@ -201,12 +205,15 @@ export class PropertiesInquiry {
 @InputType()
 export class OrdinaryInquery {
 	@IsNotEmpty()
+	@IsInt()
 	@Min(1)
 	@Field(() => Int)
 	page!: number;
 
 	@IsNotEmpty()
+	@IsInt()
 	@Min(1)
+	@Max(100)
 	@Field(() => Int)
 	limit!: number;
 }
@@ -221,12 +228,15 @@ class APISearch {
 @InputType()
 export class AgentPropertiesInquiry {
 	@IsNotEmpty()
+	@IsInt()
 	@Min(1)
 	@Field(() => Int)
 	page!: number;
 
 	@IsNotEmpty()
+	@IsInt()
 	@Min(1)
+	@Max(100)
 	@Field(() => Int)
 	limit!: number;
 
@@ -261,12 +271,15 @@ class ALPISearch {
 @InputType()
 export class AllPropertiesInquiry {
 	@IsNotEmpty()
+	@IsInt()
 	@Min(1)
 	@Field(() => Int)
 	page!: number;
 
 	@IsNotEmpty()
+	@IsInt()
 	@Min(1)
+	@Max(100)
 	@Field(() => Int)
 	limit!: number;
 

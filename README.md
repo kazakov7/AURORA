@@ -1,5 +1,12 @@
 # AURORA Backend
 
+## CORS configuration
+
+Set `CORS_ALLOWED_ORIGINS` to a comma-separated list of exact frontend origins in production, for example
+`https://aurora.example,https://admin.aurora.example`. Wildcard production origins are not accepted. Localhost,
+`127.0.0.1`, and IPv6 localhost origins are allowed automatically outside production. OAuth callback URLs remain
+configured with their providers and are not replaced by this API CORS setting.
+
 ## Google authentication
 
 The API accepts a verified Google ID token through the GraphQL mutation below. Configure the public Google Web client ID on the API as `GOOGLE_WEB_CLIENT_ID`; Antigravity must use the same public Web client ID. Do not add a Google client secret to this project.

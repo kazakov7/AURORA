@@ -1,4 +1,4 @@
-import { BadRequestException, CanActivate, ExecutionContext, Injectable, ForbiddenException } from '@nestjs/common';
+import { CanActivate, ExecutionContext, Injectable, ForbiddenException, UnauthorizedException } from '@nestjs/common';
 import { Reflector } from '@nestjs/core';
 import { AuthService } from '../auth.service';
 import { Messages } from '../../../libs/enums/common.enum';
@@ -20,10 +20,11 @@ export class RolesGuard implements CanActivate {
 		if (context.contextType === 'graphql') {
 			const request = context.getArgByIndex(2).req;
 			const bearerToken = request.headers.authorization;
-			if (!bearerToken) throw new BadRequestException(Messages.TOKEN_NOT_EXIST);
+			if (!bearerToken) throw new UnauthorizedException(Messages.TOKEN_NOT_EXIST);
 
-			const token = bearerToken.split(' ')[1],
-				authMember = await this.authService.verifyToken(token),
+			const token = bearerToken.startsWith('Bearer ') ? bearerToken.slice(7).trim() : '';
+			if (!token) throw new UnauthorizedException(Messages.NOT_AUTHENTICATED);
+			const authMember = await this.authService.verifyToken(token),
 				hasRole = () => roles.indexOf(authMember.memberType) > -1,
 				hasPermission: boolean = hasRole();
 

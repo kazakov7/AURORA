@@ -7,6 +7,7 @@ import PropertySchema from '../../schemas/Property.model';
 import RankingPublicationSchema from '../../schemas/RankingPublication.model';
 import RankingSnapshotSchema from '../../schemas/RankingSnapshot.model';
 import TourSchema from '../../schemas/Tour.model';
+import { AuthModule } from '../auth/auth.module';
 import { RankingResolver } from './ranking.resolver';
 import { RankingService } from './ranking.service';
 
@@ -21,6 +22,7 @@ import { RankingService } from './ranking.service';
 			{ name: 'Member', schema: MemberSchema },
 			{ name: 'Agent', schema: AgentSchema },
 		]),
+		AuthModule,
 	],
 	providers: [RankingResolver, RankingService],
 	exports: [RankingService],

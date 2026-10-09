@@ -1,4 +1,4 @@
-import { BadRequestException, CanActivate, ExecutionContext, Injectable, UnauthorizedException } from '@nestjs/common';
+import { CanActivate, ExecutionContext, Injectable, UnauthorizedException } from '@nestjs/common';
 import { AuthService } from '../auth.service';
 import { Messages } from '../../../libs/enums/common.enum';
 
@@ -13,10 +13,11 @@ export class AuthGuard implements CanActivate {
 			const request = context.getArgByIndex(2).req;
 
 			const bearerToken = request.headers.authorization;
-			if (!bearerToken) throw new BadRequestException(Messages.TOKEN_NOT_EXIST);
+			if (!bearerToken) throw new UnauthorizedException(Messages.TOKEN_NOT_EXIST);
 
-			const token = bearerToken.split(' ')[1],
-				authMember = await this.authService.verifyToken(token);
+			const token = bearerToken.startsWith('Bearer ') ? bearerToken.slice(7).trim() : '';
+			if (!token) throw new UnauthorizedException(Messages.NOT_AUTHENTICATED);
+			const authMember = await this.authService.verifyToken(token);
 			if (!authMember) throw new UnauthorizedException(Messages.NOT_AUTHENTICATED);
 
 			console.log('memberNick[auth] =>', authMember.memberNick);

@@ -29,32 +29,32 @@ export class NotificationService {
 	) { }
 
 	public async createNotification(input: CreateNotificationInput): Promise<Notification | null> {
-		if (input.authorId?.equals(input.receiverId)) return null;
-		const receiver = await this.memberModel
-			.findOne({ _id: input.receiverId, memberStatus: MemberStatus.ACTIVE, deletedAt: null })
-			.exec();
-		// A completed business transition must never be rolled back just because a
-		// recipient was deactivated between the action and notification dispatch.
-		if (!receiver) return null;
-
-		if (input.authorId) {
-			const author = await this.memberModel
-				.findOne({ _id: input.authorId, memberStatus: MemberStatus.ACTIVE, deletedAt: null })
-				.exec();
-			if (!author) return null;
-		}
-
-		if (input.notificationType === NotificationType.SYSTEM && input.notificationGroup !== NotificationGroup.SYSTEM) {
-			throw new BadRequestException(Messages.BAD_REQUEST);
-		}
-
+		// A completed business transition must never fail or be rolled back because
+		// its notification could not be dispatched, so failures are logged only.
 		try {
+			if (input.authorId?.equals(input.receiverId)) return null;
+			const receiver = await this.memberModel
+				.findOne({ _id: input.receiverId, memberStatus: MemberStatus.ACTIVE, deletedAt: null })
+				.exec();
+			if (!receiver) return null;
+
+			if (input.authorId) {
+				const author = await this.memberModel
+					.findOne({ _id: input.authorId, memberStatus: MemberStatus.ACTIVE, deletedAt: null })
+					.exec();
+				if (!author) return null;
+			}
+
+			if (input.notificationType === NotificationType.SYSTEM && input.notificationGroup !== NotificationGroup.SYSTEM) {
+				throw new BadRequestException(Messages.BAD_REQUEST);
+			}
+
 			const result = await this.notificationModel.findOneAndUpdate(
 				input.notificationEventKey
 					? { receiverId: input.receiverId, notificationEventKey: input.notificationEventKey }
 					: { _id: new Types.ObjectId() },
 				{ $setOnInsert: { ...input, notificationStatus: NotificationStatus.WAIT } },
-				{ new: true, upsert: true, rawResult: true },
+				{ new: true, upsert: true, includeResultMetadata: true },
 			).exec();
 			const notification = result.value as Notification;
 			if (notification && !result.lastErrorObject?.updatedExisting) {
@@ -63,7 +63,7 @@ export class NotificationService {
 			return notification;
 		} catch (err) {
 			console.error('Notification creation failed:', err);
-			throw new BadRequestException(Messages.CREATE_FAILED);
+			return null;
 		}
 	}
 

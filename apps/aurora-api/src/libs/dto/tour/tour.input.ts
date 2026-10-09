@@ -10,6 +10,7 @@ import {
 	IsNumber,
 	IsOptional,
 	IsString,
+	Max,
 	MaxLength,
 	Min,
 } from 'class-validator';
@@ -168,6 +169,7 @@ export class ToursInquiry {
 	@Field(() => Int)
 	@IsInt()
 	@Min(1)
+	@Max(100)
 	limit: number;
 
 	@Field(() => String, { nullable: true })
@@ -194,6 +196,7 @@ export class OrdinaryTourInquiry {
 	@Field(() => Int)
 	@IsInt()
 	@Min(1)
+	@Max(100)
 	limit: number;
 }
 
@@ -215,6 +218,7 @@ export class AgentToursInquiry {
 	@Field(() => Int)
 	@IsInt()
 	@Min(1)
+	@Max(100)
 	limit: number;
 
 	@Field(() => String, { nullable: true })
@@ -257,6 +261,7 @@ export class AllToursInquiry {
 	@Field(() => Int)
 	@IsInt()
 	@Min(1)
+	@Max(100)
 	limit: number;
 
 	@Field(() => String, { nullable: true })

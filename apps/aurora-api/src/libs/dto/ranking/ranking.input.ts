@@ -1,5 +1,5 @@
 import { Field, InputType, Int } from '@nestjs/graphql';
-import { IsEnum, IsOptional, IsString, Max, Min } from 'class-validator';
+import { IsEnum, IsInt, IsOptional, IsString, Max, Min } from 'class-validator';
 import { AgentType } from '../../enums/agent.enum';
 
 @InputType()
@@ -11,6 +11,7 @@ export class RankingInquiry {
 
 	@Field(() => Int, { nullable: true })
 	@IsOptional()
+	@IsInt()
 	@Min(1)
 	@Max(20)
 	limit?: number;
@@ -24,6 +25,7 @@ export class TopAgentsInquiry {
 
 	@Field(() => Int, { nullable: true })
 	@IsOptional()
+	@IsInt()
 	@Min(1)
 	@Max(20)
 	limit?: number;

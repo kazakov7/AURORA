@@ -72,5 +72,6 @@ export class DestinationReviewsInquiry {
 	@Field(() => Int)
 	@IsInt()
 	@Min(1)
+	@Max(100)
 	limit!: number;
 }

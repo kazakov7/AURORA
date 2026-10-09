@@ -161,6 +161,51 @@ describe('Notice, Notification, Chat and Socket.IO (e2e)', () => {
 		expect((await event).notificationTitle).toBe('Realtime notification');
 	});
 
+	it('never fails the caller when a notification cannot be created', async () => {
+		const receiver = await seedMember(app, 'notifysafe');
+		const service = app.get(NotificationService);
+		await expect(
+			service.createNotification({
+				receiverId: new Types.ObjectId(receiver._id),
+				notificationType: NotificationType.SYSTEM,
+				notificationGroup: NotificationGroup.MEMBER,
+				notificationTitle: 'Invalid group',
+			}),
+		).resolves.toBeNull();
+		expect(await model(app, 'Notification').countDocuments({ receiverId: receiver._id })).toBe(0);
+	});
+
+	it('pushes notification:new in realtime when a member is followed', async () => {
+		const owner = await seedMember(app, 'followowner');
+		const follower = await seedMember(app, 'followfan');
+		const socket = await connect(owner.accessToken);
+		const event = new Promise<any>((resolve, reject) => {
+			socket.once('notification:new', resolve);
+			setTimeout(() => reject(new Error('notification:new timeout')), 5000);
+		});
+		const followed = await graphQL(app, `mutation Follow($input: String!) { subscribe(input: $input) { _id } }`, { input: owner._id }, follower.accessToken);
+		expect(followed.body.errors).toBeUndefined();
+		const notification = await event;
+		expect(notification.notificationType).toBe(NotificationType.FOLLOW);
+		expect(notification.authorId.toString()).toBe(follower._id.toString());
+	});
+
+	it('refreshes the JWT only on own getMember so role changes apply without re-login', async () => {
+		const member = await seedMember(app, 'roleowner');
+		const other = await seedMember(app, 'roleother');
+		await model(app, 'Member').updateOne({ _id: member._id }, { memberType: MemberType.AGENT });
+		const query = `query Member($input: String!) { getMember(input: $input) { _id memberType accessToken } }`;
+
+		const own = await graphQL(app, query, { input: member._id }, member.accessToken);
+		expect(own.body.errors).toBeUndefined();
+		const payload = JSON.parse(Buffer.from(own.body.data.getMember.accessToken.split('.')[1], 'base64').toString());
+		expect(payload.memberType).toBe(MemberType.AGENT);
+		expect(payload.memberPassword).toBeUndefined();
+
+		const foreign = await graphQL(app, query, { input: member._id }, other.accessToken);
+		expect(foreign.body.data.getMember.accessToken).toBeNull();
+	});
+
 	it('canonicalizes DIRECT chat, keeps GLOBAL singleton and rejects self-chat', async () => {
 		const first = await seedMember(app, 'chatfirst');
 		const second = await seedMember(app, 'chatsecond');

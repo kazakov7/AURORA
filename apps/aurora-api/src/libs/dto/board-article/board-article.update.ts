@@ -2,10 +2,14 @@ import { Field, InputType } from '@nestjs/graphql';
 import { IsNotEmpty, IsOptional, Length } from 'class-validator';
 
 import { ObjectId, Types } from 'mongoose';
-import { BoardArticleStatus } from '../../enums/board-article.enum';
+import { BoardArticleStatus, BoardArticleCategory } from '../../enums/board-article.enum';
 
 @InputType()
 export class BoardArticleUpdate {
+	@IsOptional()
+	@Field(() => BoardArticleCategory, { nullable: true })
+	articleCategory?: BoardArticleCategory;
+
 	@IsNotEmpty()
 	@Field(() => String)
 	_id!: Types.ObjectId;

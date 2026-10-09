@@ -71,4 +71,7 @@ export class DestinationResolver {
 	public async removeDestinationByAdmin(@Args('destinationId') destinationId: string): Promise<String> {
 		return this.destinationService.removeDestinationByAdmin(shapeIntoMongoObjectId(destinationId));
 	}
+
+
+
 }

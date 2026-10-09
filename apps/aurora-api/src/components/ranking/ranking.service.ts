@@ -6,6 +6,7 @@ import { MemberStatus, MemberType } from '../../libs/enums/member.enum';
 import { PropertyStatus } from '../../libs/enums/property.enum';
 import { RankingScope, RankingType } from '../../libs/enums/ranking.enum';
 import { TourStatus } from '../../libs/enums/tour.enum';
+import { lookUpAuthMemberFollowData, lookUpAuthMemberLiked } from '../../libs/config';
 
 @Injectable()
 export class RankingService {
@@ -25,28 +26,29 @@ export class RankingService {
 		return this.withMeta(list);
 	}
 
-	public async getProperties(destinationId: string | undefined, limit: number): Promise<any> {
+	public async getProperties(destinationId: string | undefined, limit: number, memberId?: Types.ObjectId | null): Promise<any> {
 		const scope = destinationId ? RankingScope.DESTINATION : RankingScope.GLOBAL;
 		const entries = await this.getEntries(RankingType.TOP_PROPERTIES, scope, destinationId);
 		const filter: any = { propertyStatus: PropertyStatus.ACTIVE, deletedAt: null };
 		if (destinationId) filter.destinationId = new Types.ObjectId(destinationId);
-		const list = await this.findInSnapshotOrder(this.propertyModel, entries, filter, limit);
+		const list = await this.findInSnapshotOrder(this.propertyModel, entries, filter, limit, memberId ? [lookUpAuthMemberLiked(memberId)] : []);
 		return this.withMeta(list);
 	}
 
-	public async getTours(destinationId: string | undefined, limit: number): Promise<any> {
+	public async getTours(destinationId: string | undefined, limit: number, memberId?: Types.ObjectId | null): Promise<any> {
 		const scope = destinationId ? RankingScope.DESTINATION : RankingScope.GLOBAL;
 		const entries = await this.getEntries(RankingType.TOP_TOURS, scope, destinationId);
 		const filter: any = { tourStatus: TourStatus.ACTIVE, deletedAt: null };
 		if (destinationId) filter.destinationId = new Types.ObjectId(destinationId);
-		const list = await this.findInSnapshotOrder(this.tourModel, entries, filter, limit);
+		const list = await this.findInSnapshotOrder(this.tourModel, entries, filter, limit, memberId ? [lookUpAuthMemberLiked(memberId)] : []);
 		return this.withMeta(list);
 	}
 
-	public async getTravelers(destinationId: string | undefined, limit: number): Promise<any> {
+	public async getTravelers(destinationId: string | undefined, limit: number, memberId?: Types.ObjectId | null): Promise<any> {
 		const scope = destinationId ? RankingScope.DESTINATION : RankingScope.GLOBAL;
 		const entries = await this.getEntries(RankingType.TOP_TRAVELERS, scope, destinationId);
-		const list = await this.findInSnapshotOrder(this.memberModel, entries, { memberStatus: MemberStatus.ACTIVE, memberType: { $ne: MemberType.ADMIN }, deletedAt: null }, limit);
+		const authStages = memberId ? [lookUpAuthMemberFollowData({ followerId: memberId, followingId: '$_id' })] : [];
+		const list = await this.findInSnapshotOrder(this.memberModel, entries, { memberStatus: MemberStatus.ACTIVE, memberType: { $ne: MemberType.ADMIN }, deletedAt: null }, limit, authStages);
 		return this.withMeta(list);
 	}
 
@@ -76,13 +78,14 @@ export class RankingService {
 		return snapshot?.entries ?? [];
 	}
 
-	private async findInSnapshotOrder(model: Model<any>, entries: any[], filter: any, limit: number): Promise<any[]> {
+	private async findInSnapshotOrder(model: Model<any>, entries: any[], filter: any, limit: number, authStages: any[] = []): Promise<any[]> {
 		const ids = entries.slice(0, limit).map((entry) => entry.entityId);
 		if (!ids.length) return [];
 		return await model.aggregate([
 			{ $match: { ...filter, _id: { $in: ids } } },
 			{ $addFields: { __rank: { $indexOfArray: [ids, '$_id'] } } },
 			{ $sort: { __rank: 1, _id: 1 } },
+			...authStages,
 		]).exec();
 	}
 

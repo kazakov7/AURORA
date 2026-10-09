@@ -7,8 +7,9 @@ import { Messages } from '../../libs/enums/common.enum';
 import { AuthService } from '../auth/auth.service';
 import { MessageService } from '../message/message.service';
 import { ChatService } from './chat.service';
+import { createCorsOptions } from '../../libs/cors';
 
-@WebSocketGateway({ namespace: 'chat', cors: { origin: true, credentials: true } })
+@WebSocketGateway({ namespace: 'chat', cors: createCorsOptions() })
 export class ChatGateway {
 	@WebSocketServer()
 	server: Server;
@@ -28,6 +29,7 @@ export class ChatGateway {
 			if (!token) throw new Error(Messages.TOKEN_NOT_EXIST);
 
 			const authMember = await this.authService.verifyToken(token);
+			client.data.accessToken = token;
 			client.data.authMember = authMember;
 			await client.join(this.memberRoom(authMember._id));
 
@@ -42,7 +44,7 @@ export class ChatGateway {
 	@SubscribeMessage('chat:join')
 	public async joinChat(@MessageBody() payload: { chatId?: string }, @ConnectedSocket() client: Socket) {
 		try {
-			const memberId = this.getMemberId(client);
+			const memberId = await this.getMemberId(client);
 			await this.chatService.assertMemberCanChat(memberId);
 			const chatId = this.getObjectId(payload?.chatId);
 			await this.chatService.assertChatAccess(memberId, chatId);
@@ -56,7 +58,7 @@ export class ChatGateway {
 	@SubscribeMessage('chat:leave')
 	public async leaveChat(@MessageBody() payload: { chatId?: string }, @ConnectedSocket() client: Socket) {
 		try {
-			const memberId = this.getMemberId(client);
+			const memberId = await this.getMemberId(client);
 			const chatId = this.getObjectId(payload?.chatId);
 			await this.chatService.assertChatAccess(memberId, chatId);
 			await client.leave(this.chatRoom(chatId));
@@ -69,7 +71,7 @@ export class ChatGateway {
 	@SubscribeMessage('message:send')
 	public async sendMessage(@MessageBody() payload: MessageInput, @ConnectedSocket() client: Socket) {
 		try {
-			const memberId = this.getMemberId(client);
+			const memberId = await this.getMemberId(client);
 			if (!this.canSendMessage(memberId)) throw new Error(Messages.MESSAGE_RATE_LIMITED);
 			const message = await this.messageService.createMessage(memberId, payload);
 			const recipients = await this.messageService.getChatRecipients(message.chatId as unknown as Types.ObjectId);
@@ -96,6 +98,13 @@ export class ChatGateway {
 		this.server.to(this.memberRoom(memberId)).emit('chat:deleted', { chatId: chatId.toString() });
 	}
 
+	public disconnectMember(memberId: Types.ObjectId): void {
+		if (!this.server) return;
+		const room = this.memberRoom(memberId);
+		this.server.to(room).emit('chat:error', { message: Messages.NOT_AUTHENTICATED });
+		this.server.in(room).disconnectSockets(true);
+	}
+
 	private extractToken(client: Socket): string | undefined {
 		const authToken = client.handshake.auth?.token;
 		if (typeof authToken === 'string' && authToken) return authToken;
@@ -105,8 +114,12 @@ export class ChatGateway {
 		return authorization.startsWith('Bearer ') ? authorization.split(' ')[1] : undefined;
 	}
 
-	private getMemberId(client: Socket): Types.ObjectId {
-		const memberId = client.data.authMember?._id;
+	private async getMemberId(client: Socket): Promise<Types.ObjectId> {
+		const token = client.data.accessToken;
+		if (!token) throw new Error(Messages.NOT_AUTHENTICATED);
+		const authMember = await this.authService.verifyToken(token);
+		client.data.authMember = authMember;
+		const memberId = authMember._id;
 		if (!memberId) throw new Error(Messages.NOT_AUTHENTICATED);
 		return new Types.ObjectId(memberId);
 	}

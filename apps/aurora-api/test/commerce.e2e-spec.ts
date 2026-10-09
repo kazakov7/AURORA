@@ -5,7 +5,7 @@ jest.mock('stripe', () => ({
 			create: jest.fn().mockImplementation((_payload, options) =>
 				Promise.resolve({ id: `pi_${options.idempotencyKey}`, client_secret: `secret_${options.idempotencyKey}` }),
 			),
-			retrieve: jest.fn().mockImplementation((id) => Promise.resolve({ id, client_secret: `secret_${id}`, latest_charge: null })),
+			retrieve: jest.fn().mockImplementation((id) => Promise.resolve({ id, client_secret: `secret_${id}`, latest_charge: 'ch_test' })),
 			cancel: jest.fn().mockResolvedValue({}),
 		},
 		refunds: { create: jest.fn().mockResolvedValue({}) },
@@ -32,6 +32,7 @@ describe('Booking, Payment and TravelHistory (integration/e2e)', () => {
 
 	afterEach(async () => {
 		await clearDatabase(app);
+		jest.clearAllMocks();
 	});
 
 	afterAll(async () => {
@@ -113,7 +114,7 @@ describe('Booking, Payment and TravelHistory (integration/e2e)', () => {
 		const providerPaymentId = first.body.data.startPropertyPayment.payment.providerPaymentId;
 		paymentService.stripe.webhooks.constructEvent.mockReturnValue({
 			type: 'payment_intent.succeeded',
-			data: { object: { id: providerPaymentId } },
+			data: { object: { id: providerPaymentId, amount_received: 240000, currency: 'krw' } },
 		});
 		const webhook = () =>
 			request(app.getHttpServer())
@@ -123,11 +124,25 @@ describe('Booking, Payment and TravelHistory (integration/e2e)', () => {
 				.send('{}');
 		expect((await webhook()).status).toBe(201);
 		expect((await webhook()).status).toBe(201);
+		paymentService.stripe.webhooks.constructEvent.mockReturnValue({
+			type: 'payment_intent.payment_failed',
+			data: { object: { id: providerPaymentId, last_payment_error: { message: 'late failure event' } } },
+		});
+		expect((await webhook()).status).toBe(201);
 		const booking = await model(app, 'Booking').findById(bookingId).lean();
 		const payment = await model(app, 'Payment').findOne({ providerPaymentId }).lean();
 		expect(booking.bookingStatus).toBe(BookingStatus.CONFIRMED);
 		expect(payment.paymentStatus).toBe(PaymentStatus.SUCCEEDED);
 		expect((await model(app, 'Property').findById(property._id).lean()).propertyBookings).toBe(1);
+
+		const guestNotifications = await model(app, 'Notification').find({ receiverId: userOne._id, notificationType: 'BOOKING' }).lean();
+		const ownerNotifications = await model(app, 'Notification').find({ receiverId: property.memberId, notificationType: 'BOOKING' }).lean();
+		expect(guestNotifications).toHaveLength(1);
+		expect(guestNotifications[0].notificationTitle).toBe('Booking confirmed');
+		expect(guestNotifications[0].authorId).toBeUndefined();
+		expect(ownerNotifications).toHaveLength(1);
+		expect(ownerNotifications[0].notificationTitle).toBe('New reservation confirmed');
+		expect(ownerNotifications[0].authorId.toString()).toBe(userOne._id.toString());
 	});
 
 	it('permits only one parallel Property hold for an overlapping date range', async () => {
@@ -186,6 +201,69 @@ describe('Booking, Payment and TravelHistory (integration/e2e)', () => {
 		expect((await model(app, 'Tour').findById(tour._id).lean()).tourReservedSeats).toBe(2);
 	});
 
+	it('permits only one parallel reservation for the last Tour seat', async () => {
+		const userOne = await seedMember(app, 'lastseatone');
+		const userTwo = await seedMember(app, 'lastseattwo');
+		const { tour } = await catalogFixtures();
+		await model(app, 'Tour').updateOne({ _id: tour._id }, { tourCapacity: 1 }).exec();
+		const mutation = `mutation Pay($input: StartTourPaymentInput!) {
+			startTourPayment(input: $input) { payment { bookingId } }
+		}`;
+
+		const results = await Promise.all([
+			graphQL(app, mutation, { input: { tourId: tour._id.toString(), bookingGuests: 1, idempotencyKey: randomUUID() } }, userOne.accessToken),
+			graphQL(app, mutation, { input: { tourId: tour._id.toString(), bookingGuests: 1, idempotencyKey: randomUUID() } }, userTwo.accessToken),
+		]);
+
+		expect(results.filter((result) => !result.body.errors)).toHaveLength(1);
+		expect(await model(app, 'Booking').countDocuments({ bookingRefId: tour._id, bookingStatus: BookingStatus.PENDING })).toBe(1);
+		expect((await model(app, 'Tour').findById(tour._id).lean()).tourReservedSeats).toBe(1);
+	});
+
+	it('keeps one Tour hold and one Payment for concurrent duplicate requests', async () => {
+		const user = await seedMember(app, 'dupetour');
+		const { tour } = await catalogFixtures();
+		const idempotencyKey = randomUUID();
+		const mutation = `mutation Pay($input: StartTourPaymentInput!) {
+			startTourPayment(input: $input) { payment { _id bookingId providerPaymentId } }
+		}`;
+		const variables = { input: { tourId: tour._id.toString(), bookingGuests: 1, idempotencyKey } };
+
+		const [first, second] = await Promise.all([
+			graphQL(app, mutation, variables, user.accessToken),
+			graphQL(app, mutation, variables, user.accessToken),
+		]);
+
+		expect(first.body.errors).toBeUndefined();
+		expect(second.body.errors).toBeUndefined();
+		expect(first.body.data.startTourPayment.payment._id).toBe(second.body.data.startTourPayment.payment._id);
+		expect(await model(app, 'Booking').countDocuments({ memberId: user._id, checkoutKey: idempotencyKey })).toBe(1);
+		expect(await model(app, 'Payment').countDocuments({ idempotencyKey })).toBe(1);
+		expect((await model(app, 'Tour').findById(tour._id).lean()).tourReservedSeats).toBe(1);
+	});
+
+	it('rolls back a Tour seat increment when booking creation fails inside the transaction', async () => {
+		const user = await seedMember(app, 'faulttour');
+		const { tour } = await catalogFixtures();
+		const bookingModel = model(app, 'Booking');
+		const createSpy = jest.spyOn(bookingModel, 'create').mockRejectedValueOnce(new Error('fault injection after seat increment'));
+
+		try {
+			const result = await graphQL(
+				app,
+				`mutation Pay($input: StartTourPaymentInput!) { startTourPayment(input: $input) { clientSecret } }`,
+				{ input: { tourId: tour._id.toString(), bookingGuests: 1, idempotencyKey: randomUUID() } },
+				user.accessToken,
+			);
+			expect(result.body.errors).toBeDefined();
+		} finally {
+			createSpy.mockRestore();
+		}
+
+		expect(await bookingModel.countDocuments({ bookingRefId: tour._id })).toBe(0);
+		expect((await model(app, 'Tour').findById(tour._id).lean()).tourReservedSeats).toBe(0);
+	});
+
 	it('expires an unpaid Tour hold, returns seats and refunds a late successful payment', async () => {
 		const user = await seedMember(app, 'expiretour');
 		const { tour } = await catalogFixtures();
@@ -210,17 +288,121 @@ describe('Booking, Payment and TravelHistory (integration/e2e)', () => {
 
 		paymentService.stripe.webhooks.constructEvent.mockReturnValue({
 			type: 'payment_intent.succeeded',
-			data: { object: { id: providerPaymentId } },
+			data: { object: { id: providerPaymentId, amount_received: 70000, currency: 'krw' } },
 		});
-		const lateWebhook = await request(app.getHttpServer())
+		const lateWebhook = () => request(app.getHttpServer())
 			.post('/payments/stripe/webhook')
 			.set('stripe-signature', 'test-signature')
 			.set('Content-Type', 'application/json')
 			.send('{}');
-		expect(lateWebhook.status).toBe(201);
+		const duplicateWebhooks = await Promise.all([lateWebhook(), lateWebhook()]);
+		expect(duplicateWebhooks.every((response) => response.status === 201)).toBe(true);
 		expect((await model(app, 'Booking').findById(bookingId).lean()).bookingStatus).toBe(BookingStatus.CANCELLED);
 		expect((await model(app, 'Payment').findOne({ providerPaymentId }).lean()).paymentStatus).toBe(PaymentStatus.REFUNDED);
 		expect((await model(app, 'Tour').findById(tour._id).lean()).tourReservedSeats).toBe(0);
+		expect(paymentService.stripe.refunds.create).toHaveBeenCalledWith(
+			{ payment_intent: providerPaymentId },
+			{ idempotencyKey: `booking-refund:${providerPaymentId}` },
+		);
+	});
+
+	it('releases Tour inventory once under simultaneous expiration workers', async () => {
+		const user = await seedMember(app, 'expireparallel');
+		const { tour } = await catalogFixtures();
+		const checkout = await graphQL(
+			app,
+			`mutation Pay($input: StartTourPaymentInput!) {
+				startTourPayment(input: $input) { payment { bookingId } }
+			}`,
+			{ input: { tourId: tour._id.toString(), bookingGuests: 2, idempotencyKey: randomUUID() } },
+			user.accessToken,
+		);
+		const bookingId = checkout.body.data.startTourPayment.payment.bookingId;
+		await model(app, 'Booking').updateOne({ _id: bookingId }, { expiresAt: new Date(Date.now() - 1_000) }).exec();
+		const paymentService = app.get(PaymentService);
+
+		await Promise.all([paymentService.expirePendingBookings(), paymentService.expirePendingBookings()]);
+
+		expect((await model(app, 'Booking').findById(bookingId).lean()).bookingStatus).toBe(BookingStatus.CANCELLED);
+		expect((await model(app, 'Tour').findById(tour._id).lean()).tourReservedSeats).toBe(0);
+	});
+
+	it('rejects repeated cancellation without releasing Tour seats twice', async () => {
+		const user = await seedMember(app, 'cancelonce');
+		const { tour } = await catalogFixtures();
+		const checkout = await graphQL(
+			app,
+			`mutation Pay($input: StartTourPaymentInput!) {
+				startTourPayment(input: $input) { payment { bookingId } }
+			}`,
+			{ input: { tourId: tour._id.toString(), bookingGuests: 1, idempotencyKey: randomUUID() } },
+			user.accessToken,
+		);
+		const bookingId = checkout.body.data.startTourPayment.payment.bookingId;
+		const mutation = `mutation Cancel($bookingId: String!) {
+			cancelTourBooking(bookingId: $bookingId) { _id bookingStatus }
+		}`;
+
+		const first = await graphQL(app, mutation, { bookingId }, user.accessToken);
+		const second = await graphQL(app, mutation, { bookingId }, user.accessToken);
+
+		expect(first.body.data.cancelTourBooking.bookingStatus).toBe(BookingStatus.CANCELLED);
+		expect(second.body.errors).toBeDefined();
+		expect((await model(app, 'Tour').findById(tour._id).lean()).tourReservedSeats).toBe(0);
+	});
+
+	it('rejects a reused Payment idempotency key owned by another member', async () => {
+		const userOne = await seedMember(app, 'keyownerone');
+		const userTwo = await seedMember(app, 'keyownertwo');
+		const { property } = await catalogFixtures();
+		const idempotencyKey = randomUUID();
+		const checkIn = new Date(Date.now() + 3 * 86_400_000);
+		const checkOut = new Date(Date.now() + 4 * 86_400_000);
+		const mutation = `mutation Pay($input: StartPropertyPaymentInput!) {
+			startPropertyPayment(input: $input) { payment { _id } }
+		}`;
+		const input = { propertyId: property._id.toString(), checkIn, checkOut, bookingGuests: 1, idempotencyKey };
+
+		const first = await graphQL(app, mutation, { input }, userOne.accessToken);
+		const second = await graphQL(app, mutation, { input }, userTwo.accessToken);
+
+		expect(first.body.errors).toBeUndefined();
+		expect(second.body.errors).toBeDefined();
+		expect(await model(app, 'Booking').countDocuments({ checkoutKey: idempotencyKey })).toBe(1);
+	});
+
+	it('refunds and cancels a booking when a signed success event has the wrong amount', async () => {
+		const user = await seedMember(app, 'amountcheck');
+		const { tour } = await catalogFixtures();
+		const checkout = await graphQL(
+			app,
+			`mutation Pay($input: StartTourPaymentInput!) {
+				startTourPayment(input: $input) { payment { bookingId providerPaymentId } }
+			}`,
+			{ input: { tourId: tour._id.toString(), bookingGuests: 1, idempotencyKey: randomUUID() } },
+			user.accessToken,
+		);
+		const { bookingId, providerPaymentId } = checkout.body.data.startTourPayment.payment;
+		const paymentService = app.get(PaymentService) as any;
+		paymentService.stripe.webhooks.constructEvent.mockReturnValue({
+			type: 'payment_intent.succeeded',
+			data: { object: { id: providerPaymentId, amount_received: 1, currency: 'krw' } },
+		});
+
+		const result = await request(app.getHttpServer())
+			.post('/payments/stripe/webhook')
+			.set('stripe-signature', 'test-signature')
+			.set('Content-Type', 'application/json')
+			.send('{}');
+
+		expect(result.status).toBe(201);
+		expect((await model(app, 'Booking').findById(bookingId).lean()).bookingStatus).toBe(BookingStatus.CANCELLED);
+		expect((await model(app, 'Payment').findOne({ providerPaymentId }).lean()).paymentStatus).toBe(PaymentStatus.REFUNDED);
+		expect((await model(app, 'Tour').findById(tour._id).lean()).tourReservedSeats).toBe(0);
+		expect(paymentService.stripe.refunds.create).toHaveBeenCalledWith(
+			{ payment_intent: providerPaymentId },
+			{ idempotencyKey: `booking-refund:${providerPaymentId}` },
+		);
 	});
 
 	it('rejects checkout without JWT and webhook requests without a Stripe signature', async () => {
@@ -244,6 +426,21 @@ describe('Booking, Payment and TravelHistory (integration/e2e)', () => {
 			.set('Content-Type', 'application/json')
 			.send('{}');
 		expect(unsignedWebhook.status).toBe(400);
+	});
+
+	it('rejects a Stripe webhook when signature verification fails', async () => {
+		const paymentService = app.get(PaymentService) as any;
+		paymentService.stripe.webhooks.constructEvent.mockImplementationOnce(() => {
+			throw new Error('invalid signature');
+		});
+
+		const result = await request(app.getHttpServer())
+			.post('/payments/stripe/webhook')
+			.set('stripe-signature', 'invalid-signature')
+			.set('Content-Type', 'application/json')
+			.send('{}');
+
+		expect(result.status).toBe(400);
 	});
 
 	it('rejects invalid property dates and guest capacity', async () => {

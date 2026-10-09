@@ -1,5 +1,5 @@
 import { Field, InputType, Int } from '@nestjs/graphql';
-import { IsIn, IsNotEmpty, IsOptional, Length, Min } from 'class-validator';
+import { IsIn, IsInt, IsNotEmpty, IsOptional, Length, Max, Min } from 'class-validator';
 import type { ObjectId } from 'mongoose';
 import { availableBoardArticleSorts } from '../../config';
 import { BoardArticleCategory, BoardArticleStatus } from '../../enums/board-article.enum';
@@ -46,12 +46,15 @@ class BAISearch {
 @InputType()
 export class BoardArticlesInquiry {
 	@IsNotEmpty()
+	@IsInt()
 	@Min(1)
 	@Field(() => Int)
 	page!: number;
 
 	@IsNotEmpty()
+	@IsInt()
 	@Min(1)
+	@Max(100)
 	@Field(() => Int)
 	limit!: number;
 
@@ -83,12 +86,15 @@ class ABAISearch {
 @InputType()
 export class AllBoardArticlesInquiry {
 	@IsNotEmpty()
+	@IsInt()
 	@Min(1)
 	@Field(() => Int)
 	page!: number;
 
 	@IsNotEmpty()
+	@IsInt()
 	@Min(1)
+	@Max(100)
 	@Field(() => Int)
 	limit!: number;
 

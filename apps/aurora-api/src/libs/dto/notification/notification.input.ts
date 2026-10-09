@@ -1,5 +1,5 @@
 import { Field, InputType, Int } from '@nestjs/graphql';
-import { IsEnum, IsIn, IsInt, IsNotEmpty, IsOptional, Min } from 'class-validator';
+import { IsEnum, IsIn, IsInt, IsNotEmpty, IsOptional, Max, Min } from 'class-validator';
 import { Direction } from '../../enums/common.enum';
 import { NotificationGroup, NotificationStatus, NotificationType } from '../../enums/notification.enum';
 
@@ -31,6 +31,7 @@ export class NotificationsInquiry {
 	@Field(() => Int)
 	@IsInt()
 	@Min(1)
+	@Max(100)
 	limit: number;
 
 	@Field(() => String, { nullable: true })

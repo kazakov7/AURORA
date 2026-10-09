@@ -7,6 +7,7 @@ import { AddressInfo } from 'net';
 import { AppModule } from '../../src/app.module';
 import { MemberService } from '../../src/components/member/member.service';
 import { MemberType } from '../../src/libs/enums/member.enum';
+import { createCorsOptions } from '../../src/libs/cors';
 
 export interface TestMember {
 	_id: string;
@@ -19,7 +20,7 @@ export async function createTestApp(): Promise<INestApplication> {
 	const moduleRef = await Test.createTestingModule({ imports: [AppModule] }).compile();
 	const app = moduleRef.createNestApplication({ rawBody: true });
 	app.useGlobalPipes(new ValidationPipe());
-	app.enableCors({ origin: true, credentials: true });
+	app.enableCors(createCorsOptions());
 	await app.listen(0, '127.0.0.1');
 	return app;
 }

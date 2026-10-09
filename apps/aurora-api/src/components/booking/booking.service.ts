@@ -11,7 +11,7 @@ import { lookupMember } from '../../libs/config';
 export class BookingService {
 	constructor(
 		@InjectModel('Booking') private readonly bookingModel: Model<any>,
-	) {}
+	) { }
 
 	public async getUnavailablePropertyIds(checkIn: Date, checkOut: Date): Promise<Types.ObjectId[]> {
 		const now = new Date();
