@@ -36,6 +36,11 @@ export class LoggingInterceptor implements NestInterceptor {
 		return next.handle();
 	}
 	private stringify(context: ExecutionContext): string {
-		return JSON.stringify(context).slice(0, 75);
+		return JSON.stringify(context, (key, value) => {
+			if (/password|credential|authorization|codeVerifier|accessToken|clientSecret/i.test(key)) {
+				return '[REDACTED]';
+			}
+			return value;
+		}).slice(0, 75);
 	}
 }

@@ -1,5 +1,5 @@
 import { Field, InputType, Int } from '@nestjs/graphql';
-import { IsEmail, IsEnum, IsIn, IsInt, IsNotEmpty, IsOptional, IsString, Length, Matches, Max, Min } from 'class-validator';
+import { IsEmail, IsEnum, IsIn, IsInt, IsNotEmpty, IsOptional, IsString, Length, Matches, Max, Min, ValidateIf } from 'class-validator';
 import { availableMemberSorts } from '../../config';
 import { Direction } from '../../enums/common.enum';
 import { MemberAuthType, MemberStatus, MemberType } from '../../enums/member.enum';
@@ -18,7 +18,7 @@ export class MemberInput {
 	memberPassword: string;
 
 	@Field({ nullable: true })
-	@IsOptional()
+	@ValidateIf((_member, value) => typeof value === 'string' && value.trim().length > 0)
 	@IsEmail()
 	memberEmail?: string;
 
@@ -38,6 +38,27 @@ export class LoginInput {
 	@Length(5, 12)
 	@Field(() => String)
 	memberPassword!: string;
+}
+
+@InputType()
+export class ChangePasswordInput {
+	@IsNotEmpty()
+	@IsString()
+	@Length(5, 12)
+	@Field(() => String)
+	currentPassword!: string;
+
+	@IsNotEmpty()
+	@IsString()
+	@Length(5, 12)
+	@Field(() => String)
+	newPassword!: string;
+
+	@IsNotEmpty()
+	@IsString()
+	@Length(5, 12)
+	@Field(() => String)
+	confirmPassword!: string;
 }
 
 @InputType()

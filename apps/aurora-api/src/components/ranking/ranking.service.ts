@@ -23,7 +23,16 @@ export class RankingService {
 	public async getDestinations(type: RankingType, limit: number): Promise<any> {
 		const entries = await this.getEntries(type, RankingScope.GLOBAL);
 		const list = await this.findInSnapshotOrder(this.destinationModel, entries, { destinationStatus: 'ACTIVE', deletedAt: null }, limit);
-		return this.withMeta(list);
+		if (list.length >= limit) return this.withMeta(list);
+
+		const existingIds = list.map((item: any) => item._id);
+		const fallbackList = await this.destinationModel.aggregate([
+			{ $match: { destinationStatus: 'ACTIVE', deletedAt: null, _id: { $nin: existingIds } } },
+			{ $sort: { destinationViews: -1, destinationLikes: -1, createdAt: -1, _id: -1 } },
+			{ $limit: limit - list.length },
+		]).exec();
+
+		return this.withMeta([...list, ...fallbackList]);
 	}
 
 	public async getProperties(destinationId: string | undefined, limit: number, memberId?: Types.ObjectId | null): Promise<any> {

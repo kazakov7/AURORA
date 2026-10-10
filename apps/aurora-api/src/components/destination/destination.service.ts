@@ -58,7 +58,11 @@ export class DestinationService {
 		const match: T = { destinationStatus: DestinationStatus.ACTIVE, deletedAt: null };
 		if (input.search.destinationCountry) match.destinationCountry = input.search.destinationCountry;
 		if (input.search.text) {
-			const regex = new RegExp(escapeRegExp(input.search.text), 'i');
+			const terms = input.search.text
+				.split('|')
+				.map((t) => escapeRegExp(t.trim()))
+				.filter(Boolean);
+			const regex = new RegExp(terms.join('|'), 'i');
 			match.$or = [{ destinationName: regex }, { destinationCountry: regex }, { destinationDesc: regex }];
 		}
 

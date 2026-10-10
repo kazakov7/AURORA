@@ -18,7 +18,7 @@ export class DatabaseModule {
 		private readonly connection: Connection,
 	) {
 		if (connection.readyState === 1) {
-			console.log(`MongoDB is connected into ${process.env.NODE_ENV === 'production' ? 'production' : 'development'}`);
+			console.log('API DB:', this.connection.name);
 		} else {
 			console.log('DB is not connected!');
 		}

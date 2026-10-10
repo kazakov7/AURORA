@@ -79,6 +79,26 @@ describe('Auth, Member and Agent (e2e)', () => {
 		expect(invalidId.body.errors?.[0].message).toBe('Invalid ID!');
 	});
 
+	it('does not store blank optional contact fields during signup', async () => {
+		const first = await graphQL(
+			app,
+			`mutation Signup($input: MemberInput!) { signup(input: $input) { _id memberEmail memberPhone } }`,
+			{ input: { memberNick: 'blankphone1', memberPassword: 'pass1234', memberEmail: '', memberPhone: '' } },
+		);
+		const second = await graphQL(
+			app,
+			`mutation Signup($input: MemberInput!) { signup(input: $input) { _id memberEmail memberPhone } }`,
+			{ input: { memberNick: 'blankphone2', memberPassword: 'pass1234', memberEmail: '', memberPhone: '' } },
+		);
+
+		expect(first.body.errors).toBeUndefined();
+		expect(second.body.errors).toBeUndefined();
+		expect(first.body.data.signup.memberEmail).toBeNull();
+		expect(second.body.data.signup.memberEmail).toBeNull();
+		expect(first.body.data.signup.memberPhone).toBeNull();
+		expect(second.body.data.signup.memberPhone).toBeNull();
+	});
+
 	it('verifies Google identities server-side, creates passwordless users and reuses the AURORA JWT flow', async () => {
 		const authService = app.get(AuthService);
 		jest.spyOn(authService, 'verifyGoogleCredential').mockResolvedValue({

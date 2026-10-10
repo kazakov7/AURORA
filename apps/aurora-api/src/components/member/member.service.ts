@@ -5,6 +5,7 @@ import { Model, PipelineStage, Types } from 'mongoose';
 import { AuthService, GoogleIdentity, KakaoIdentity, TelegramIdentity } from '../auth/auth.service';
 import {
 	GoogleAuthInput,
+	ChangePasswordInput,
 	KakaoAuthInput,
 	LoginInput,
 	MemberInput,
@@ -51,9 +52,16 @@ export class MemberService {
 	) { }
 
 	public async signup(input: MemberInput): Promise<Member> {
-		input.memberPassword = await this.authService.hashPassword(input.memberPassword!);
+		const memberEmail = input.memberEmail?.trim().toLowerCase();
+		const memberPhone = input.memberPhone?.trim();
+		const signupInput = {
+			memberNick: input.memberNick.trim(),
+			memberPassword: await this.authService.hashPassword(input.memberPassword!),
+			...(memberEmail ? { memberEmail } : {}),
+			...(memberPhone ? { memberPhone } : {}),
+		};
 		try {
-			const result = await this.memberModel.create(input);
+			const result = await this.memberModel.create(signupInput);
 			result.accessToken = await this.authService.createToken(result);
 			return result;
 		} catch (err) {
@@ -80,6 +88,48 @@ export class MemberService {
 		response.accessToken = await this.authService.createToken(response);
 
 		return response;
+	}
+
+	public async changePassword(memberId: Types.ObjectId, input: ChangePasswordInput): Promise<boolean> {
+		const { currentPassword, newPassword, confirmPassword } = input;
+		if (newPassword !== confirmPassword) {
+			throw new BadRequestException(Messages.PASSWORD_CONFIRMATION_MISMATCH);
+		}
+
+		const member = await this.memberModel
+			.findOne({
+				_id: memberId,
+				memberStatus: MemberStatus.ACTIVE,
+				deletedAt: null,
+			})
+			.select('+memberPassword')
+			.exec();
+		if (!member) throw new UnauthorizedException(Messages.NOT_AUTHENTICATED);
+		if (!member.memberPassword) {
+			throw new BadRequestException(Messages.PASSWORD_CHANGE_UNAVAILABLE);
+		}
+
+		const currentPasswordMatches = await this.authService.comparePasswords(currentPassword, member.memberPassword);
+		if (!currentPasswordMatches) throw new BadRequestException(Messages.WRONG_PASSWORD);
+
+		const reusesCurrentPassword = await this.authService.comparePasswords(newPassword, member.memberPassword);
+		if (reusesCurrentPassword) throw new BadRequestException(Messages.NEW_PASSWORD_MUST_DIFFER);
+
+		const hashedPassword = await this.authService.hashPassword(newPassword);
+		const result = await this.memberModel
+			.updateOne(
+				{
+					_id: memberId,
+					memberPassword: member.memberPassword,
+					memberStatus: MemberStatus.ACTIVE,
+					deletedAt: null,
+				},
+				{ $set: { memberPassword: hashedPassword } },
+			)
+			.exec();
+		if (result.modifiedCount !== 1) throw new BadRequestException(Messages.WRONG_PASSWORD);
+
+		return true;
 	}
 
 	public async googleAuth(input: GoogleAuthInput): Promise<Member> {

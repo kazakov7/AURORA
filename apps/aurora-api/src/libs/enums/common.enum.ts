@@ -20,6 +20,9 @@ export enum Messages {
 	// AUTH
 	// =========================
 	WRONG_PASSWORD = 'Wrong password, try again!',
+	PASSWORD_CONFIRMATION_MISMATCH = 'New password and confirmation do not match!',
+	NEW_PASSWORD_MUST_DIFFER = 'New password must be different from the current password!',
+	PASSWORD_CHANGE_UNAVAILABLE = 'Password changes are unavailable for this social account!',
 	NOT_AUTHENTICATED = 'You are not authenticated, please login first!',
 	TOKEN_NOT_EXIST = 'Bearer token is not provided!',
 	TOKEN_EXPIRED = 'Your session has expired, please login again!',

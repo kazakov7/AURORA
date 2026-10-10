@@ -3,6 +3,7 @@ import { MemberService } from './member.service';
 import { Member, Members } from '../../libs/dto/member/member';
 import {
 	GoogleAuthInput,
+	ChangePasswordInput,
 	KakaoAuthInput,
 	LoginInput,
 	MemberInput,
@@ -25,13 +26,11 @@ export class MemberResolver {
 
 	@Mutation(() => Member)
 	public async signup(@Args('input') input: MemberInput): Promise<Member> {
-		console.log('input', input);
 		return await this.memberService.signup(input);
 	}
 
 	@Mutation(() => Member)
 	public async login(@Args('input') input: LoginInput): Promise<Member> {
-		console.log('Mutation: login', input);
 		return await this.memberService.login(input);
 	}
 
@@ -59,6 +58,15 @@ export class MemberResolver {
 		console.log('Mutation: updateMember');
 		delete input._id;
 		return this.memberService.updateMember(memberId, input);
+	}
+
+	@UseGuards(AuthGuard)
+	@Mutation(() => Boolean)
+	public async changePassword(
+		@Args('input') input: ChangePasswordInput,
+		@AuthMember('_id') memberId: Types.ObjectId,
+	): Promise<boolean> {
+		return await this.memberService.changePassword(memberId, input);
 	}
 
 	@UseGuards(WithoutGuard)

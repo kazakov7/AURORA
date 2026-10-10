@@ -69,7 +69,7 @@ export class BookingService {
 	}
 
 	public async getMyBookings(memberId: Types.ObjectId, input: BookingsInquiry): Promise<Bookings> {
-		const match: T = { memberId, bookingCategory: BookingCategory.PROPERTY };
+		const match: T = { memberId };
 		if (input.search?.bookingStatusList?.length) {
 			match.bookingStatus = { $in: input.search.bookingStatusList };
 		}
@@ -209,6 +209,15 @@ export class BookingService {
 								},
 							},
 							{ $unwind: { path: '$propertyData', preserveNullAndEmptyArrays: true } },
+							{
+								$lookup: {
+									from: 'tours',
+									localField: 'bookingRefId',
+									foreignField: '_id',
+									as: 'tourData',
+								},
+							},
+							{ $unwind: { path: '$tourData', preserveNullAndEmptyArrays: true } },
 						],
 						metaCounter: [{ $count: 'total' }],
 					},

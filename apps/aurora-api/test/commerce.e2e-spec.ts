@@ -19,7 +19,7 @@ import { Types } from 'mongoose';
 import request from 'supertest';
 import { PaymentService } from '../src/components/payment/payment.service';
 import { TravelHistoryService } from '../src/components/travel-history/travel-history.service';
-import { BookingStatus } from '../src/libs/enums/booking.enum';
+import { BookingCategory, BookingStatus } from '../src/libs/enums/booking.enum';
 import { PaymentStatus } from '../src/libs/enums/payment.enum';
 import { clearDatabase, createTestApp, graphQL, model, seedMember } from './helpers/e2e.helper';
 
@@ -199,6 +199,65 @@ describe('Booking, Payment and TravelHistory (integration/e2e)', () => {
 		);
 		expect(overflow.body.errors).toBeDefined();
 		expect((await model(app, 'Tour').findById(tour._id).lean()).tourReservedSeats).toBe(2);
+	});
+
+	it('returns both Property and Tour reservations from getMyBookings', async () => {
+		const user = await seedMember(app, 'allbookingsuser');
+		const { property, tour } = await catalogFixtures();
+		const checkIn = new Date(Date.now() + 3 * 86_400_000);
+		const checkOut = new Date(Date.now() + 5 * 86_400_000);
+
+		const propertyCheckout = await graphQL(
+			app,
+			`mutation Pay($input: StartPropertyPaymentInput!) {
+				startPropertyPayment(input: $input) { payment { bookingId } }
+			}`,
+			{
+				input: {
+					propertyId: property._id.toString(),
+					checkIn,
+					checkOut,
+					bookingGuests: 1,
+					idempotencyKey: randomUUID(),
+				},
+			},
+			user.accessToken,
+		);
+		const tourCheckout = await graphQL(
+			app,
+			`mutation Pay($input: StartTourPaymentInput!) {
+				startTourPayment(input: $input) { payment { bookingId } }
+			}`,
+			{ input: { tourId: tour._id.toString(), bookingGuests: 1, idempotencyKey: randomUUID() } },
+			user.accessToken,
+		);
+		expect(propertyCheckout.body.errors).toBeUndefined();
+		expect(tourCheckout.body.errors).toBeUndefined();
+
+		const result = await graphQL(
+			app,
+			`query MyBookings($input: BookingsInquiry!) {
+				getMyBookings(input: $input) {
+					list {
+						bookingCategory
+						propertyData { propertyName }
+						tourData { tourName }
+					}
+					metaCounter { total }
+				}
+			}`,
+			{ input: { page: 1, limit: 10, search: {} } },
+			user.accessToken,
+		);
+
+		expect(result.body.errors).toBeUndefined();
+		expect(result.body.data.getMyBookings.metaCounter[0].total).toBe(2);
+		expect(result.body.data.getMyBookings.list).toEqual(
+			expect.arrayContaining([
+				expect.objectContaining({ bookingCategory: BookingCategory.PROPERTY, propertyData: { propertyName: property.propertyName } }),
+				expect.objectContaining({ bookingCategory: BookingCategory.TOUR, tourData: { tourName: tour.tourName } }),
+			]),
+		);
 	});
 
 	it('permits only one parallel reservation for the last Tour seat', async () => {
