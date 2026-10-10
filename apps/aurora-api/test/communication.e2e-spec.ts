@@ -65,6 +65,16 @@ describe('Notice, Notification, Chat and Socket.IO (e2e)', () => {
 		);
 		expect(created.body.errors).toBeUndefined();
 		const noticeId = created.body.data.createNotice._id;
+		const userNotifications = await model(app, 'Notification').find({ receiverId: user._id }).lean();
+		expect(userNotifications).toHaveLength(1);
+		expect(userNotifications[0]).toMatchObject({
+			notificationType: NotificationType.SYSTEM,
+			notificationGroup: NotificationGroup.SYSTEM,
+			notificationTitle: 'Travel FAQ',
+			notificationDesc: 'Booking guide',
+		});
+		expect(userNotifications[0].notificationRefId.toString()).toBe(noticeId);
+		expect(await model(app, 'Notification').countDocuments({ receiverId: admin._id })).toBe(0);
 		await graphQL(
 			app,
 			`mutation Update($input: NoticeUpdate!) { updateNoticeByAdmin(input: $input) { _id noticeStatus } }`,

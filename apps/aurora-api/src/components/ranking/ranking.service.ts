@@ -32,7 +32,15 @@ export class RankingService {
 		const filter: any = { propertyStatus: PropertyStatus.ACTIVE, deletedAt: null };
 		if (destinationId) filter.destinationId = new Types.ObjectId(destinationId);
 		const list = await this.findInSnapshotOrder(this.propertyModel, entries, filter, limit, memberId ? [lookUpAuthMemberLiked(memberId)] : []);
-		return this.withMeta(list);
+		if (list.length || !destinationId) return this.withMeta(list);
+
+		const fallbackList = await this.propertyModel.aggregate([
+			{ $match: filter },
+			{ $sort: { propertyRating: -1, propertyBookings: -1, propertyViews: -1, createdAt: -1, _id: -1 } },
+			{ $limit: limit },
+			...(memberId ? [lookUpAuthMemberLiked(memberId)] : []),
+		]).exec();
+		return this.withMeta(fallbackList);
 	}
 
 	public async getTours(destinationId: string | undefined, limit: number, memberId?: Types.ObjectId | null): Promise<any> {

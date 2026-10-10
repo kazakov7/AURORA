@@ -44,6 +44,8 @@ const TourSchema = new Schema(
 		tourCurrency: {
 			type: String,
 			required: true,
+			enum: ['USD'],
+			default: 'USD',
 		},
 
 		tourStartDate: {

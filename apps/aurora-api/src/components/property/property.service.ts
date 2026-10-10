@@ -15,7 +15,7 @@ import { LikeGroup } from '../../libs/enums/like.enum';
 import { PropertyStatus } from '../../libs/enums/property.enum';
 import { ViewGroup } from '../../libs/enums/view.enum';
 import { StatisticModifier, T } from '../../libs/types/common';
-import { lookUpAuthMemberLiked, lookupMember, shapeIntoMongoObjectId } from '../../libs/config';
+import { lookUpAuthMemberLiked, lookupMember, shapeIntoMongoObjectId, escapeRegExp } from '../../libs/config';
 import { BookingService } from '../booking/booking.service';
 import { LikeService } from '../like/like.service';
 import { MemberService } from '../member/member.service';
@@ -201,7 +201,7 @@ export class PropertyService {
 		}
 
 		if (text) {
-			const regex = new RegExp(text, 'i');
+			const regex = new RegExp(escapeRegExp(text), 'i');
 			match.$or = [{ propertyName: regex }, { propertyDesc: regex }, { propertyCity: regex }];
 		}
 	}

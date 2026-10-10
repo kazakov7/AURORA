@@ -12,7 +12,7 @@ const NoticeSchema = new Schema(
 		noticeStatus: {
 			type: String,
 			enum: NoticeStatus,
-			default: NoticeStatus.HOLD,
+			default: NoticeStatus.ACTIVE,
 		},
 
 		noticeTitle: {

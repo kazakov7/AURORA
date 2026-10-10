@@ -44,12 +44,13 @@ export class TourInput {
 
 	@Field(() => Float)
 	@IsNumber()
-	@Min(0)
+	@Min(0.01)
 	tourPrice: number;
 
 	@Field(() => String)
 	@IsString()
 	@IsNotEmpty()
+	@IsIn(['USD'])
 	tourCurrency: string;
 
 	@Field(() => Date)

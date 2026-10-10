@@ -9,7 +9,7 @@ import { Messages } from '../../libs/enums/common.enum';
 import { PaymentProvider, PaymentStatus } from '../../libs/enums/payment.enum';
 import { PropertyStatus } from '../../libs/enums/property.enum';
 import { TourStatus } from '../../libs/enums/tour.enum';
-import { HOLD_DURATION_MS, KRW } from '../../libs/config';
+import { HOLD_DURATION_MS, USD } from '../../libs/config';
 import { NotificationService } from '../notification/notification.service';
 import { NotificationGroup, NotificationType } from '../../libs/enums/notification.enum';
 
@@ -596,14 +596,16 @@ export class PaymentService implements OnModuleInit, OnModuleDestroy {
 
 	private getStripeCharge(amount: number, currency: string): { amount: number; currency: string } {
 		const normalizedCurrency = currency?.trim().toUpperCase();
-		const decimalPlaces = normalizedCurrency === KRW ? 0 : normalizedCurrency === 'USD' ? 2 : undefined;
+		const decimalPlaces = normalizedCurrency === USD ? 2 : undefined;
 
 		if (decimalPlaces === undefined || !Number.isFinite(amount) || amount <= 0) {
 			throw new BadRequestException(Messages.INVALID_DATA);
 		}
 
-		const stripeAmount = amount * 10 ** decimalPlaces;
-		if (!Number.isSafeInteger(stripeAmount)) throw new BadRequestException(Messages.INVALID_DATA);
+		const stripeAmount = Math.round(amount * 10 ** decimalPlaces);
+		if (!Number.isSafeInteger(stripeAmount) || Math.abs(stripeAmount / 10 ** decimalPlaces - amount) > 0.000001) {
+			throw new BadRequestException(Messages.INVALID_DATA);
+		}
 
 		return { amount: stripeAmount, currency: normalizedCurrency.toLowerCase() };
 	}

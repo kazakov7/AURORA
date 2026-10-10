@@ -1,5 +1,5 @@
 import { Field, Float, InputType, Int } from '@nestjs/graphql';
-import { IsArray, IsEnum, IsInt, IsMongoId, IsNotEmpty, IsNumber, IsOptional, IsString, MaxLength, Min } from 'class-validator';
+import { IsArray, IsEnum, IsIn, IsInt, IsMongoId, IsNotEmpty, IsNumber, IsOptional, IsString, MaxLength, Min } from 'class-validator';
 import { Types } from 'mongoose';
 import { TourStatus } from '../../enums/tour.enum';
 
@@ -29,12 +29,13 @@ export class TourUpdateInput {
 	@Field(() => Float, { nullable: true })
 	@IsOptional()
 	@IsNumber()
-	@Min(0)
+	@Min(0.01)
 	tourPrice?: number;
 
 	@Field({ nullable: true })
 	@IsOptional()
 	@IsString()
+	@IsIn(['USD'])
 	tourCurrency?: string;
 
 	@Field(() => Date, { nullable: true })

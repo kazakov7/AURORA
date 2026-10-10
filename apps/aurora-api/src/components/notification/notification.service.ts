@@ -5,7 +5,7 @@ import { ChatGateway } from '../chat/chat.gateway';
 import { Notification, Notifications } from '../../libs/dto/notification/notification';
 import { NotificationsInquiry } from '../../libs/dto/notification/notification.input';
 import { Direction, Messages } from '../../libs/enums/common.enum';
-import { MemberStatus } from '../../libs/enums/member.enum';
+import { MemberStatus, MemberType } from '../../libs/enums/member.enum';
 import { NotificationGroup, NotificationStatus, NotificationType } from '../../libs/enums/notification.enum';
 import { T } from '../../libs/types/common';
 
@@ -142,5 +142,32 @@ export class NotificationService {
 			receiverId: admin._id as Types.ObjectId,
 			notificationEventKey: input.notificationEventKey ? `${input.notificationEventKey}:${admin._id}` : undefined,
 		})));
+	}
+
+	public async notifyActiveMembers(
+		input: Omit<CreateNotificationInput, 'receiverId'>,
+		excludedReceiverIds: Types.ObjectId[] = [],
+	): Promise<void> {
+		try {
+			const members = await this.memberModel
+				.find({
+					memberType: { $ne: MemberType.ADMIN },
+					memberStatus: MemberStatus.ACTIVE,
+					deletedAt: null,
+				})
+				.select('_id')
+				.lean()
+				.exec();
+			const excludedReceiverIdSet = new Set(excludedReceiverIds.map((receiverId) => receiverId.toString()));
+			await Promise.all((members as any[])
+				.filter((member) => !excludedReceiverIdSet.has(member._id.toString()))
+				.map((member) => this.createNotification({
+					...input,
+					receiverId: member._id as Types.ObjectId,
+					notificationEventKey: input.notificationEventKey ? `${input.notificationEventKey}:${member._id}` : undefined,
+				})));
+		} catch (err) {
+			console.error('Active member notification broadcast failed:', err);
+		}
 	}
 }

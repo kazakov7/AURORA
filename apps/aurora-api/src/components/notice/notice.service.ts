@@ -5,15 +5,30 @@ import { Notice, Notices } from '../../libs/dto/notice/notice';
 import { NoticeInput, NoticesInquiry, NoticeUpdate } from '../../libs/dto/notice/notice.input';
 import { Direction, Messages } from '../../libs/enums/common.enum';
 import { NoticeStatus } from '../../libs/enums/notice.enum';
+import { NotificationGroup, NotificationType } from '../../libs/enums/notification.enum';
 import { T } from '../../libs/types/common';
+import { escapeRegExp } from '../../libs/config';
+import { NotificationService } from '../notification/notification.service';
 
 @Injectable()
 export class NoticeService {
-	constructor(@InjectModel('Notice') private readonly noticeModel: Model<any>) { }
+	constructor(
+		@InjectModel('Notice') private readonly noticeModel: Model<any>,
+		private readonly notificationService: NotificationService,
+	) { }
 
 	public async createNotice(memberId: Types.ObjectId, input: NoticeInput): Promise<Notice> {
 		try {
-			return await this.noticeModel.create({ ...input, memberId });
+			const notice = await this.noticeModel.create({ ...input, memberId });
+			await this.notificationService.notifyActiveMembers({
+				notificationType: NotificationType.SYSTEM,
+				notificationGroup: NotificationGroup.SYSTEM,
+				notificationRefId: notice._id,
+				notificationTitle: notice.noticeTitle,
+				notificationDesc: notice.noticeContent,
+				notificationEventKey: `notice-created:${notice._id}`,
+			});
+			return notice;
 		} catch (err) {
 			console.error('Notice creation failed:', err);
 			throw new BadRequestException(Messages.CREATE_FAILED);
@@ -51,7 +66,7 @@ export class NoticeService {
 		if (search?.noticeCategory) match.noticeCategory = search.noticeCategory;
 		if (search?.noticeStatus && !baseMatch.noticeStatus) match.noticeStatus = search.noticeStatus;
 		if (search?.text) {
-			const regex = new RegExp(search.text, 'i');
+			const regex = new RegExp(escapeRegExp(search.text), 'i');
 			match.$or = [{ noticeTitle: regex }, { noticeContent: regex }];
 		}
 

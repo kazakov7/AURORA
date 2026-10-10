@@ -22,6 +22,7 @@ import {
 	shapeIntoMongoObjectId,
 	lookupMember,
 	lookUpAuthMemberLiked,
+	escapeRegExp,
 } from '../../libs/config';
 
 import { LikeGroup } from '../../libs/enums/like.enum';
@@ -203,7 +204,7 @@ export class BoardArticleService {
 
 		if (articleCategory) match.articleCategory = articleCategory;
 
-		if (text) match.articleTitle = { $regex: new RegExp(text, 'i') };
+		if (text) match.articleTitle = { $regex: new RegExp(escapeRegExp(text), 'i') };
 
 		if (input.search?.memberId) {
 			match.memberId = shapeIntoMongoObjectId(input.search.memberId);

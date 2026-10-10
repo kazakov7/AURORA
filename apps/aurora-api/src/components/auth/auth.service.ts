@@ -56,6 +56,8 @@ interface KakaoProfileResponse {
 
 interface TelegramTokenResponse {
 	id_token?: string;
+	/** Telegram answers OAuth errors with HTTP 200 and an `error` field (e.g. `invalid_grant`) */
+	error?: string;
 }
 
 const KAKAO_TOKEN_ENDPOINT = 'https://kauth.kakao.com/oauth/token';
@@ -277,6 +279,12 @@ export class AuthService {
 			throw new InternalServerErrorException(Messages.TELEGRAM_TOKEN_EXCHANGE_FAILED);
 		}
 
+		if (token?.error) {
+			if (token.error === 'invalid_client' || token.error === 'unauthorized_client') {
+				throw new ServiceUnavailableException(Messages.TELEGRAM_AUTH_NOT_CONFIGURED);
+			}
+			throw new BadRequestException(Messages.INVALID_TELEGRAM_AUTHORIZATION_CODE);
+		}
 		if (!token?.id_token) throw new UnauthorizedException(Messages.INVALID_TELEGRAM_IDENTITY_TOKEN);
 		return await this.verifyTelegramIdentityToken(token.id_token, clientId);
 	}

@@ -245,6 +245,27 @@ describe('AuthService social authentication', () => {
 			invalidCodeService.verifyTelegramAuthorizationCode('bad-code', 'https://bad.redirect', 'b'.repeat(43)),
 		).rejects.toEqual(expect.objectContaining({ message: Messages.INVALID_TELEGRAM_AUTHORIZATION_CODE }));
 
+		// Telegram reports OAuth errors with HTTP 200 and an `error` body instead of a 4xx status
+		const invalidGrantService = new AuthService(
+			{} as JwtService,
+			{
+				post: jest.fn().mockReturnValue(of({ data: { error: 'invalid_grant' } })),
+			} as unknown as HttpService,
+		);
+		await expect(
+			invalidGrantService.verifyTelegramAuthorizationCode('expired-code', 'https://app.aurora.test/auth/telegram', 'e'.repeat(43)),
+		).rejects.toEqual(expect.objectContaining({ message: Messages.INVALID_TELEGRAM_AUTHORIZATION_CODE }));
+
+		const invalidClientService = new AuthService(
+			{} as JwtService,
+			{
+				post: jest.fn().mockReturnValue(of({ data: { error: 'invalid_client' } })),
+			} as unknown as HttpService,
+		);
+		await expect(
+			invalidClientService.verifyTelegramAuthorizationCode('code', 'https://app.aurora.test/auth/telegram', 'f'.repeat(43)),
+		).rejects.toEqual(expect.objectContaining({ message: Messages.TELEGRAM_AUTH_NOT_CONFIGURED }));
+
 		const missingTokenService = new AuthService(
 			{} as JwtService,
 			{

@@ -9,7 +9,7 @@ import { createCorsOptions } from './libs/cors';
 
 async function bootstrap() {
 	const app = await NestFactory.create<NestExpressApplication>(AppModule, { rawBody: true });
-	app.use(graphqlUploadExpress({ maxFileSize: 10_000_000, maxFiles: 10 }));
+	app.use(graphqlUploadExpress({ maxFileSize: 20 * 1024 * 1024, maxFiles: 10 }));
 	app.useStaticAssets(join(process.cwd(), 'uploads'), { prefix: '/uploads/' });
 	app.useGlobalPipes(new ValidationPipe());
 	app.useGlobalInterceptors(new LoggingInterceptor());

@@ -33,7 +33,7 @@ describe('One-time ratings (e2e)', () => {
 			propertyName: 'Rating Hotel',
 			propertyAddress: 'Seoul',
 			pricePerNight: 100000,
-			currency: 'KRW',
+			currency: 'USD',
 			maxGuests: 2,
 		});
 
@@ -102,7 +102,7 @@ describe('One-time ratings (e2e)', () => {
 						tourName: 'Rating Tour',
 						tourStatus: 'ACTIVE',
 						tourPrice: 50000,
-						tourCurrency: 'KRW',
+						tourCurrency: 'USD',
 						tourStartDate: new Date(Date.now() + 86_400_000),
 						tourEndDate: new Date(Date.now() + 172_800_000),
 						tourCapacity: 10,

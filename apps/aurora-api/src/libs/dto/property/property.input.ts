@@ -53,13 +53,14 @@ export class CreatePropertyInput {
 
 	@Field(() => Float)
 	@IsNumber()
-	@Min(0)
+	@Min(0.01)
 	@IsNotEmpty()
 	pricePerNight: number;
 
 	@Field(() => String)
 	@IsString()
 	@IsNotEmpty()
+	@IsIn(['USD'])
 	currency: string;
 
 	@Field(() => Int)
@@ -122,7 +123,7 @@ export class PISearch {
 	memberId?: Types.ObjectId;
 
 	@IsOptional()
-	@Field(() => [String], { nullable: true })
+	@Field(() => String, { nullable: true })
 	destinationId?: string;
 
 	@IsOptional()

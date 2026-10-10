@@ -1,7 +1,7 @@
-import { UseGuards } from '@nestjs/common';
+import { BadRequestException, UseGuards } from '@nestjs/common';
 import { Args, Mutation, Resolver } from '@nestjs/graphql';
 import { createWriteStream } from 'fs';
-import { validMimeTypes, getSerialForImage } from '../../libs/config';
+import { validMimeTypes, getSerialForImage, isValidUploadTarget } from '../../libs/config';
 import { AuthGuard } from '../auth/guards/auth.guard';
 import { GraphQLUpload, FileUpload } from 'graphql-upload';
 import { Messages } from '../../libs/enums/common.enum';
@@ -19,11 +19,11 @@ export class ImageUploaderResolver {
         console.log('Mutation: imageUploader');
 
         if (!filename) throw new Error(Messages.UPLOAD_FAILED);
-        console.log('jkbfjberbf', mimetype);
+        if (!isValidUploadTarget(target)) throw new BadRequestException(Messages.BAD_REQUEST);
         const validMime = validMimeTypes.includes(mimetype);
         if (!validMime) throw new Error(Messages.PROVIDE_ALLOWED_FORMAT);
 
-        const imageName = getSerialForImage(filename);
+        const imageName = getSerialForImage(mimetype);
         const url = `uploads/${target}/${imageName}`;
         const stream = createReadStream();
 
@@ -47,6 +47,7 @@ export class ImageUploaderResolver {
         @Args('target') target: String,
     ): Promise<string[]> {
         console.log('Mutation: imagesUploader');
+        if (!isValidUploadTarget(target)) throw new BadRequestException(Messages.BAD_REQUEST);
 
         const uploadedImages = [];
         const promisedList = files.map(
@@ -57,7 +58,7 @@ export class ImageUploaderResolver {
                     const validMime = validMimeTypes.includes(mimetype);
                     if (!validMime) throw new Error(Messages.PROVIDE_ALLOWED_FORMAT);
 
-                    const imageName = getSerialForImage(filename);
+                    const imageName = getSerialForImage(mimetype);
                     const url = `uploads/${target}/${imageName}`;
                     const stream = createReadStream();
 

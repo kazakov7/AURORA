@@ -64,6 +64,8 @@ const PropertySchema = new Schema(
 		currency: {
 			type: String,
 			required: true,
+			enum: ['USD'],
+			default: 'USD',
 		},
 
 		maxGuests: {

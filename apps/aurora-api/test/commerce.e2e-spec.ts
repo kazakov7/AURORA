@@ -52,7 +52,7 @@ describe('Booking, Payment and TravelHistory (integration/e2e)', () => {
 			propertyName: 'Bali Aura',
 			propertyAddress: 'Bali',
 			pricePerNight: 120000,
-			currency: 'KRW',
+			currency: 'USD',
 			maxGuests: 3,
 		});
 		const tour = await model(app, 'Tour').create({
@@ -61,7 +61,7 @@ describe('Booking, Payment and TravelHistory (integration/e2e)', () => {
 			tourStatus: 'ACTIVE',
 			tourName: 'Bali Tour',
 			tourPrice: 70000,
-			tourCurrency: 'KRW',
+			tourCurrency: 'USD',
 			tourStartDate: new Date(Date.now() + 86_400_000),
 			tourEndDate: new Date(Date.now() + 172_800_000),
 			tourCapacity: 2,
@@ -114,7 +114,7 @@ describe('Booking, Payment and TravelHistory (integration/e2e)', () => {
 		const providerPaymentId = first.body.data.startPropertyPayment.payment.providerPaymentId;
 		paymentService.stripe.webhooks.constructEvent.mockReturnValue({
 			type: 'payment_intent.succeeded',
-			data: { object: { id: providerPaymentId, amount_received: 240000, currency: 'krw' } },
+			data: { object: { id: providerPaymentId, amount_received: 24000000, currency: 'usd' } },
 		});
 		const webhook = () =>
 			request(app.getHttpServer())
@@ -288,7 +288,7 @@ describe('Booking, Payment and TravelHistory (integration/e2e)', () => {
 
 		paymentService.stripe.webhooks.constructEvent.mockReturnValue({
 			type: 'payment_intent.succeeded',
-			data: { object: { id: providerPaymentId, amount_received: 70000, currency: 'krw' } },
+			data: { object: { id: providerPaymentId, amount_received: 7000000, currency: 'usd' } },
 		});
 		const lateWebhook = () => request(app.getHttpServer())
 			.post('/payments/stripe/webhook')
@@ -386,7 +386,7 @@ describe('Booking, Payment and TravelHistory (integration/e2e)', () => {
 		const paymentService = app.get(PaymentService) as any;
 		paymentService.stripe.webhooks.constructEvent.mockReturnValue({
 			type: 'payment_intent.succeeded',
-			data: { object: { id: providerPaymentId, amount_received: 1, currency: 'krw' } },
+			data: { object: { id: providerPaymentId, amount_received: 1, currency: 'usd' } },
 		});
 
 		const result = await request(app.getHttpServer())
@@ -494,7 +494,7 @@ describe('Booking, Payment and TravelHistory (integration/e2e)', () => {
 			checkOut: new Date(Date.now() - 86_400_000),
 			bookingGuests: 1,
 			bookingTotalPrice: 120000,
-			bookingCurrency: 'KRW',
+			bookingCurrency: 'USD',
 			priceSnapshot: { pricePerNight: 120000 },
 		});
 		const travelHistoryService = app.get(TravelHistoryService);

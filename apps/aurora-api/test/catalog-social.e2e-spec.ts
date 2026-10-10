@@ -109,7 +109,7 @@ describe('Catalog and social domains (e2e)', () => {
 			propertyAddress: 'Tokyo',
 			propertyCity: 'Tokyo',
 			pricePerNight: 100000,
-			currency: 'KRW',
+			currency: 'USD',
 			maxGuests: 2,
 		};
 		const createMutation = `mutation Create($input: CreatePropertyInput!) {
@@ -153,7 +153,7 @@ describe('Catalog and social domains (e2e)', () => {
 			destinationId: destination._id.toString(),
 			tourName: 'Bangkok Tour',
 			tourPrice: 50000,
-			tourCurrency: 'KRW',
+			tourCurrency: 'USD',
 			tourStartDate: new Date(Date.now() + 86_400_000),
 			tourEndDate: new Date(Date.now() + 172_800_000),
 			tourCapacity: 10,
@@ -253,7 +253,7 @@ describe('Catalog and social domains (e2e)', () => {
 			propertyName: 'Aurora Singapore Hotel',
 			propertyAddress: 'Marina Bay',
 			pricePerNight: 180000,
-			currency: 'KRW',
+			currency: 'USD',
 			maxGuests: 2,
 		});
 		const detailQuery = `query HotelDetail($id: String!) {
@@ -302,7 +302,7 @@ describe('Catalog and social domains (e2e)', () => {
 		});
 		const property = await model(app, 'Property').create({
 			memberId: owner._id, destinationId: destination._id, propertyType: 'HOTEL', propertyStatus: PropertyStatus.ACTIVE,
-			propertyName: 'Kyoto Aura', propertyAddress: 'Kyoto', pricePerNight: 150000, currency: 'KRW', maxGuests: 2,
+			propertyName: 'Kyoto Aura', propertyAddress: 'Kyoto', pricePerNight: 150000, currency: 'USD', maxGuests: 2,
 		});
 		const publication = await model(app, 'RankingPublication').create({ isActive: true, publishedAt: new Date(), calculatedAt: new Date(), snapshotCount: 2 });
 		const snapshot = (rankingType: string, entityId: unknown) => ({
@@ -327,5 +327,27 @@ describe('Catalog and social domains (e2e)', () => {
 		const guest = await graphQL(app, rankingQuery, { input: { limit: 4 } });
 		expect(guest.body.errors).toBeUndefined();
 		expect(guest.body.data.getTopProperties.list[0].meLiked).toBeNull();
+	});
+
+	it('returns destination hotels when a destination ranking snapshot has not been published yet', async () => {
+		const owner = await seedMember(app, 'destinationrankowner');
+		const destination = await model(app, 'Destination').create({
+			destinationName: 'Fallback City', destinationSlug: 'fallback-city', destinationCountry: 'US', destinationStatus: DestinationStatus.ACTIVE,
+		});
+		const property = await model(app, 'Property').create({
+			memberId: owner._id, destinationId: destination._id, propertyType: 'HOTEL', propertyStatus: PropertyStatus.ACTIVE,
+			propertyName: 'Fallback Hotel', propertyAddress: 'Fallback City', pricePerNight: 150, currency: 'USD', maxGuests: 2,
+			propertyRating: 4.8, propertyBookings: 12, propertyViews: 80,
+		});
+
+		const result = await graphQL(
+			app,
+			`query TopProperties($input: RankingInquiry) { getTopProperties(input: $input) { list { _id destinationId } metaCounter { total } } }`,
+			{ input: { destinationId: destination._id.toString(), limit: 4 } },
+		);
+
+		expect(result.body.errors).toBeUndefined();
+		expect(result.body.data.getTopProperties.list).toEqual([{ _id: property._id.toString(), destinationId: destination._id.toString() }]);
+		expect(result.body.data.getTopProperties.metaCounter).toEqual([{ total: 1 }]);
 	});
 });

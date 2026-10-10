@@ -10,7 +10,7 @@ import {
 	ToursInquiry,
 } from '../../libs/dto/tour/tour.input';
 import { TourUpdateInput, UpdateTourStatusInput } from '../../libs/dto/tour/tour.update';
-import { lookUpAuthMemberLiked, lookupMember, shapeIntoMongoObjectId } from '../../libs/config';
+import { lookUpAuthMemberLiked, lookupMember, shapeIntoMongoObjectId, escapeRegExp } from '../../libs/config';
 import { Direction, Messages } from '../../libs/enums/common.enum';
 import { LikeGroup } from '../../libs/enums/like.enum';
 import { TourStatus } from '../../libs/enums/tour.enum';
@@ -199,7 +199,7 @@ export class TourService {
 		}
 
 		if (text) {
-			const regex = new RegExp(text, 'i');
+			const regex = new RegExp(escapeRegExp(text), 'i');
 			match.$or = [
 				{ tourName: regex },
 				{ tourDesc: regex },

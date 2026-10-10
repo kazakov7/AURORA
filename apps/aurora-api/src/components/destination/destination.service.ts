@@ -4,7 +4,7 @@ import { Model, Types } from 'mongoose';
 import { Destination, Destinations } from '../../libs/dto/destination/destination';
 import { DestinationInput, DestinationsInquiry } from '../../libs/dto/destination/destination.input';
 import { DestinationUpdate } from '../../libs/dto/destination/destination.update';
-import { lookUpAuthMemberLiked } from '../../libs/config';
+import { lookUpAuthMemberLiked, escapeRegExp } from '../../libs/config';
 import { Direction, Messages } from '../../libs/enums/common.enum';
 import { LikeGroup } from '../../libs/enums/like.enum';
 import { DestinationStatus } from '../../libs/enums/destination';
@@ -58,7 +58,7 @@ export class DestinationService {
 		const match: T = { destinationStatus: DestinationStatus.ACTIVE, deletedAt: null };
 		if (input.search.destinationCountry) match.destinationCountry = input.search.destinationCountry;
 		if (input.search.text) {
-			const regex = new RegExp(input.search.text, 'i');
+			const regex = new RegExp(escapeRegExp(input.search.text), 'i');
 			match.$or = [{ destinationName: regex }, { destinationCountry: regex }, { destinationDesc: regex }];
 		}
 

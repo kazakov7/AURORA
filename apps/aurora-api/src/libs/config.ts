@@ -4,7 +4,7 @@ import { Messages } from './enums/common.enum';
 
 
 export const HOLD_DURATION_MS = 15 * 60 * 1000;
-export const KRW = 'KRW';
+export const USD = 'USD';
 export const availableAgentSorts = ['createdAt', 'updatedAt', 'agentType', 'verificationStatus'];
 export const availableMemberSorts = [
 	'createdAt',
@@ -52,14 +52,22 @@ export const availableCommentSorts = ['createdAt', 'updatedAt'];
 export const availableChatSorts = ['createdAt', 'updatedAt', 'lastMessageAt'];
 // IMAGE CONFIGURATION ()
 import { randomUUID } from 'crypto';
-import * as path from 'path';
 import { T } from './types/common';
 
 export const validMimeTypes = ['image/png', 'image/jpg', 'image/jpeg'];
-export const getSerialForImage = (filename: string) => {
-	const ext = path.parse(filename).ext;
-	return randomUUID() + ext;
+/** Upload sub-folders under ./uploads; the client-supplied target must be one of these (blocks path traversal) **/
+export const validUploadTargets = ['member', 'article', 'board', 'property', 'tour', 'destination', 'support'];
+export const isValidUploadTarget = (target: unknown): target is string =>
+	typeof target === 'string' && validUploadTargets.includes(target);
+
+/** Extension comes from the validated mimetype, never from the client filename (blocks .html/.js uploads) **/
+const imageExtensions: Record<string, string> = { 'image/png': '.png', 'image/jpg': '.jpg', 'image/jpeg': '.jpg' };
+export const getSerialForImage = (mimetype: string) => {
+	return randomUUID() + (imageExtensions[mimetype] ?? '.jpg');
 };
+/** Escapes user search text before building a RegExp (prevents invalid-pattern 500s and ReDoS) **/
+export const escapeRegExp = (text: string): string => text.replace(/[.*+?^${}()|[\]\\]/g, '\\$&');
+
 export const shapeIntoMongoObjectId = (target: any): any => {
 	if (target instanceof ObjectId) return target;
 	if (typeof target !== 'string' || !ObjectId.isValid(target)) {
