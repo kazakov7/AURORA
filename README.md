@@ -1,209 +1,56 @@
-# AURORA Backend
+<div align="center">
 
-## CORS configuration
+# ✦ AURORA API
 
-Set `CORS_ALLOWED_ORIGINS` to a comma-separated list of exact frontend origins in production, for example
-`https://aurora.example,https://admin.aurora.example`. Wildcard production origins are not accepted. Localhost,
-`127.0.0.1`, and IPv6 localhost origins are allowed automatically outside production. OAuth callback URLs remain
-configured with their providers and are not replaced by this API CORS setting.
+**Explore more. Travel better.**
 
-## Google authentication
+A full-stack travel marketplace backend built for seamless stays, curated tours, and connected travelers.
 
-The API accepts a verified Google ID token through the GraphQL mutation below. Configure the public Google Web client ID on the API as `GOOGLE_WEB_CLIENT_ID`; Antigravity must use the same public Web client ID. Do not add a Google client secret to this project.
+![NestJS](https://img.shields.io/badge/NestJS-11-E0234E?style=flat-square&logo=nestjs&logoColor=white)
+![TypeScript](https://img.shields.io/badge/TypeScript-3178C6?style=flat-square&logo=typescript&logoColor=white)
+![GraphQL](https://img.shields.io/badge/GraphQL-E10098?style=flat-square&logo=graphql&logoColor=white)
+![MongoDB](https://img.shields.io/badge/MongoDB-47A248?style=flat-square&logo=mongodb&logoColor=white)
+![Socket.IO](https://img.shields.io/badge/Socket.IO-010101?style=flat-square&logo=socketdotio&logoColor=white)
+![Stripe](https://img.shields.io/badge/Stripe-635BFF?style=flat-square&logo=stripe&logoColor=white)
 
-```graphql
-mutation GoogleAuth($input: GoogleAuthInput!) {
-	googleAuth(input: $input) {
-		_id
-		memberNick
-		memberType
-		memberAuthType
-		accessToken
-	}
-}
-```
+</div>
 
-The client sends only `{ "input": { "credential": "<Google ID token>" } }`. On success, store and use `accessToken` through the same AURORA session flow used after `login`. The API verifies the credential, issuer, audience, expiry, Google subject, and verified email; it does not trust browser profile data. A Google attempt for an email already owned by a non-Google account is rejected and must not be auto-linked.
+---
 
-## Kakao authentication
+### ✨ Features
 
-Configure `KAKAO_REST_API_KEY` and `KAKAO_CLIENT_SECRET` on the API. The client secret remains server-only. The API exchanges the authorization code directly with Kakao, requires the returned OIDC ID token, and verifies its RS256 signature using Kakao's published JWKS as well as its issuer, audience, expiration, and subject.
+- **Travel marketplace** — destinations, properties, tours, bookings and reviews
+- **Accounts & access** — authentication, user/agent/admin roles and agent verification
+- **Community** — articles, follows, likes, comments and notifications
+- **Real-time chat** — direct messaging powered by Socket.IO
+- **Payments** — Stripe checkout, verified webhooks and booking holds
+- **Discovery** — search, filters, rankings and scheduled batch processing
 
-```graphql
-mutation KakaoAuth($input: KakaoAuthInput!) {
-	kakaoAuth(input: $input) {
-		_id
-		memberNick
-		memberType
-		memberAuthType
-		accessToken
-	}
-}
-```
+### 🧩 Architecture
 
-Antigravity sends only:
+| Service | Stack | Purpose |
+|---|---|---|
+| `aurora-api` | NestJS · GraphQL · Mongoose | Main API, auth, bookings, payments and chat |
+| `aurora-batch` | NestJS · MongoDB | Scheduled rankings and manual refresh |
+| Database | MongoDB Atlas | Separate development and production databases |
 
-```json
-{
-	"input": {
-		"code": "<authorization code returned by Kakao>",
-		"redirectUri": "https://your-app.example/auth/kakao/callback"
-	}
-}
-```
-
-In Kakao Developers, enable Kakao Login and OpenID Connect, register the exact redirect URI under the REST API key, enable the client secret, and enable consent for Nickname and Profile image. Antigravity must request the Kakao authorization scope `openid,profile_nickname,profile_image` (comma-separated for Kakao's REST authorization request). The API retrieves the consented nickname and HTTPS profile-image URL from Kakao's server-side user-information endpoint; it never receives provider tokens or profile values from Antigravity. Email is optional for AURORA Kakao accounts, but any supplied email that already belongs to another AURORA account is rejected rather than linked. The supplied `redirectUri` must exactly match the URI used to obtain the code and one registered in Kakao Developers.
-
-## Telegram authentication
-
-Configure `TELEGRAM_CLIENT_ID` and `TELEGRAM_CLIENT_SECRET` on the API. The client secret is backend-only and must never be included in the frontend bundle. Telegram authentication is lazily configured, so missing Telegram variables do not affect other API features; the `telegramAuth` mutation returns a configuration error until both are present.
-
-The frontend uses Telegram's OIDC Authorization Code Flow with PKCE (`S256`) against `https://oauth.telegram.org/auth`. It generates and retains a cryptographically random `state` and PKCE `code_verifier`, sends the derived `code_challenge`, requests only `openid profile`, and validates the returned `state` before calling AURORA. The `redirect_uri` must exactly match the value used in the authorization request and an allowed callback registered through BotFather.
-
-```text
-response_type=code
-client_id=<public Telegram client ID>
-redirect_uri=https://your-app.example/auth/telegram/callback
-scope=openid profile
-state=<random CSRF value>
-code_challenge=<base64url SHA-256(code_verifier)>
-code_challenge_method=S256
-```
-
-After validating `state`, the frontend sends the code, the same redirect URI, and the original verifier. This is the complete GraphQL contract:
-
-```graphql
-mutation TelegramAuth($input: TelegramAuthInput!) {
-	telegramAuth(input: $input) {
-		_id
-		memberNick
-		memberFullName
-		memberImage
-		memberType
-		memberAuthType
-		accessToken
-	}
-}
-```
-
-```json
-{
-	"input": {
-		"code": "<Telegram authorization code>",
-		"redirectUri": "https://your-app.example/auth/telegram/callback",
-		"codeVerifier": "<original 43-128 character PKCE verifier>"
-	}
-}
-```
-
-The API exchanges the code at `https://oauth.telegram.org/token` using HTTP Basic client authentication, verifies the returned ID token against Telegram's issuer, audience, expiry, subject, RS256 signature and official JWKS, and consumes only the `name`, `preferred_username`, and `picture` profile claims. Provider tokens and `telegramSubject` are never exposed through GraphQL or embedded in the AURORA JWT. There is no UserInfo call. AURORA intentionally does not request the phone or `telegram:bot_access` scopes.
-
-In BotFather, select the bot and configure its Login Widget/Telegram Login settings: register the production origin and exact callback URL, obtain the OIDC client ID and secret, and keep the signing algorithm at the RS256/default setting used by this backend. The frontend may receive the client ID, but never the client secret. Telegram publishes discovery metadata at `https://oauth.telegram.org/.well-known/openid-configuration` and signing keys at `https://oauth.telegram.org/.well-known/jwks.json`.
-
-The NestJS GraphQL backend for the AURORA travel marketplace.
-
-<p align="center">
-  <a href="http://nestjs.com/" target="blank"><img src="https://nestjs.com/img/logo-small.svg" width="120" alt="Nest Logo" /></a>
-</p>
-
-[circleci-image]: https://img.shields.io/circleci/build/github/nestjs/nest/master?token=abc123def456
-[circleci-url]: https://circleci.com/gh/nestjs/nest
-
-  <p align="center">A progressive <a href="http://nodejs.org" target="_blank">Node.js</a> framework for building efficient and scalable server-side applications.</p>
-    <p align="center">
-<a href="https://www.npmjs.com/~nestjscore" target="_blank"><img src="https://img.shields.io/npm/v/@nestjs/core.svg" alt="NPM Version" /></a>
-<a href="https://www.npmjs.com/~nestjscore" target="_blank"><img src="https://img.shields.io/npm/l/@nestjs/core.svg" alt="Package License" /></a>
-<a href="https://www.npmjs.com/~nestjscore" target="_blank"><img src="https://img.shields.io/npm/dm/@nestjs/common.svg" alt="NPM Downloads" /></a>
-<a href="https://circleci.com/gh/nestjs/nest" target="_blank"><img src="https://img.shields.io/circleci/build/github/nestjs/nest/master" alt="CircleCI" /></a>
-<a href="https://discord.gg/G7Qnnhy" target="_blank"><img src="https://img.shields.io/badge/discord-online-brightgreen.svg" alt="Discord"/></a>
-<a href="https://opencollective.com/nest#backer" target="_blank"><img src="https://opencollective.com/nest/backers/badge.svg" alt="Backers on Open Collective" /></a>
-<a href="https://opencollective.com/nest#sponsor" target="_blank"><img src="https://opencollective.com/nest/sponsors/badge.svg" alt="Sponsors on Open Collective" /></a>
-  <a href="https://paypal.me/kamilmysliwiec" target="_blank"><img src="https://img.shields.io/badge/Donate-PayPal-ff3f59.svg" alt="Donate us"/></a>
-    <a href="https://opencollective.com/nest#sponsor"  target="_blank"><img src="https://img.shields.io/badge/Support%20us-Open%20Collective-41B883.svg" alt="Support us"></a>
-  <a href="https://twitter.com/nestframework" target="_blank"><img src="https://img.shields.io/twitter/follow/nestframework.svg?style=social&label=Follow" alt="Follow us on Twitter"></a>
-</p>
-  <!--[![Backers on Open Collective](https://opencollective.com/nest/backers/badge.svg)](https://opencollective.com/nest#backer)
-  [![Sponsors on Open Collective](https://opencollective.com/nest/sponsors/badge.svg)](https://opencollective.com/nest#sponsor)-->
-
-## Description
-
-AURORA is built with [Nest](https://github.com/nestjs/nest).
-
-## Project setup
+### 🚀 Local development
 
 ```bash
-$ npm install
+npm install
+# Configure the required environment variables locally (never commit secrets)
+npm run start:dev    # GraphQL API
+npm run dev:batch    # Ranking worker, in another terminal
 ```
 
-## Compile and run the project
+**Endpoints:** `/graphql` · `/payments/stripe/webhook` · `/rankings/run` (batch service, token-protected)
 
-```bash
-# development
-$ npm run start
+### 🔐 Security & deployment
 
-# watch mode
-$ npm run start:dev
+Environment secrets stay outside Git. Development and production use separate MongoDB databases. Deploy the API and batch worker as separate services, and store user uploads on persistent object storage rather than ephemeral application disks.
 
-# production mode
-$ npm run start:prod
-```
+---
 
-## Run tests
-
-```bash
-# unit tests
-$ npm run test
-
-# e2e tests
-$ npm run test:e2e
-
-# backend validation
-$ npx tsc -p apps/aurora-api/tsconfig.app.json --noEmit
-$ npx tsc -p apps/aurora-batch/tsconfig.app.json --noEmit
-$ npm run build
-
-# test coverage
-$ npm run test:cov
-```
-
-The E2E suite starts an isolated in-memory MongoDB replica set, clears test data between cases, and never uses `MONGO_DEV` or `MONGO_PROD`. The first run may download a MongoDB test binary into `/tmp/aura-mongodb-binaries`. Stripe is mocked in E2E; no real charge is created.
-
-## Deployment
-
-When you're ready to deploy your NestJS application to production, there are some key steps you can take to ensure it runs as efficiently as possible. Check out the [deployment documentation](https://docs.nestjs.com/deployment) for more information.
-
-If you are looking for a cloud-based platform to deploy your NestJS application, check out [Mau](https://mau.nestjs.com), our official platform for deploying NestJS applications on AWS. Mau makes deployment straightforward and fast, requiring just a few simple steps:
-
-```bash
-$ npm install -g @nestjs/mau
-$ mau deploy
-```
-
-With Mau, you can deploy your application in just a few clicks, allowing you to focus on building features rather than managing infrastructure.
-
-## Resources
-
-Check out a few resources that may come in handy when working with NestJS:
-
-- Visit the [NestJS Documentation](https://docs.nestjs.com) to learn more about the framework.
-- For questions and support, please visit our [Discord channel](https://discord.gg/G7Qnnhy).
-- To dive deeper and get more hands-on experience, check out our official video [courses](https://courses.nestjs.com/).
-- Deploy your application to AWS with the help of [NestJS Mau](https://mau.nestjs.com) in just a few clicks.
-- Visualize your application graph and interact with the NestJS application in real-time using [NestJS Devtools](https://devtools.nestjs.com).
-- Need help with your project (part-time to full-time)? Check out our official [enterprise support](https://enterprise.nestjs.com).
-- To stay in the loop and get updates, follow us on [X](https://x.com/nestframework) and [LinkedIn](https://linkedin.com/company/nestjs).
-- Looking for a job, or have a job to offer? Check out our official [Jobs board](https://jobs.nestjs.com).
-
-## Support
-
-Nest is an MIT-licensed open source project. It can grow thanks to the sponsors and support by the amazing backers. If you'd like to join them, please [read more here](https://docs.nestjs.com/support).
-
-## Stay in touch
-
-- Author - [Kamil Myśliwiec](https://twitter.com/kammysliwiec)
-- Website - [https://nestjs.com](https://nestjs.com/)
-- Twitter - [@nestframework](https://twitter.com/nestframework)
-
-## License
-
-Nest is [MIT licensed](https://github.com/nestjs/nest/blob/master/LICENSE).
+<div align="center">
+  <sub>Built with care for the AURORA travel platform.</sub>
+</div>
