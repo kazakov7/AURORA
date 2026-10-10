@@ -78,3 +78,13 @@ export class Bookings {
 	@Field(() => [TotalCounter], { nullable: true })
 	metaCounter: TotalCounter[];
 }
+
+/** Public calendar DTO. It deliberately contains no member, payment, or booking metadata. */
+@ObjectType()
+export class PropertyAvailabilityRange {
+	@Field(() => Date)
+	checkIn: Date;
+
+	@Field(() => Date)
+	checkOut: Date;
+}

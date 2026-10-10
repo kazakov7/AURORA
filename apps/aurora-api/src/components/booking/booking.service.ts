@@ -1,9 +1,10 @@
-import { Injectable } from '@nestjs/common';
+import { BadRequestException, Injectable } from '@nestjs/common';
 import { InjectModel } from '@nestjs/mongoose';
 import { Model, Types } from 'mongoose';
-import { Booking, Bookings } from '../../libs/dto/booking/booking';
-import { BookingsInquiry } from '../../libs/dto/booking/booking.input';
+import { Booking, Bookings, PropertyAvailabilityRange } from '../../libs/dto/booking/booking';
+import { BookingsInquiry, PropertyAvailabilityInquiry } from '../../libs/dto/booking/booking.input';
 import { BookingCategory, BookingStatus } from '../../libs/enums/booking.enum';
+import { Messages } from '../../libs/enums/common.enum';
 import { T } from '../../libs/types/common';
 import { lookupMember } from '../../libs/config';
 
@@ -29,6 +30,42 @@ export class BookingService {
 			.exec();
 
 		return propertyIds as Types.ObjectId[];
+	}
+
+	/**
+	 * Calendar availability uses half-open intervals: [checkIn, checkOut).
+	 * Therefore a guest can check in on the same date a previous guest checks out.
+	 */
+	public async getPropertyAvailability(input: PropertyAvailabilityInquiry): Promise<PropertyAvailabilityRange[]> {
+		if (!Types.ObjectId.isValid(input.propertyId) || !(input.startDate instanceof Date) || !(input.endDate instanceof Date) || input.endDate <= input.startDate) {
+			throw new BadRequestException(Messages.INVALID_DATA);
+		}
+
+		const now = new Date();
+		const ranges = await this.bookingModel
+			.find(
+				{
+					bookingCategory: BookingCategory.PROPERTY,
+					bookingRefId: new Types.ObjectId(input.propertyId),
+					checkIn: { $lt: input.endDate },
+					checkOut: { $gt: input.startDate },
+					$or: [
+						{ bookingStatus: BookingStatus.CONFIRMED },
+						{ bookingStatus: BookingStatus.PENDING, expiresAt: null },
+						{ bookingStatus: BookingStatus.PENDING, expiresAt: { $gt: now } },
+					],
+				},
+				{ checkIn: 1, checkOut: 1 },
+			)
+			.sort({ checkIn: 1 })
+			.lean()
+			.exec();
+
+		const availabilityRanges = ranges as unknown as Array<{ checkIn: Date; checkOut: Date }>;
+		return availabilityRanges.map((range) => ({
+			checkIn: range.checkIn,
+			checkOut: range.checkOut,
+		}));
 	}
 
 	public async getMyBookings(memberId: Types.ObjectId, input: BookingsInquiry): Promise<Bookings> {

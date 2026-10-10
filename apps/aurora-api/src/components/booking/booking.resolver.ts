@@ -1,8 +1,8 @@
 import { Args, Mutation, Query, Resolver } from '@nestjs/graphql';
 import { UseGuards } from '@nestjs/common';
 import { Types } from 'mongoose';
-import { Booking, Bookings } from '../../libs/dto/booking/booking';
-import { BookingsInquiry } from '../../libs/dto/booking/booking.input';
+import { Booking, Bookings, PropertyAvailabilityRange } from '../../libs/dto/booking/booking';
+import { BookingsInquiry, PropertyAvailabilityInquiry } from '../../libs/dto/booking/booking.input';
 import { shapeIntoMongoObjectId } from '../../libs/config';
 import { BookingCategory } from '../../libs/enums/booking.enum';
 import { MemberType } from '../../libs/enums/member.enum';
@@ -19,6 +19,13 @@ export class BookingResolver {
 		private readonly bookingService: BookingService,
 		private readonly paymentService: PaymentService,
 	) {}
+
+	@Query(() => [PropertyAvailabilityRange])
+	public async getPropertyAvailability(
+		@Args('input') input: PropertyAvailabilityInquiry,
+	): Promise<PropertyAvailabilityRange[]> {
+		return this.bookingService.getPropertyAvailability(input);
+	}
 
 	@UseGuards(AuthGuard)
 	@Mutation(() => Booking)

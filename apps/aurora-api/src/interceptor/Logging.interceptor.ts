@@ -13,7 +13,10 @@ export class LoggingInterceptor implements NestInterceptor {
 		const requestType = context.getType<GqlContextType>();
 
 		if (requestType === 'http') {
-			// Develop if needed!
+			// REST endpoints (including Stripe webhooks) must continue through the
+			// Nest handler chain. Returning nothing here turns a valid controller
+			// response into an HTTP 500 before the controller can respond.
+			return next.handle();
 		} else if (requestType === 'graphql') {
 			// (1)print request
 			const gqlContext = GqlExecutionContext.create(context);
@@ -29,6 +32,8 @@ export class LoggingInterceptor implements NestInterceptor {
 				}),
 			);
 		}
+
+		return next.handle();
 	}
 	private stringify(context: ExecutionContext): string {
 		return JSON.stringify(context).slice(0, 75);

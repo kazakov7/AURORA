@@ -1,5 +1,5 @@
 import { Field, InputType, Int } from '@nestjs/graphql';
-import { IsArray, IsEnum, IsInt, IsOptional, Max, Min } from 'class-validator';
+import { IsArray, IsDate, IsEnum, IsInt, IsMongoId, IsOptional, Max, Min } from 'class-validator';
 import { BookingStatus } from '../../enums/booking.enum';
 
 @InputType()
@@ -27,4 +27,19 @@ export class BookingsInquiry {
 	@Field(() => BookingSearch, { nullable: true })
 	@IsOptional()
 	search?: BookingSearch;
+}
+
+@InputType()
+export class PropertyAvailabilityInquiry {
+	@Field(() => String)
+	@IsMongoId()
+	propertyId: string;
+
+	@Field(() => Date)
+	@IsDate()
+	startDate: Date;
+
+	@Field(() => Date)
+	@IsDate()
+	endDate: Date;
 }
