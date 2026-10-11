@@ -47,7 +47,18 @@ describe('Auth, Member and Agent (e2e)', () => {
 			{ input: { memberNick: 'authuser', memberPassword: 'pass1234' } },
 		);
 		expect(login.body.errors).toBeUndefined();
-		const token = login.body.data.login.accessToken;
+
+		const emailLogin = await graphQL(
+			app,
+			`mutation Login($input: LoginInput!) {
+				login(input: $input) { _id memberNick accessToken }
+			}`,
+			{ input: { memberNick: '  AUTH@AURA.TEST  ', memberPassword: 'pass1234' } },
+		);
+		expect(emailLogin.body.errors).toBeUndefined();
+		expect(emailLogin.body.data.login._id).toBe(login.body.data.login._id);
+		expect(emailLogin.body.data.login.memberNick).toBe('authuser');
+		const token = emailLogin.body.data.login.accessToken;
 
 		const unauthorized = await graphQL(app, `mutation { updateMember(input: { memberFullName: "Blocked" }) { _id } }`);
 		expect(unauthorized.body.errors?.[0].message).toContain('Bearer token');
@@ -75,6 +86,14 @@ describe('Auth, Member and Agent (e2e)', () => {
 			input: { memberNick: 'x', memberPassword: '1' },
 		});
 		expect(invalidDto.body.errors).toBeDefined();
+
+		const invalidLogin = await graphQL(app, `mutation Login($input: LoginInput!) { login(input: $input) { _id } }`, {
+			input: { memberNick: 'x'.repeat(255), memberPassword: 'pass1234' },
+		});
+		expect(invalidLogin.body.errors?.[0]).toMatchObject({
+			extensions: { code: 'BAD_REQUEST' },
+			message: 'memberNick must be shorter than or equal to 254 characters',
+		});
 
 		const invalidId = await graphQL(app, `query { getMember(input: "not-an-object-id") { _id } }`);
 		expect(invalidId.body.errors?.[0].message).toBe('Invalid ID!');

@@ -130,6 +130,7 @@ describe('Phase 1 authentication and CORS security (e2e)', () => {
 
 	it('returns the same Unauthorized login response for unknown, wrong-password, blocked and deleted accounts', async () => {
 		const memberService = app.get(MemberService);
+		await seedMember(app, 'activelogin');
 		const blocked = await seedMember(app, 'blockedlogin');
 		const deleted = await seedMember(app, 'deletedlogin');
 		await model(app, 'Member').updateOne({ _id: blocked._id }, { memberStatus: MemberStatus.BLOCKED });
@@ -140,6 +141,7 @@ describe('Phase 1 authentication and CORS security (e2e)', () => {
 
 		for (const credentials of [
 			{ memberNick: 'missinglogin', memberPassword: 'pass1234' },
+			{ memberNick: 'activelogin', memberPassword: 'wrongpass' },
 			{ memberNick: 'blockedlogin', memberPassword: 'pass1234' },
 			{ memberNick: 'deletedlogin', memberPassword: 'pass1234' },
 			{ memberNick: 'blockedlogin', memberPassword: 'wrongpass' },
@@ -149,6 +151,25 @@ describe('Phase 1 authentication and CORS security (e2e)', () => {
 				message: Messages.NOT_AUTHENTICATED,
 			});
 		}
+	});
+
+	it('rejects an identifier that matches one member nickname and another member email', async () => {
+		const memberService = app.get(MemberService);
+		await memberService.signup({
+			memberNick: 'a@b.co',
+			memberPassword: 'pass1234',
+			memberEmail: 'nickname-owner@example.com',
+		});
+		await memberService.signup({
+			memberNick: 'emailowner',
+			memberPassword: 'pass1234',
+			memberEmail: 'a@b.co',
+		});
+
+		await expect(memberService.login({ memberNick: 'a@b.co', memberPassword: 'pass1234' })).rejects.toMatchObject({
+			status: 401,
+			message: Messages.NOT_AUTHENTICATED,
+		});
 	});
 
 	it('returns CORS headers only for allowed development origins', async () => {

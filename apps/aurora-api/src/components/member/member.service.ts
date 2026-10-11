@@ -73,8 +73,16 @@ export class MemberService {
 		}
 	}
 	public async login(input: LoginInput): Promise<Member> {
-		const { memberNick, memberPassword } = input;
-		const response = await this.memberModel.findOne({ memberNick: memberNick }).select('+memberPassword').exec();
+		const { memberPassword } = input;
+		const memberIdentifier = input.memberNick.trim();
+		const responses = await this.memberModel
+			.find({
+				$or: [{ memberNick: memberIdentifier }, { memberEmail: memberIdentifier.toLowerCase() }],
+			})
+			.limit(2)
+			.select('+memberPassword')
+			.exec();
+		const response = responses.length === 1 ? responses[0] : null;
 		const isMatch = await this.authService.comparePasswords(
 			memberPassword,
 			response?.memberPassword ?? INVALID_LOGIN_PASSWORD_HASH,

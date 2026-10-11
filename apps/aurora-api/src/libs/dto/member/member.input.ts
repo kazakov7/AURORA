@@ -35,7 +35,7 @@ export class MemberInput {
 @InputType()
 export class LoginInput {
 	@IsNotEmpty()
-	@Length(3, 12)
+	@Length(3, 254)
 	@Field(() => String)
 	memberNick!: string;
 
