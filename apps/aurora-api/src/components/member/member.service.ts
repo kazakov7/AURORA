@@ -54,11 +54,13 @@ export class MemberService {
 	public async signup(input: MemberInput): Promise<Member> {
 		const memberEmail = input.memberEmail?.trim().toLowerCase();
 		const memberPhone = input.memberPhone?.trim();
+		const memberFullName = input.memberFullName?.trim();
 		const signupInput = {
 			memberNick: input.memberNick.trim(),
 			memberPassword: await this.authService.hashPassword(input.memberPassword!),
 			...(memberEmail ? { memberEmail } : {}),
 			...(memberPhone ? { memberPhone } : {}),
+			...(memberFullName ? { memberFullName } : {}),
 		};
 		try {
 			const result = await this.memberModel.create(signupInput);

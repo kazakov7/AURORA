@@ -30,11 +30,12 @@ describe('Auth, Member and Agent (e2e)', () => {
 		const signup = await graphQL(
 			app,
 			`mutation Signup($input: MemberInput!) {
-				signup(input: $input) { _id memberNick memberType accessToken }
+				signup(input: $input) { _id memberNick memberFullName memberType accessToken }
 			}`,
-			{ input: { memberNick: 'authuser', memberPassword: 'pass1234', memberEmail: 'auth@aura.test' } },
+			{ input: { memberNick: 'authuser', memberFullName: 'Aura User', memberPassword: 'pass1234', memberEmail: 'auth@aura.test' } },
 		);
 		expect(signup.body.errors).toBeUndefined();
+		expect(signup.body.data.signup.memberFullName).toBe('Aura User');
 		expect(signup.body.data.signup.memberType).toBe('USER');
 		expect(signup.body.data.signup.accessToken).toBeTruthy();
 
