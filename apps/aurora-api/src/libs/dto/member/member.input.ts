@@ -26,6 +26,11 @@ export class MemberInput {
 	@IsOptional()
 	@IsString()
 	memberPhone?: string;
+
+	@Field({ nullable: true })
+	@ValidateIf((_member, value) => typeof value === 'string' && value.trim().length > 0)
+	@IsString()
+	memberFullName?: string;
 }
 @InputType()
 export class LoginInput {
