@@ -1,84 +1,109 @@
+
 import { BadRequestException, UseGuards } from '@nestjs/common';
 import { Args, Mutation, Resolver } from '@nestjs/graphql';
-import { createWriteStream } from 'fs';
-import { validMimeTypes, getSerialForImage, isValidUploadTarget } from '../../libs/config';
-import { AuthGuard } from '../auth/guards/auth.guard';
+import { v2 as cloudinary } from 'cloudinary';
 import { GraphQLUpload, FileUpload } from 'graphql-upload';
-import { Messages } from '../../libs/enums/common.enum';
 
+import {
+    validMimeTypes,
+    isValidUploadTarget,
+} from '../../libs/config';
+import { Messages } from '../../libs/enums/common.enum';
+import { AuthGuard } from '../auth/guards/auth.guard';
 
 @Resolver()
 export class ImageUploaderResolver {
-    @UseGuards(AuthGuard)
-    @Mutation((returns) => String)
-    public async imageUploader(
-        @Args({ name: 'file', type: () => GraphQLUpload })
-        { createReadStream, filename, mimetype }: FileUpload,
-        @Args('target') target: String,
+    private async uploadToCloudinary(
+        file: FileUpload,
+        target: string,
     ): Promise<string> {
-        console.log('Mutation: imageUploader');
+        const { filename, mimetype, createReadStream } = file;
 
-        if (!filename) throw new Error(Messages.UPLOAD_FAILED);
-        if (!isValidUploadTarget(target)) throw new BadRequestException(Messages.BAD_REQUEST);
-        const validMime = validMimeTypes.includes(mimetype);
-        if (!validMime) throw new Error(Messages.PROVIDE_ALLOWED_FORMAT);
+        if (!filename) {
+            throw new BadRequestException(Messages.UPLOAD_FAILED);
+        }
 
-        const imageName = getSerialForImage(mimetype);
-        const url = `uploads/${target}/${imageName}`;
-        const stream = createReadStream();
+        if (!validMimeTypes.includes(mimetype)) {
+            throw new BadRequestException(Messages.PROVIDE_ALLOWED_FORMAT);
+        }
 
-        const result = await new Promise((resolve, reject) => {
-            stream.on('error', reject);
-            stream
-                .pipe(createWriteStream(url))
-                .on('finish', () => resolve(true))
-                .on('error', reject);
+        const cloudName = process.env.CLOUDINARY_CLOUD_NAME;
+        const apiKey = process.env.CLOUDINARY_API_KEY;
+        const apiSecret = process.env.CLOUDINARY_API_SECRET;
+
+        if (!cloudName || !apiKey || !apiSecret) {
+            throw new Error('Cloudinary configuration is missing');
+        }
+
+        cloudinary.config({
+            cloud_name: cloudName,
+            api_key: apiKey,
+            api_secret: apiSecret,
+            secure: true,
         });
-        if (!result) throw new Error(Messages.UPLOAD_FAILED);
 
-        return url;
+        return new Promise<string>((resolve, reject) => {
+            const uploadStream = cloudinary.uploader.upload_stream(
+                {
+                    folder: `aurora/${target}`,
+                    resource_type: 'image',
+                    unique_filename: true,
+                    overwrite: false,
+                },
+                (error, result) => {
+                    if (error) {
+                        reject(error);
+                        return;
+                    }
+
+                    if (!result?.secure_url) {
+                        reject(new Error(Messages.UPLOAD_FAILED));
+                        return;
+                    }
+
+                    resolve(result.secure_url);
+                },
+            );
+
+            const sourceStream = createReadStream();
+
+            sourceStream.on('error', reject);
+            uploadStream.on('error', reject);
+
+            sourceStream.pipe(uploadStream);
+        });
     }
 
     @UseGuards(AuthGuard)
-    @Mutation((returns) => [String])
+    @Mutation(() => String)
+    public async imageUploader(
+        @Args({ name: 'file', type: () => GraphQLUpload })
+        file: FileUpload,
+        @Args('target') target: string,
+    ): Promise<string> {
+        if (!isValidUploadTarget(target)) {
+            throw new BadRequestException(Messages.BAD_REQUEST);
+        }
+
+        return this.uploadToCloudinary(file, target);
+    }
+
+    @UseGuards(AuthGuard)
+    @Mutation(() => [String])
     public async imagesUploader(
         @Args('files', { type: () => [GraphQLUpload] })
         files: Promise<FileUpload>[],
-        @Args('target') target: String,
+        @Args('target') target: string,
     ): Promise<string[]> {
-        console.log('Mutation: imagesUploader');
-        if (!isValidUploadTarget(target)) throw new BadRequestException(Messages.BAD_REQUEST);
+        if (!isValidUploadTarget(target)) {
+            throw new BadRequestException(Messages.BAD_REQUEST);
+        }
 
-        const uploadedImages = [];
-        const promisedList = files.map(
-            async (img: Promise<FileUpload>, index: number): Promise<Promise<void>> => {
-                try {
-                    const { filename, mimetype, encoding, createReadStream } = await img;
-
-                    const validMime = validMimeTypes.includes(mimetype);
-                    if (!validMime) throw new Error(Messages.PROVIDE_ALLOWED_FORMAT);
-
-                    const imageName = getSerialForImage(mimetype);
-                    const url = `uploads/${target}/${imageName}`;
-                    const stream = createReadStream();
-
-                    const result = await new Promise((resolve, reject) => {
-                        stream
-                            .pipe(createWriteStream(url))
-                            .on('finish', () => resolve(true))
-                            .on('error', () => reject(false));
-                    });
-                    if (!result) throw new Error(Messages.UPLOAD_FAILED);
-
-                    // @ts-ignore
-                    uploadedImages[index] = url;
-                } catch (err) {
-                    console.log('Error, file missing!');
-                }
-            },
+        return Promise.all(
+            files.map(async (filePromise) => {
+                const file = await filePromise;
+                return this.uploadToCloudinary(file, target);
+            }),
         );
-
-        await Promise.all(promisedList);
-        return uploadedImages;
     }
 }
