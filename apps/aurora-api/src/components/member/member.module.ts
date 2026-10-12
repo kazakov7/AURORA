@@ -5,7 +5,6 @@ import { MongooseModule } from '@nestjs/mongoose';
 import MemberSchema from '../../schemas/Member.model';
 import { AuthModule } from '../auth/auth.module';
 import { ViewModule } from '../view/view.module';
-import { LikeModule } from '../like/like.module';
 import FollowSchema from '../../schemas/Follow.model';
 import { ChatModule } from '../chat/chat.module';
 
@@ -15,7 +14,6 @@ import { ChatModule } from '../chat/chat.module';
 		MongooseModule.forFeature([{ name: 'Follow', schema: FollowSchema }]),
 		AuthModule,
 		ViewModule,
-		LikeModule,
 		ChatModule,
 	],
 	providers: [MemberResolver, MemberService],

@@ -23,7 +23,6 @@ import { MemberAuthType, MemberStatus, MemberType } from '../../libs/enums/membe
 import { StatisticModifier, T } from '../../libs/types/common';
 import { ViewGroup } from '../../libs/enums/view.enum';
 import { ViewService } from '../view/view.service';
-import { LikeService } from '../like/like.service';
 import { AdminUpdateMemberInput } from '../../libs/dto/member/admin.update.member';
 import { Follower, Following, MeFollowed } from '../../libs/dto/follow/follow';
 import { randomBytes } from 'crypto';
@@ -41,7 +40,6 @@ export class MemberService {
 		@InjectModel('Follow') private readonly followModel: Model<Follower | Following>,
 		private authService: AuthService,
 		private viewService: ViewService,
-		private likeService: LikeService,
 		private readonly chatGateway: ChatGateway,
 	) {}
 
