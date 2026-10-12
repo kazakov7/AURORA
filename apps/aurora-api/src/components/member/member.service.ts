@@ -40,6 +40,7 @@ export class MemberService {
 		private readonly memberModel: Model<Member>,
 		@InjectModel('Follow') private readonly followModel: Model<Follower | Following>,
 		@InjectModel('Property') private readonly propertyModel: Model<any>,
+		@InjectModel('Tour') private readonly tourModel: Model<any>,
 		@InjectModel('Destination') private readonly destinationModel: Model<any>,
 		private authService: AuthService,
 		private viewService: ViewService,
@@ -499,33 +500,51 @@ export class MemberService {
 		if (!result) throw new NotFoundException(Messages.MEMBER_NOT_FOUND);
 		if (result.memberStatus !== MemberStatus.ACTIVE || result.deletedAt) {
 			this.chatGateway.disconnectMember(result._id as unknown as Types.ObjectId);
-			await this.deactivateMemberProperties(result._id as unknown as Types.ObjectId);
+			await this.deactivateMemberListings(result._id as unknown as Types.ObjectId);
 		}
 		return result;
 	}
 
-	/** A blocked or deleted agent's hotels leave the catalog; an admin turns them back on once the account is restored **/
-	private async deactivateMemberProperties(memberId: Types.ObjectId): Promise<void> {
-		const activeProperties: T = {
+	/** A blocked or deleted agent's hotels and tours leave the catalog; an admin turns them back on once the account is restored **/
+	private async deactivateMemberListings(memberId: Types.ObjectId): Promise<void> {
+		await this.deactivateListings(memberId, this.propertyModel, {
+			statusKey: 'propertyStatus',
+			memberKey: 'memberProperties',
+			destinationKey: 'destinationProperties',
+		});
+		await this.deactivateListings(memberId, this.tourModel, {
+			statusKey: 'tourStatus',
+			memberKey: 'memberTours',
+			destinationKey: 'destinationTours',
+		});
+	}
+
+	private async deactivateListings(
+		memberId: Types.ObjectId,
+		listingModel: Model<any>,
+		keys: { statusKey: string; memberKey: string; destinationKey: string },
+	): Promise<void> {
+		// PropertyStatus and TourStatus share the ACTIVE and INACTIVE values
+		const activeListings: T = {
 			memberId,
-			propertyStatus: PropertyStatus.ACTIVE,
+			[keys.statusKey]: PropertyStatus.ACTIVE,
 			deletedAt: null,
 		};
-		const destinationIds = await this.propertyModel.distinct('destinationId', activeProperties);
+		const destinationIds = await listingModel.distinct('destinationId', activeListings);
 		if (!destinationIds.length) return;
 
-		await this.propertyModel
-			.updateMany(activeProperties, { propertyStatus: PropertyStatus.INACTIVE })
+		await listingModel
+			.updateMany(activeListings, { [keys.statusKey]: PropertyStatus.INACTIVE })
 			.exec();
 
-		// Both counters count ACTIVE hotels only: the owner has none left, each destination is recounted
-		await this.memberModel.updateOne({ _id: memberId }, { memberProperties: 0 }).exec();
+		// Both counters count ACTIVE listings only: the owner has none left, each destination is recounted
+		await this.memberModel.updateOne({ _id: memberId }, { [keys.memberKey]: 0 }).exec();
 		for (const destinationId of destinationIds) {
-			const destinationProperties = await this.propertyModel
-				.countDocuments({ destinationId, propertyStatus: PropertyStatus.ACTIVE, deletedAt: null })
+			const activeCount = await listingModel
+				.countDocuments({ destinationId, [keys.statusKey]: PropertyStatus.ACTIVE, deletedAt: null })
 				.exec();
 			await this.destinationModel
-				.updateOne({ _id: destinationId }, { destinationProperties })
+				.updateOne({ _id: destinationId }, { [keys.destinationKey]: activeCount })
 				.exec();
 		}
 	}

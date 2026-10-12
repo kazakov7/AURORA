@@ -1,4 +1,9 @@
-import { BadRequestException, Injectable, InternalServerErrorException } from '@nestjs/common';
+import {
+	BadRequestException,
+	Injectable,
+	InternalServerErrorException,
+	NotFoundException,
+} from '@nestjs/common';
 import { InjectModel } from '@nestjs/mongoose';
 import { Model, Types } from 'mongoose';
 import { Tours, Tour } from '../../libs/dto/tour/tour';
@@ -26,6 +31,7 @@ import { MemberService } from '../member/member.service';
 import { ViewService } from '../view/view.service';
 import { AgentService } from '../agent/agent.service';
 import { AgentType } from '../../libs/enums/agent.enum';
+import { MemberStatus, MemberType } from '../../libs/enums/member.enum';
 import { DestinationService } from '../destination/destination.service';
 import { NotificationService } from '../notification/notification.service';
 import { NotificationGroup, NotificationType } from '../../libs/enums/notification.enum';
@@ -51,16 +57,6 @@ export class TourService {
 
 		try {
 			const result = await this.tourModel.create({ ...input, destinationId });
-			await this.memberService.memberStatusEditor({
-				_id: result.memberId as Types.ObjectId,
-				targetKey: 'memberTours',
-				modifier: 1,
-			});
-			await this.destinationService.destinationStatsEditor({
-				_id: destinationId,
-				targetKey: 'destinationTours',
-				modifier: 1,
-			});
 			return result as unknown as Tour;
 		} catch (error) {
 			console.error('Tour creation failed:', error);
@@ -68,15 +64,23 @@ export class TourService {
 		}
 	}
 
-	public async getTour(memberId: Types.ObjectId, tourId: Types.ObjectId): Promise<Tour> {
+	public async getTour(
+		memberId: Types.ObjectId,
+		tourId: Types.ObjectId,
+		memberType?: MemberType,
+	): Promise<Tour> {
 		const targetTour = await this.tourModel
-			.findOne({ _id: tourId, tourStatus: TourStatus.ACTIVE, deletedAt: null })
+			.findOne({ _id: tourId, deletedAt: null })
 			.lean<Tour>()
 			.exec();
 
-		if (!targetTour) throw new InternalServerErrorException(Messages.TOUR_NOT_FOUND);
+		if (!targetTour) throw new NotFoundException(Messages.TOUR_NOT_FOUND);
 
-		if (memberId) {
+		const isActive = targetTour.tourStatus === TourStatus.ACTIVE;
+		const canPreview = memberType === MemberType.ADMIN || targetTour.memberId.equals(memberId);
+		if (!isActive && !canPreview) throw new NotFoundException(Messages.TOUR_NOT_FOUND);
+
+		if (memberId && isActive) {
 			const newView = await this.viewService.recordView({
 				memberId,
 				viewRefId: tourId,
@@ -86,7 +90,9 @@ export class TourService {
 				await this.tourStatsEditor({ _id: tourId, targetKey: 'tourViews', modifier: 1 });
 				targetTour.tourViews += 1;
 			}
+		}
 
+		if (memberId) {
 			targetTour.meLiked = await this.likeService.checkLikeExistence({
 				memberId,
 				likeRefId: tourId,
@@ -94,10 +100,13 @@ export class TourService {
 			});
 		}
 
-		targetTour.memberData = await this.memberService.getMember(
-			null,
-			targetTour.memberId as unknown as Types.ObjectId,
-		);
+		// A missing owner account must not break the page: the tour is returned without the host
+		targetTour.memberData = await this.memberService
+			.getMember(null, targetTour.memberId as unknown as Types.ObjectId)
+			.catch((err) => {
+				if (err instanceof NotFoundException) return null;
+				throw err;
+			});
 		return targetTour;
 	}
 
@@ -123,38 +132,68 @@ export class TourService {
 
 	public async updateTour(memberId: Types.ObjectId, input: TourUpdateInput): Promise<Tour> {
 		await this.agentService.assertApprovedAgent(memberId, AgentType.TOUR);
-		const existingTour = await this.tourModel
-			.findOne({
-				_id: input._id,
-				memberId,
-				tourStatus: { $ne: TourStatus.INACTIVE },
-				deletedAt: null,
-			})
-			.lean<Tour>()
-			.exec();
-
-		if (!existingTour) throw new InternalServerErrorException(Messages.UPDATE_FAILED);
-
-		this.validateTourDates(
-			input.tourStartDate ?? existingTour.tourStartDate,
-			input.tourEndDate ?? existingTour.tourEndDate,
-		);
-		if (input.tourCapacity !== undefined && input.tourCapacity < existingTour.tourReservedSeats) {
-			throw new BadRequestException(Messages.TOUR_FULL);
-		}
-
 		const search: T = {
 			_id: input._id,
 			memberId,
 			tourStatus: { $ne: TourStatus.INACTIVE },
 			deletedAt: null,
 		};
+		const existingTour = await this.tourModel.findOne(search).lean<Tour>().exec();
+
+		if (!existingTour) throw new InternalServerErrorException(Messages.UPDATE_FAILED);
+
+		const isRescheduled =
+			this.isDateChanged(input.tourStartDate, existingTour.tourStartDate) ||
+			this.isDateChanged(input.tourEndDate, existingTour.tourEndDate);
+		const isMoved =
+			Boolean(input.destinationId) && !existingTour.destinationId.equals(input.destinationId);
+
+		// Guests paid for the dates and the country they booked, so a tour with booked seats keeps both
+		if ((isRescheduled || isMoved) && existingTour.tourReservedSeats > 0) {
+			throw new BadRequestException(Messages.TOUR_HAS_BOOKINGS);
+		}
+		if (isRescheduled) {
+			this.validateTourDates(
+				input.tourStartDate ?? existingTour.tourStartDate,
+				input.tourEndDate ?? existingTour.tourEndDate,
+				this.isDateChanged(input.tourStartDate, existingTour.tourStartDate),
+			);
+		}
+		if (isMoved)
+			await this.destinationService.getActiveDestination(
+				shapeIntoMongoObjectId(input.destinationId),
+			);
+		if (input.tourCapacity !== undefined && input.tourCapacity < existingTour.tourReservedSeats) {
+			throw new BadRequestException(Messages.TOUR_FULL);
+		}
+
+		// An edited REJECTED tour returns to the admin queue; every other status is kept as it is
+		const update: T = { ...input };
+		if (existingTour.tourStatus === TourStatus.REJECTED) update.tourStatus = TourStatus.PENDING;
+
+		// Matching the values that were just read keeps a booking made in between from being overridden
+		search.tourStatus = existingTour.tourStatus;
+		search.destinationId = existingTour.destinationId;
+		if (isRescheduled || isMoved) search.tourReservedSeats = 0;
 		if (input.tourCapacity !== undefined) {
 			search.$expr = { $lte: ['$tourReservedSeats', input.tourCapacity] };
 		}
 
-		const result = await this.tourModel.findOneAndUpdate(search, input, { new: true }).exec();
+		const result = await this.tourModel.findOneAndUpdate(search, update, { new: true }).exec();
 		if (!result) throw new InternalServerErrorException(Messages.UPDATE_FAILED);
+
+		if (isMoved && result.tourStatus === TourStatus.ACTIVE) {
+			await this.destinationService.destinationStatsEditor({
+				_id: existingTour.destinationId,
+				targetKey: 'destinationTours',
+				modifier: -1,
+			});
+			await this.destinationService.destinationStatsEditor({
+				_id: result.destinationId,
+				targetKey: 'destinationTours',
+				modifier: 1,
+			});
+		}
 		return result as unknown as Tour;
 	}
 
@@ -162,11 +201,10 @@ export class TourService {
 		const match: T = { tourStatus: TourStatus.ACTIVE, deletedAt: null };
 		this.shapeMatchQuery(match, input);
 
-		const sort: T = { [input.sort ?? 'tourStartDate']: input.direction ?? Direction.ASC };
 		const result = await this.tourModel
 			.aggregate([
 				{ $match: match },
-				{ $sort: sort },
+				{ $sort: this.shapeSort(input.sort ?? 'tourStartDate', input.direction ?? Direction.ASC) },
 				{
 					$facet: {
 						list: [
@@ -174,7 +212,7 @@ export class TourService {
 							{ $limit: input.limit },
 							lookUpAuthMemberLiked(memberId),
 							lookupMember,
-							{ $unwind: '$memberData' },
+							{ $unwind: { path: '$memberData', preserveNullAndEmptyArrays: true } },
 						],
 						metaCounter: [{ $count: 'total' }],
 					},
@@ -220,8 +258,9 @@ export class TourService {
 			};
 		}
 
-		if (text) {
-			const regex = new RegExp(escapeRegExp(text), 'i');
+		const normalizedText = text?.trim();
+		if (normalizedText) {
+			const regex = new RegExp(escapeRegExp(normalizedText), 'i');
 			match.$or = [
 				{ tourName: regex },
 				{ tourDesc: regex },
@@ -251,7 +290,7 @@ export class TourService {
 			tourStatus: TourStatus.ACTIVE,
 			deletedAt: null,
 		});
-		if (!target) throw new InternalServerErrorException(Messages.TOUR_NOT_FOUND);
+		if (!target) throw new NotFoundException(Messages.TOUR_NOT_FOUND);
 
 		const modifier = await this.likeService.toggleLike({
 			memberId,
@@ -275,11 +314,9 @@ export class TourService {
 	}
 
 	public async getAgentTours(memberId: Types.ObjectId, input: AgentToursInquiry): Promise<Tours> {
-		const match: T = {
-			memberId,
-			tourStatus: input.search.tourStatus ?? { $ne: TourStatus.INACTIVE },
-			deletedAt: null,
-		};
+		// The owner sees every status, so a tour an admin turned off does not vanish from the list
+		const match: T = { memberId, deletedAt: null };
+		if (input.search.tourStatus) match.tourStatus = input.search.tourStatus;
 		return this.getTourList(match, input);
 	}
 
@@ -296,15 +333,30 @@ export class TourService {
 		input: UpdateTourStatusInput,
 		adminId?: Types.ObjectId,
 	): Promise<Tour> {
+		const existingTour = await this.tourModel
+			.findOne({ _id: input._id, deletedAt: null })
+			.lean<Tour>()
+			.exec();
+
+		if (!existingTour) throw new NotFoundException(Messages.TOUR_NOT_FOUND);
+		if (existingTour.tourStatus === input.tourStatus) return existingTour;
+		if (input.tourStatus === TourStatus.ACTIVE) await this.assertCanActivate(existingTour);
+
+		// Matching the status that was just read applies each change, and its counters, exactly once
 		const result = await this.tourModel
 			.findOneAndUpdate(
-				{ _id: input._id, deletedAt: null },
+				{ _id: input._id, tourStatus: existingTour.tourStatus, deletedAt: null },
 				{ tourStatus: input.tourStatus },
 				{ new: true },
 			)
 			.exec();
 
 		if (!result) throw new InternalServerErrorException(Messages.UPDATE_FAILED);
+
+		const wasActive = existingTour.tourStatus === TourStatus.ACTIVE;
+		const isActive = result.tourStatus === TourStatus.ACTIVE;
+		if (wasActive !== isActive) await this.activeCountersEditor(result, isActive ? 1 : -1);
+
 		await this.notificationService.createNotification({
 			receiverId: result.memberId as Types.ObjectId,
 			authorId: adminId,
@@ -313,45 +365,69 @@ export class TourService {
 			notificationRefId: result._id as Types.ObjectId,
 			notificationTitle: 'Tour listing status updated',
 			notificationDesc: `Your tour listing status is now ${result.tourStatus}.`,
-			notificationEventKey: `tour-status:${result._id}:${result.tourStatus}`,
+			// The update time makes each change its own event, so a status set again is announced again
+			notificationEventKey: `tour-status:${result._id}:${result.updatedAt.getTime()}`,
 		});
 		return result as unknown as Tour;
 	}
 
 	public async removeTourByAdmin(tourId: Types.ObjectId): Promise<Tour> {
+		const search: T = { _id: tourId, tourStatus: TourStatus.INACTIVE, deletedAt: null };
+		const targetTour = await this.tourModel.findOne(search).lean<Tour>().exec();
+		if (!targetTour) throw new InternalServerErrorException(Messages.REMOVE_FAILED);
+
+		// Guests whose tour is still ahead keep their seats, so such a tour cannot be removed yet.
+		// An INACTIVE tour takes no new bookings, so the seats read here cannot grow before the update
+		if (targetTour.tourReservedSeats > 0 && targetTour.tourEndDate > new Date()) {
+			throw new BadRequestException(Messages.TOUR_HAS_BOOKINGS);
+		}
+
 		const result = await this.tourModel
-			.findOneAndUpdate(
-				{ _id: tourId, tourStatus: TourStatus.INACTIVE, deletedAt: null },
-				{ deletedAt: new Date() },
-				{ new: true },
-			)
+			.findOneAndUpdate(search, { deletedAt: new Date() }, { new: true })
 			.exec();
 
 		if (!result) throw new InternalServerErrorException(Messages.REMOVE_FAILED);
-		await this.memberService.memberStatusEditor({
-			_id: result.memberId as Types.ObjectId,
-			targetKey: 'memberTours',
-			modifier: -1,
-		});
 		return result as unknown as Tour;
+	}
+
+	/** A tour goes live only in an active destination and under an owner whose account is active **/
+	private async assertCanActivate(tour: Tour): Promise<void> {
+		await this.destinationService.getActiveDestination(tour.destinationId);
+		const owner = await this.memberService.getMember(null, tour.memberId, false);
+		if (owner.memberStatus !== MemberStatus.ACTIVE) {
+			throw new BadRequestException(Messages.MEMBER_BLOCKED);
+		}
+	}
+
+	/** memberTours and destinationTours count ACTIVE tours, so they move when one enters or leaves ACTIVE **/
+	private async activeCountersEditor(tour: Tour, modifier: number): Promise<void> {
+		await this.memberService.memberStatusEditor({
+			_id: tour.memberId,
+			targetKey: 'memberTours',
+			modifier,
+		});
+		await this.destinationService.destinationStatsEditor({
+			_id: tour.destinationId,
+			targetKey: 'destinationTours',
+			modifier,
+		});
 	}
 
 	private async getTourList(
 		match: T,
 		input: Pick<ToursInquiry, 'page' | 'limit' | 'sort' | 'direction'>,
 	): Promise<Tours> {
-		const sort: T = { [input.sort ?? 'createdAt']: input.direction ?? Direction.DESC };
 		const result = await this.tourModel
 			.aggregate([
 				{ $match: match },
-				{ $sort: sort },
+				{ $sort: this.shapeSort(input.sort ?? 'createdAt', input.direction ?? Direction.DESC) },
 				{
 					$facet: {
 						list: [
 							{ $skip: (input.page - 1) * input.limit },
 							{ $limit: input.limit },
 							lookupMember,
-							{ $unwind: '$memberData' },
+							{ $unwind: { path: '$memberData', preserveNullAndEmptyArrays: true } },
 						],
 						metaCounter: [{ $count: 'total' }],
 					},
@@ -362,13 +438,27 @@ export class TourService {
 		return result[0] as Tours;
 	}
 
-	private validateTourDates(tourStartDate: Date, tourEndDate: Date): void {
+	/** A tour ends after it starts, and a new start date cannot lie in the past: such a tour could never be booked **/
+	private validateTourDates(tourStartDate: Date, tourEndDate: Date, isNewStart = true): void {
+		const today = new Date();
+		today.setHours(0, 0, 0, 0);
 		if (
 			!(tourStartDate instanceof Date) ||
 			!(tourEndDate instanceof Date) ||
-			tourEndDate <= tourStartDate
+			tourEndDate <= tourStartDate ||
+			(isNewStart && tourStartDate < today)
 		) {
 			throw new BadRequestException(Messages.INVALID_DATA);
 		}
+	}
+
+	/** Forms send every field back, so a date only counts as changed when its value differs **/
+	private isDateChanged(input: Date | undefined, current: Date): boolean {
+		return input !== undefined && input.getTime() !== new Date(current).getTime();
+	}
+
+	/** The _id tie-breaker keeps pages stable when many tours share the same sort value **/
+	private shapeSort(sort: string, direction: Direction): T {
+		return { [sort]: direction, _id: direction };
 	}
 }

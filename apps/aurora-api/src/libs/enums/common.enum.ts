@@ -103,6 +103,7 @@ export enum Messages {
 	TOUR_NOT_AVAILABLE = 'Tour is not available!',
 	TOUR_NOT_OWNED = 'You are not the owner of this tour!',
 	TOUR_FULL = 'This tour is fully booked!',
+	TOUR_HAS_BOOKINGS = 'This tour has booked seats!',
 
 	// =========================
 	// TOUR SCHEDULE

@@ -1,5 +1,8 @@
 import { Field, Float, InputType, Int } from '@nestjs/graphql';
+import { Transform, Type } from 'class-transformer';
 import {
+	ArrayMaxSize,
+	ArrayMinSize,
 	IsArray,
 	IsDate,
 	IsEnum,
@@ -10,12 +13,15 @@ import {
 	IsNumber,
 	IsOptional,
 	IsString,
+	Matches,
 	Max,
 	MaxLength,
 	Min,
+	ValidateIf,
+	ValidateNested,
 } from 'class-validator';
 import { Types } from 'mongoose';
-import { availableTourSorts } from '../../config';
+import { availableTourSorts, imageSourceRegex, isProvided, trimString } from '../../config';
 import { Direction } from '../../enums/common.enum';
 import { TourStatus } from '../../enums/tour.enum';
 
@@ -30,27 +36,30 @@ export class TourInput {
 	destinationId: string;
 
 	@Field(() => String)
+	@Transform(trimString)
 	@IsString()
 	@IsNotEmpty()
 	@MaxLength(200)
 	tourName: string;
 
-	@Field({ nullable: true })
-	@IsOptional()
+	@Field(() => String)
+	@Transform(trimString)
 	@IsString()
+	@IsNotEmpty()
 	@MaxLength(5000)
-	tourDesc?: string;
+	tourDesc: string;
 
 	@Field(() => Float)
-	@IsNumber()
+	@IsNumber({ maxDecimalPlaces: 2 })
 	@Min(0.01)
 	tourPrice: number;
 
-	@Field(() => String)
+	// Optional, but never null: an omitted currency takes the USD default of the schema
+	@Field(() => String, { nullable: true })
+	@ValidateIf(isProvided)
 	@IsString()
-	@IsNotEmpty()
 	@IsIn(['USD'])
-	tourCurrency: string;
+	tourCurrency?: string;
 
 	@Field(() => Date)
 	@IsDate()
@@ -65,35 +74,46 @@ export class TourInput {
 	@Min(1)
 	tourCapacity: number;
 
-	@Field({ nullable: true })
-	@IsOptional()
+	@Field(() => String)
+	@Transform(trimString)
 	@IsString()
-	tourDepartureCountry?: string;
+	@IsNotEmpty()
+	@MaxLength(100)
+	tourDepartureCountry: string;
+
+	@Field(() => String)
+	@Transform(trimString)
+	@IsString()
+	@IsNotEmpty()
+	@MaxLength(100)
+	tourDepartureCity: string;
+
+	@Field(() => String)
+	@Transform(trimString)
+	@IsString()
+	@IsNotEmpty()
+	@MaxLength(200)
+	tourDeparturePlace: string;
 
 	@Field({ nullable: true })
 	@IsOptional()
 	@IsString()
-	tourDepartureCity?: string;
-
-	@Field({ nullable: true })
-	@IsOptional()
-	@IsString()
-	tourDeparturePlace?: string;
-
-	@Field({ nullable: true })
-	@IsOptional()
-	@IsString()
+	@MaxLength(100)
 	tourDestinationCity?: string;
 
-	@Field(() => [String], { nullable: true })
-	@IsOptional()
+	@Field(() => [String])
 	@IsArray()
+	@ArrayMinSize(3)
+	@ArrayMaxSize(10)
 	@IsString({ each: true })
-	tourImages?: string[];
+	@MaxLength(1000, { each: true })
+	@Matches(imageSourceRegex, { each: true })
+	tourImages: string[];
 
 	@Field({ nullable: true })
 	@IsOptional()
 	@IsString()
+	@MaxLength(3000)
 	tourAdditionalInfo?: string;
 }
 
@@ -141,10 +161,14 @@ export class TourSearch {
 
 	@Field(() => TourStartDateRange, { nullable: true })
 	@IsOptional()
+	@ValidateNested()
+	@Type(() => TourStartDateRange)
 	tourStartDateRange?: TourStartDateRange;
 
 	@Field(() => TourPriceRange, { nullable: true })
 	@IsOptional()
+	@ValidateNested()
+	@Type(() => TourPriceRange)
 	tourPriceRange?: TourPriceRange;
 
 	@Field(() => Int, { nullable: true })
@@ -156,6 +180,7 @@ export class TourSearch {
 	@Field(() => String, { nullable: true })
 	@IsOptional()
 	@IsString()
+	@MaxLength(100)
 	text?: string;
 }
 
@@ -183,6 +208,8 @@ export class ToursInquiry {
 
 	@Field(() => TourSearch)
 	@IsNotEmpty()
+	@ValidateNested()
+	@Type(() => TourSearch)
 	search: TourSearch;
 }
 
@@ -232,6 +259,8 @@ export class AgentToursInquiry {
 
 	@Field(() => AgentTourSearch)
 	@IsNotEmpty()
+	@ValidateNested()
+	@Type(() => AgentTourSearch)
 	search: AgentTourSearch;
 }
 
@@ -275,5 +304,7 @@ export class AllToursInquiry {
 
 	@Field(() => AdminTourSearch)
 	@IsNotEmpty()
+	@ValidateNested()
+	@Type(() => AdminTourSearch)
 	search: AdminTourSearch;
 }

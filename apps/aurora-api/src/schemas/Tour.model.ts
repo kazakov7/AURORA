@@ -31,7 +31,7 @@ const TourSchema = new Schema(
 		tourStatus: {
 			type: String,
 			enum: TourStatus,
-			default: TourStatus.ACTIVE,
+			default: TourStatus.PENDING,
 			index: true,
 		},
 

@@ -40,8 +40,9 @@ export class TourResolver {
 	public async getTour(
 		@Args('tourId') tourId: string,
 		@AuthMember('_id') memberId: Types.ObjectId,
+		@AuthMember('memberType') memberType: MemberType,
 	): Promise<Tour> {
-		return this.tourService.getTour(memberId, shapeIntoMongoObjectId(tourId));
+		return this.tourService.getTour(memberId, shapeIntoMongoObjectId(tourId), memberType);
 	}
 
 	@Roles(MemberType.AGENT)

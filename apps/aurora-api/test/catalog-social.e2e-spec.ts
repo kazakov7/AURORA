@@ -173,6 +173,11 @@ describe('Catalog and social domains (e2e)', () => {
 		const input = {
 			destinationId: destination._id.toString(),
 			tourName: 'Bangkok Tour',
+			tourDesc: 'Temples and night markets',
+			tourDepartureCountry: 'Korea',
+			tourDepartureCity: 'Seoul',
+			tourDeparturePlace: 'Incheon Airport',
+			tourImages: ['uploads/tour/1.jpg', 'uploads/tour/2.jpg', 'uploads/tour/3.jpg'],
 			tourPrice: 50000,
 			tourCurrency: 'USD',
 			tourStartDate: new Date(Date.now() + 86_400_000),

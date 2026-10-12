@@ -84,8 +84,9 @@ export class Tour {
 	@Field(() => String)
 	updatedAt: Date;
 
-	@Field(() => Member)
-	memberData!: Member;
+	// Filled by the list and detail queries only, and empty when the owner account is gone
+	@Field(() => Member, { nullable: true })
+	memberData?: Member | null;
 
 	@Field(() => [MeLiked], { nullable: true })
 	meLiked?: MeLiked[];
