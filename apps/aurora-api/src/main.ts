@@ -13,7 +13,7 @@ async function bootstrap() {
 	app.useGlobalPipes(new ValidationPipe());
 	app.useGlobalInterceptors(new LoggingInterceptor());
 	app.enableCors({
-		origin: process.env.CORS_ALLOWED_ORIGIN,
+		origin: [process.env.CORS_ALLOWED_ORIGIN as string, 'http://localhost:3000'],
 		credentials: true,
 	});
 	await app.listen(process.env.AURORA_PORT ?? 3000);
