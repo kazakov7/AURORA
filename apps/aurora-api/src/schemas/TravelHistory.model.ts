@@ -35,7 +35,10 @@ const TravelHistorySchema = new Schema(
 	},
 );
 
-TravelHistorySchema.index({ memberId: 1, bookingId: 1 }, { unique: true, name: 'travel_member_booking_uq' });
+TravelHistorySchema.index(
+	{ memberId: 1, bookingId: 1 },
+	{ unique: true, name: 'travel_member_booking_uq' },
+);
 TravelHistorySchema.index({ memberId: 1, visitedAt: 1 }, { name: 'travel_member_date_idx' });
 
 export default TravelHistorySchema;

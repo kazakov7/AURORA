@@ -1,4 +1,4 @@
-import { HttpException, Module } from '@nestjs/common';
+import { HttpException, HttpStatus, Module } from '@nestjs/common';
 import { AppController } from './app.controller';
 import { AppService } from './app.service';
 import { ConfigModule } from '@nestjs/config';
@@ -10,7 +10,10 @@ import { AppResolver } from './app.resolver';
 import { ComponentsModule } from './components/components.module';
 import { DatabaseModule } from './database/database.module';
 
-function getSafeErrorMessage(formattedError: GraphQLFormattedError, originalError: unknown): string {
+function getSafeErrorMessage(
+	formattedError: GraphQLFormattedError,
+	originalError: unknown,
+): string {
 	const exception = unwrapResolverError(originalError);
 	if (!(exception instanceof HttpException)) return formattedError.message;
 
@@ -18,8 +21,15 @@ function getSafeErrorMessage(formattedError: GraphQLFormattedError, originalErro
 	if (typeof response === 'string') return response;
 
 	const message = (response as { message?: unknown }).message;
-	if (Array.isArray(message)) return message.filter((item): item is string => typeof item === 'string').join('; ');
+	if (Array.isArray(message))
+		return message.filter((item): item is string => typeof item === 'string').join('; ');
 	return typeof message === 'string' ? message : formattedError.message;
+}
+
+/** Nest reports a 404 as INTERNAL_SERVER_ERROR and keeps the real status beside it **/
+function getErrorCode(formattedError: GraphQLFormattedError): unknown {
+	const { code, status } = formattedError.extensions ?? {};
+	return status === HttpStatus.NOT_FOUND ? 'NOT_FOUND' : code;
 }
 
 @Module({
@@ -33,7 +43,7 @@ function getSafeErrorMessage(formattedError: GraphQLFormattedError, originalErro
 			formatError: (formattedError: GraphQLFormattedError, originalError: unknown) => {
 				const graphQlFormattedError = {
 					extensions: {
-						code: formattedError.extensions?.code,
+						code: getErrorCode(formattedError),
 					},
 					message: getSafeErrorMessage(formattedError, originalError),
 				};
@@ -47,4 +57,4 @@ function getSafeErrorMessage(formattedError: GraphQLFormattedError, originalErro
 	controllers: [AppController],
 	providers: [AppService, AppResolver],
 })
-export class AppModule { }
+export class AppModule {}

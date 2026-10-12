@@ -3,14 +3,17 @@ import { Args, Int, Mutation, Query, Resolver } from '@nestjs/graphql';
 import { Types } from 'mongoose';
 import { shapeIntoMongoObjectId } from '../../libs/config';
 import { Notifications, Notification } from '../../libs/dto/notification/notification';
-import { MarkNotificationAsReadInput, NotificationsInquiry } from '../../libs/dto/notification/notification.input';
+import {
+	MarkNotificationAsReadInput,
+	NotificationsInquiry,
+} from '../../libs/dto/notification/notification.input';
 import { AuthMember } from '../auth/decorators/authMember.decorator';
 import { AuthGuard } from '../auth/guards/auth.guard';
 import { NotificationService } from './notification.service';
 
 @Resolver()
 export class NotificationResolver {
-	constructor(private readonly notificationService: NotificationService) { }
+	constructor(private readonly notificationService: NotificationService) {}
 
 	@UseGuards(AuthGuard)
 	@Query(() => Notifications)
@@ -23,7 +26,9 @@ export class NotificationResolver {
 
 	@UseGuards(AuthGuard)
 	@Query(() => Int)
-	public async getUnreadNotificationCount(@AuthMember('_id') memberId: Types.ObjectId): Promise<number> {
+	public async getUnreadNotificationCount(
+		@AuthMember('_id') memberId: Types.ObjectId,
+	): Promise<number> {
 		return await this.notificationService.getUnreadNotificationCount(memberId);
 	}
 
@@ -33,12 +38,17 @@ export class NotificationResolver {
 		@Args('input') input: MarkNotificationAsReadInput,
 		@AuthMember('_id') memberId: Types.ObjectId,
 	): Promise<Notification> {
-		return await this.notificationService.markNotificationAsRead(memberId, shapeIntoMongoObjectId(input.notificationId));
+		return await this.notificationService.markNotificationAsRead(
+			memberId,
+			shapeIntoMongoObjectId(input.notificationId),
+		);
 	}
 
 	@UseGuards(AuthGuard)
 	@Mutation(() => Int)
-	public async markAllNotificationsAsRead(@AuthMember('_id') memberId: Types.ObjectId): Promise<number> {
+	public async markAllNotificationsAsRead(
+		@AuthMember('_id') memberId: Types.ObjectId,
+	): Promise<number> {
 		return await this.notificationService.markAllNotificationsAsRead(memberId);
 	}
 }

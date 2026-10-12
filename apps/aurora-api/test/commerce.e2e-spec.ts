@@ -2,10 +2,19 @@ jest.mock('stripe', () => ({
 	__esModule: true,
 	default: jest.fn().mockImplementation(() => ({
 		paymentIntents: {
-			create: jest.fn().mockImplementation((_payload, options) =>
-				Promise.resolve({ id: `pi_${options.idempotencyKey}`, client_secret: `secret_${options.idempotencyKey}` }),
-			),
-			retrieve: jest.fn().mockImplementation((id) => Promise.resolve({ id, client_secret: `secret_${id}`, latest_charge: 'ch_test' })),
+			create: jest
+				.fn()
+				.mockImplementation((_payload, options) =>
+					Promise.resolve({
+						id: `pi_${options.idempotencyKey}`,
+						client_secret: `secret_${options.idempotencyKey}`,
+					}),
+				),
+			retrieve: jest
+				.fn()
+				.mockImplementation((id) =>
+					Promise.resolve({ id, client_secret: `secret_${id}`, latest_charge: 'ch_test' }),
+				),
 			cancel: jest.fn().mockResolvedValue({}),
 		},
 		refunds: { create: jest.fn().mockResolvedValue({}) },
@@ -42,7 +51,10 @@ describe('Booking, Payment and TravelHistory (integration/e2e)', () => {
 	async function catalogFixtures() {
 		const owner = await seedMember(app, 'commerceagent');
 		const destination = await model(app, 'Destination').create({
-			destinationName: 'Indonesia', destinationSlug: 'indonesia', destinationCountry: 'ID', destinationStatus: 'ACTIVE',
+			destinationName: 'Indonesia',
+			destinationSlug: 'indonesia',
+			destinationCountry: 'ID',
+			destinationStatus: 'ACTIVE',
 		});
 		const property = await model(app, 'Property').create({
 			memberId: owner._id,
@@ -86,26 +98,54 @@ describe('Booking, Payment and TravelHistory (integration/e2e)', () => {
 		const first = await graphQL(
 			app,
 			mutation,
-			{ input: { propertyId: property._id.toString(), checkIn, checkOut, bookingGuests: 2, idempotencyKey } },
+			{
+				input: {
+					propertyId: property._id.toString(),
+					checkIn,
+					checkOut,
+					bookingGuests: 2,
+					idempotencyKey,
+				},
+			},
 			userOne.accessToken,
 		);
 		expect(first.body.errors).toBeUndefined();
 		expect(first.body.data.startPropertyPayment.payment.paymentAmount).toBe(240000);
 		const bookingId = first.body.data.startPropertyPayment.payment.bookingId;
-		expect((await model(app, 'Booking').findById(bookingId).lean()).bookingStatus).toBe(BookingStatus.PENDING);
+		expect((await model(app, 'Booking').findById(bookingId).lean()).bookingStatus).toBe(
+			BookingStatus.PENDING,
+		);
 
 		const retry = await graphQL(
 			app,
 			mutation,
-			{ input: { propertyId: property._id.toString(), checkIn, checkOut, bookingGuests: 2, idempotencyKey } },
+			{
+				input: {
+					propertyId: property._id.toString(),
+					checkIn,
+					checkOut,
+					bookingGuests: 2,
+					idempotencyKey,
+				},
+			},
 			userOne.accessToken,
 		);
-		expect(retry.body.data.startPropertyPayment.payment._id).toBe(first.body.data.startPropertyPayment.payment._id);
+		expect(retry.body.data.startPropertyPayment.payment._id).toBe(
+			first.body.data.startPropertyPayment.payment._id,
+		);
 
 		const overlap = await graphQL(
 			app,
 			mutation,
-			{ input: { propertyId: property._id.toString(), checkIn, checkOut, bookingGuests: 1, idempotencyKey: randomUUID() } },
+			{
+				input: {
+					propertyId: property._id.toString(),
+					checkIn,
+					checkOut,
+					bookingGuests: 1,
+					idempotencyKey: randomUUID(),
+				},
+			},
 			userTwo.accessToken,
 		);
 		expect(overlap.body.errors).toBeDefined();
@@ -126,7 +166,9 @@ describe('Booking, Payment and TravelHistory (integration/e2e)', () => {
 		expect((await webhook()).status).toBe(201);
 		paymentService.stripe.webhooks.constructEvent.mockReturnValue({
 			type: 'payment_intent.payment_failed',
-			data: { object: { id: providerPaymentId, last_payment_error: { message: 'late failure event' } } },
+			data: {
+				object: { id: providerPaymentId, last_payment_error: { message: 'late failure event' } },
+			},
 		});
 		expect((await webhook()).status).toBe(201);
 		const booking = await model(app, 'Booking').findById(bookingId).lean();
@@ -135,8 +177,12 @@ describe('Booking, Payment and TravelHistory (integration/e2e)', () => {
 		expect(payment.paymentStatus).toBe(PaymentStatus.SUCCEEDED);
 		expect((await model(app, 'Property').findById(property._id).lean()).propertyBookings).toBe(1);
 
-		const guestNotifications = await model(app, 'Notification').find({ receiverId: userOne._id, notificationType: 'BOOKING' }).lean();
-		const ownerNotifications = await model(app, 'Notification').find({ receiverId: property.memberId, notificationType: 'BOOKING' }).lean();
+		const guestNotifications = await model(app, 'Notification')
+			.find({ receiverId: userOne._id, notificationType: 'BOOKING' })
+			.lean();
+		const ownerNotifications = await model(app, 'Notification')
+			.find({ receiverId: property.memberId, notificationType: 'BOOKING' })
+			.lean();
 		expect(guestNotifications).toHaveLength(1);
 		expect(guestNotifications[0].notificationTitle).toBe('Booking confirmed');
 		expect(guestNotifications[0].authorId).toBeUndefined();
@@ -158,20 +204,39 @@ describe('Booking, Payment and TravelHistory (integration/e2e)', () => {
 			graphQL(
 				app,
 				mutation,
-				{ input: { propertyId: property._id.toString(), checkIn, checkOut, bookingGuests: 1, idempotencyKey: randomUUID() } },
+				{
+					input: {
+						propertyId: property._id.toString(),
+						checkIn,
+						checkOut,
+						bookingGuests: 1,
+						idempotencyKey: randomUUID(),
+					},
+				},
 				userOne.accessToken,
 			),
 			graphQL(
 				app,
 				mutation,
-				{ input: { propertyId: property._id.toString(), checkIn, checkOut, bookingGuests: 1, idempotencyKey: randomUUID() } },
+				{
+					input: {
+						propertyId: property._id.toString(),
+						checkIn,
+						checkOut,
+						bookingGuests: 1,
+						idempotencyKey: randomUUID(),
+					},
+				},
 				userTwo.accessToken,
 			),
 		]);
 
 		expect([first, second].filter((result) => !result.body.errors)).toHaveLength(1);
 		expect(
-			await model(app, 'Booking').countDocuments({ bookingRefId: property._id, bookingStatus: BookingStatus.PENDING }),
+			await model(app, 'Booking').countDocuments({
+				bookingRefId: property._id,
+				bookingStatus: BookingStatus.PENDING,
+			}),
 		).toBe(1);
 	});
 
@@ -254,8 +319,14 @@ describe('Booking, Payment and TravelHistory (integration/e2e)', () => {
 		expect(result.body.data.getMyBookings.metaCounter[0].total).toBe(2);
 		expect(result.body.data.getMyBookings.list).toEqual(
 			expect.arrayContaining([
-				expect.objectContaining({ bookingCategory: BookingCategory.PROPERTY, propertyData: { propertyName: property.propertyName } }),
-				expect.objectContaining({ bookingCategory: BookingCategory.TOUR, tourData: { tourName: tour.tourName } }),
+				expect.objectContaining({
+					bookingCategory: BookingCategory.PROPERTY,
+					propertyData: { propertyName: property.propertyName },
+				}),
+				expect.objectContaining({
+					bookingCategory: BookingCategory.TOUR,
+					tourData: { tourName: tour.tourName },
+				}),
 			]),
 		);
 	});
@@ -270,12 +341,27 @@ describe('Booking, Payment and TravelHistory (integration/e2e)', () => {
 		}`;
 
 		const results = await Promise.all([
-			graphQL(app, mutation, { input: { tourId: tour._id.toString(), bookingGuests: 1, idempotencyKey: randomUUID() } }, userOne.accessToken),
-			graphQL(app, mutation, { input: { tourId: tour._id.toString(), bookingGuests: 1, idempotencyKey: randomUUID() } }, userTwo.accessToken),
+			graphQL(
+				app,
+				mutation,
+				{ input: { tourId: tour._id.toString(), bookingGuests: 1, idempotencyKey: randomUUID() } },
+				userOne.accessToken,
+			),
+			graphQL(
+				app,
+				mutation,
+				{ input: { tourId: tour._id.toString(), bookingGuests: 1, idempotencyKey: randomUUID() } },
+				userTwo.accessToken,
+			),
 		]);
 
 		expect(results.filter((result) => !result.body.errors)).toHaveLength(1);
-		expect(await model(app, 'Booking').countDocuments({ bookingRefId: tour._id, bookingStatus: BookingStatus.PENDING })).toBe(1);
+		expect(
+			await model(app, 'Booking').countDocuments({
+				bookingRefId: tour._id,
+				bookingStatus: BookingStatus.PENDING,
+			}),
+		).toBe(1);
 		expect((await model(app, 'Tour').findById(tour._id).lean()).tourReservedSeats).toBe(1);
 	});
 
@@ -295,8 +381,15 @@ describe('Booking, Payment and TravelHistory (integration/e2e)', () => {
 
 		expect(first.body.errors).toBeUndefined();
 		expect(second.body.errors).toBeUndefined();
-		expect(first.body.data.startTourPayment.payment._id).toBe(second.body.data.startTourPayment.payment._id);
-		expect(await model(app, 'Booking').countDocuments({ memberId: user._id, checkoutKey: idempotencyKey })).toBe(1);
+		expect(first.body.data.startTourPayment.payment._id).toBe(
+			second.body.data.startTourPayment.payment._id,
+		);
+		expect(
+			await model(app, 'Booking').countDocuments({
+				memberId: user._id,
+				checkoutKey: idempotencyKey,
+			}),
+		).toBe(1);
 		expect(await model(app, 'Payment').countDocuments({ idempotencyKey })).toBe(1);
 		expect((await model(app, 'Tour').findById(tour._id).lean()).tourReservedSeats).toBe(1);
 	});
@@ -305,7 +398,9 @@ describe('Booking, Payment and TravelHistory (integration/e2e)', () => {
 		const user = await seedMember(app, 'faulttour');
 		const { tour } = await catalogFixtures();
 		const bookingModel = model(app, 'Booking');
-		const createSpy = jest.spyOn(bookingModel, 'create').mockRejectedValueOnce(new Error('fault injection after seat increment'));
+		const createSpy = jest
+			.spyOn(bookingModel, 'create')
+			.mockRejectedValueOnce(new Error('fault injection after seat increment'));
 
 		try {
 			const result = await graphQL(
@@ -337,27 +432,38 @@ describe('Booking, Payment and TravelHistory (integration/e2e)', () => {
 		);
 		expect(checkout.body.errors).toBeUndefined();
 		const { bookingId, providerPaymentId } = checkout.body.data.startTourPayment.payment;
-		await model(app, 'Booking').updateOne({ _id: bookingId }, { expiresAt: new Date(Date.now() - 1_000) }).exec();
+		await model(app, 'Booking')
+			.updateOne({ _id: bookingId }, { expiresAt: new Date(Date.now() - 1_000) })
+			.exec();
 
 		const paymentService = app.get(PaymentService) as any;
 		await paymentService.expirePendingBookings();
-		expect((await model(app, 'Booking').findById(bookingId).lean()).bookingStatus).toBe(BookingStatus.CANCELLED);
-		expect((await model(app, 'Payment').findOne({ providerPaymentId }).lean()).paymentStatus).toBe(PaymentStatus.FAILED);
+		expect((await model(app, 'Booking').findById(bookingId).lean()).bookingStatus).toBe(
+			BookingStatus.CANCELLED,
+		);
+		expect((await model(app, 'Payment').findOne({ providerPaymentId }).lean()).paymentStatus).toBe(
+			PaymentStatus.FAILED,
+		);
 		expect((await model(app, 'Tour').findById(tour._id).lean()).tourReservedSeats).toBe(0);
 
 		paymentService.stripe.webhooks.constructEvent.mockReturnValue({
 			type: 'payment_intent.succeeded',
 			data: { object: { id: providerPaymentId, amount_received: 7000000, currency: 'usd' } },
 		});
-		const lateWebhook = () => request(app.getHttpServer())
-			.post('/payments/stripe/webhook')
-			.set('stripe-signature', 'test-signature')
-			.set('Content-Type', 'application/json')
-			.send('{}');
+		const lateWebhook = () =>
+			request(app.getHttpServer())
+				.post('/payments/stripe/webhook')
+				.set('stripe-signature', 'test-signature')
+				.set('Content-Type', 'application/json')
+				.send('{}');
 		const duplicateWebhooks = await Promise.all([lateWebhook(), lateWebhook()]);
 		expect(duplicateWebhooks.every((response) => response.status === 201)).toBe(true);
-		expect((await model(app, 'Booking').findById(bookingId).lean()).bookingStatus).toBe(BookingStatus.CANCELLED);
-		expect((await model(app, 'Payment').findOne({ providerPaymentId }).lean()).paymentStatus).toBe(PaymentStatus.REFUNDED);
+		expect((await model(app, 'Booking').findById(bookingId).lean()).bookingStatus).toBe(
+			BookingStatus.CANCELLED,
+		);
+		expect((await model(app, 'Payment').findOne({ providerPaymentId }).lean()).paymentStatus).toBe(
+			PaymentStatus.REFUNDED,
+		);
 		expect((await model(app, 'Tour').findById(tour._id).lean()).tourReservedSeats).toBe(0);
 		expect(paymentService.stripe.refunds.create).toHaveBeenCalledWith(
 			{ payment_intent: providerPaymentId },
@@ -377,12 +483,19 @@ describe('Booking, Payment and TravelHistory (integration/e2e)', () => {
 			user.accessToken,
 		);
 		const bookingId = checkout.body.data.startTourPayment.payment.bookingId;
-		await model(app, 'Booking').updateOne({ _id: bookingId }, { expiresAt: new Date(Date.now() - 1_000) }).exec();
+		await model(app, 'Booking')
+			.updateOne({ _id: bookingId }, { expiresAt: new Date(Date.now() - 1_000) })
+			.exec();
 		const paymentService = app.get(PaymentService);
 
-		await Promise.all([paymentService.expirePendingBookings(), paymentService.expirePendingBookings()]);
+		await Promise.all([
+			paymentService.expirePendingBookings(),
+			paymentService.expirePendingBookings(),
+		]);
 
-		expect((await model(app, 'Booking').findById(bookingId).lean()).bookingStatus).toBe(BookingStatus.CANCELLED);
+		expect((await model(app, 'Booking').findById(bookingId).lean()).bookingStatus).toBe(
+			BookingStatus.CANCELLED,
+		);
 		expect((await model(app, 'Tour').findById(tour._id).lean()).tourReservedSeats).toBe(0);
 	});
 
@@ -420,7 +533,13 @@ describe('Booking, Payment and TravelHistory (integration/e2e)', () => {
 		const mutation = `mutation Pay($input: StartPropertyPaymentInput!) {
 			startPropertyPayment(input: $input) { payment { _id } }
 		}`;
-		const input = { propertyId: property._id.toString(), checkIn, checkOut, bookingGuests: 1, idempotencyKey };
+		const input = {
+			propertyId: property._id.toString(),
+			checkIn,
+			checkOut,
+			bookingGuests: 1,
+			idempotencyKey,
+		};
 
 		const first = await graphQL(app, mutation, { input }, userOne.accessToken);
 		const second = await graphQL(app, mutation, { input }, userTwo.accessToken);
@@ -455,8 +574,12 @@ describe('Booking, Payment and TravelHistory (integration/e2e)', () => {
 			.send('{}');
 
 		expect(result.status).toBe(201);
-		expect((await model(app, 'Booking').findById(bookingId).lean()).bookingStatus).toBe(BookingStatus.CANCELLED);
-		expect((await model(app, 'Payment').findOne({ providerPaymentId }).lean()).paymentStatus).toBe(PaymentStatus.REFUNDED);
+		expect((await model(app, 'Booking').findById(bookingId).lean()).bookingStatus).toBe(
+			BookingStatus.CANCELLED,
+		);
+		expect((await model(app, 'Payment').findOne({ providerPaymentId }).lean()).paymentStatus).toBe(
+			PaymentStatus.REFUNDED,
+		);
 		expect((await model(app, 'Tour').findById(tour._id).lean()).tourReservedSeats).toBe(0);
 		expect(paymentService.stripe.refunds.create).toHaveBeenCalledWith(
 			{ payment_intent: providerPaymentId },
@@ -559,7 +682,9 @@ describe('Booking, Payment and TravelHistory (integration/e2e)', () => {
 		const travelHistoryService = app.get(TravelHistoryService);
 		await travelHistoryService.completeExpiredBookings();
 		await travelHistoryService.completeExpiredBookings();
-		expect((await model(app, 'Booking').findById(booking._id).lean()).bookingStatus).toBe('COMPLETED');
+		expect((await model(app, 'Booking').findById(booking._id).lean()).bookingStatus).toBe(
+			'COMPLETED',
+		);
 		expect(await model(app, 'TravelHistory').countDocuments({ bookingId: booking._id })).toBe(1);
 
 		const histories = await graphQL(
@@ -571,6 +696,8 @@ describe('Booking, Payment and TravelHistory (integration/e2e)', () => {
 			user.accessToken,
 		);
 		expect(histories.body.errors).toBeUndefined();
-		expect(histories.body.data.getMyTravelHistories.list[0].destinationId).toBe(destination._id.toString());
+		expect(histories.body.data.getMyTravelHistories.list[0].destinationId).toBe(
+			destination._id.toString(),
+		);
 	});
 });

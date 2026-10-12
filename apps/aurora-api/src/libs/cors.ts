@@ -29,7 +29,10 @@ export const isCorsOriginAllowed = (
 };
 
 export const createCorsOptions = () => ({
-	origin: (origin: string | undefined, callback: (error: Error | null, allow?: boolean) => void): void => {
+	origin: (
+		origin: string | undefined,
+		callback: (error: Error | null, allow?: boolean) => void,
+	): void => {
 		callback(null, isCorsOriginAllowed(origin));
 	},
 	credentials: true,

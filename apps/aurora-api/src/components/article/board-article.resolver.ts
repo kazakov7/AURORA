@@ -19,7 +19,7 @@ import { RolesGuard } from '../auth/guards/roles.guard';
 
 @Resolver()
 export class BoardArticleResolver {
-	constructor(private readonly boardArticleService: BoardArticleService) { }
+	constructor(private readonly boardArticleService: BoardArticleService) {}
 
 	@UseGuards(AuthGuard)
 	@Mutation(() => BoardArticle)

@@ -1,8 +1,14 @@
-import { BadRequestException, ConflictException, Injectable, InternalServerErrorException, UnauthorizedException } from '@nestjs/common';
+import {
+	BadRequestException,
+	ConflictException,
+	Injectable,
+	InternalServerErrorException,
+	NotFoundException,
+	UnauthorizedException,
+} from '@nestjs/common';
 import { InjectModel } from '@nestjs/mongoose';
 import { Member, Members } from '../../libs/dto/member/member';
 import { Model, PipelineStage, Types } from 'mongoose';
-import { AuthService, GoogleIdentity, KakaoIdentity, TelegramIdentity } from '../auth/auth.service';
 import {
 	GoogleAuthInput,
 	ChangePasswordInput,
@@ -13,31 +19,19 @@ import {
 	TelegramAuthInput,
 } from '../../libs/dto/member/member.input';
 import { Direction, Messages } from '../../libs/enums/common.enum';
-import { Message } from '../../libs/dto/message/message';
 import { MemberAuthType, MemberStatus, MemberType } from '../../libs/enums/member.enum';
 import { StatisticModifier, T } from '../../libs/types/common';
 import { ViewGroup } from '../../libs/enums/view.enum';
 import { ViewService } from '../view/view.service';
-import { LikeGroup } from '../../libs/enums/like.enum';
 import { LikeService } from '../like/like.service';
-import { MemberUpdate } from '../../libs/dto/member/member.update';
+import { AdminUpdateMemberInput } from '../../libs/dto/member/admin.update.member';
 import { Follower, Following, MeFollowed } from '../../libs/dto/follow/follow';
 import { randomBytes } from 'crypto';
 import { lookUpAuthMemberFollowData } from '../../libs/config';
 import { ChatGateway } from '../chat/chat.gateway';
-
-type SocialIdentity = GoogleIdentity | KakaoIdentity | TelegramIdentity;
-type SocialSubjectField = 'googleSubject' | 'kakaoSubject' | 'telegramSubject';
-const INVALID_LOGIN_PASSWORD_HASH = '$2b$10$gsxeUygdgTkpCOraF15ReuvE4CMMhw6CJY4uHPfECoboFv.fKiQfe';
-
-interface SocialAuthConfig {
-	authType: MemberAuthType;
-	subjectField: SocialSubjectField;
-	emailConflictMessage?: Messages;
-	nicknameFallback: string;
-	nicknameCandidates?: string[];
-	backfillFullName?: boolean;
-}
+import { Message } from '../../libs/dto/message/message';
+import { AuthService } from '../auth/auth.service';
+import { SocialIdentity, SocialAuthConfig } from '../../libs/types/social.identity';
 
 @Injectable()
 export class MemberService {
@@ -49,17 +43,13 @@ export class MemberService {
 		private viewService: ViewService,
 		private likeService: LikeService,
 		private readonly chatGateway: ChatGateway,
-	) { }
+	) {}
 
 	public async signup(input: MemberInput): Promise<Member> {
-		const memberEmail = input.memberEmail?.trim().toLowerCase();
-		const memberPhone = input.memberPhone?.trim();
 		const memberFullName = input.memberFullName?.trim();
 		const signupInput = {
 			memberNick: input.memberNick.trim(),
 			memberPassword: await this.authService.hashPassword(input.memberPassword!),
-			...(memberEmail ? { memberEmail } : {}),
-			...(memberPhone ? { memberPhone } : {}),
 			...(memberFullName ? { memberFullName } : {}),
 		};
 		try {
@@ -67,28 +57,30 @@ export class MemberService {
 			result.accessToken = await this.authService.createToken(result);
 			return result;
 		} catch (err) {
-			// @ts-ignore
-			console.log('Error, Service.model', err.message);
+			console.log('Error, Service.model', err);
 			throw new BadRequestException(Messages.DUPLICATE_DATA);
 		}
 	}
 	public async login(input: LoginInput): Promise<Member> {
 		const { memberPassword } = input;
-		const memberIdentifier = input.memberNick.trim();
-		const responses = await this.memberModel
-			.find({
-				$or: [{ memberNick: memberIdentifier }, { memberEmail: memberIdentifier.toLowerCase() }],
-			})
-			.limit(2)
+		const response = await this.memberModel
+			.findOne({ memberNick: input.memberNick })
 			.select('+memberPassword')
 			.exec();
-		const response = responses.length === 1 ? responses[0] : null;
+		// Unknown and passwordless (social) accounts get the same answer as a wrong password
+		if (!response?.memberPassword) throw new UnauthorizedException(Messages.NOT_AUTHENTICATED);
+
 		const isMatch = await this.authService.comparePasswords(
 			memberPassword,
-			response?.memberPassword ?? INVALID_LOGIN_PASSWORD_HASH,
+			response?.memberPassword as string,
 		);
 
-		if (!response || response.memberStatus !== MemberStatus.ACTIVE || !response.memberPassword || !isMatch) {
+		if (
+			!response ||
+			response.memberStatus !== MemberStatus.ACTIVE ||
+			!response.memberPassword ||
+			!isMatch
+		) {
 			throw new UnauthorizedException(Messages.NOT_AUTHENTICATED);
 		}
 
@@ -100,7 +92,10 @@ export class MemberService {
 		return response;
 	}
 
-	public async changePassword(memberId: Types.ObjectId, input: ChangePasswordInput): Promise<boolean> {
+	public async changePassword(
+		memberId: Types.ObjectId,
+		input: ChangePasswordInput,
+	): Promise<boolean> {
 		const { currentPassword, newPassword, confirmPassword } = input;
 		if (newPassword !== confirmPassword) {
 			throw new BadRequestException(Messages.PASSWORD_CONFIRMATION_MISMATCH);
@@ -119,10 +114,16 @@ export class MemberService {
 			throw new BadRequestException(Messages.PASSWORD_CHANGE_UNAVAILABLE);
 		}
 
-		const currentPasswordMatches = await this.authService.comparePasswords(currentPassword, member.memberPassword);
+		const currentPasswordMatches = await this.authService.comparePasswords(
+			currentPassword,
+			member.memberPassword,
+		);
 		if (!currentPasswordMatches) throw new BadRequestException(Messages.WRONG_PASSWORD);
 
-		const reusesCurrentPassword = await this.authService.comparePasswords(newPassword, member.memberPassword);
+		const reusesCurrentPassword = await this.authService.comparePasswords(
+			newPassword,
+			member.memberPassword,
+		);
 		if (reusesCurrentPassword) throw new BadRequestException(Messages.NEW_PASSWORD_MUST_DIFFER);
 
 		const hashedPassword = await this.authService.hashPassword(newPassword);
@@ -153,7 +154,10 @@ export class MemberService {
 	}
 
 	public async kakaoAuth(input: KakaoAuthInput): Promise<Member> {
-		const identity = await this.authService.verifyKakaoAuthorizationCode(input.code, input.redirectUri);
+		const identity = await this.authService.verifyKakaoAuthorizationCode(
+			input.code,
+			input.redirectUri,
+		);
 		return await this.authenticateSocialMember(identity, {
 			authType: MemberAuthType.KAKAO,
 			subjectField: 'kakaoSubject',
@@ -177,14 +181,24 @@ export class MemberService {
 		});
 	}
 
-	private async authenticateSocialMember(identity: SocialIdentity, config: SocialAuthConfig): Promise<Member> {
-		const existingSocialMember = await this.memberModel.findOne({ [config.subjectField]: identity.subject }).exec();
-		if (existingSocialMember) return await this.completeSocialLogin(existingSocialMember, identity, config);
+	private async authenticateSocialMember(
+		identity: SocialIdentity,
+		config: SocialAuthConfig,
+	): Promise<Member> {
+		const existingSocialMember = await this.memberModel
+			.findOne({ [config.subjectField]: identity.subject })
+			.exec();
+		if (existingSocialMember)
+			return await this.completeSocialLogin(existingSocialMember, identity, config);
 
 		const email = 'email' in identity ? identity.email : undefined;
 		if (email) {
-			const existingEmailMember = await this.memberModel.findOne({ memberEmail: email }).exec();
-			if (existingEmailMember && config.emailConflictMessage) throw new ConflictException(config.emailConflictMessage);
+			// The same identity created by a concurrent first sign-in is not a conflict
+			const existingEmailMember = await this.memberModel
+				.findOne({ memberEmail: email, [config.subjectField]: { $ne: identity.subject } })
+				.exec();
+			if (existingEmailMember && config.emailConflictMessage)
+				throw new ConflictException(config.emailConflictMessage);
 		}
 
 		return await this.createSocialMember(identity, config);
@@ -201,15 +215,22 @@ export class MemberService {
 
 		const update: T = { lastLoginAt: new Date() };
 		if (!member.memberImage && identity.image) update.memberImage = identity.image;
-		if (config.backfillFullName && !member.memberFullName && identity.name) update.memberFullName = identity.name;
-		const updatedMember = await this.memberModel.findByIdAndUpdate(member._id, update, { new: true }).exec();
+		if (config.backfillFullName && !member.memberFullName && identity.name)
+			update.memberFullName = identity.name;
+
+		const updatedMember = await this.memberModel
+			.findByIdAndUpdate(member._id, update, { new: true })
+			.exec();
 		if (!updatedMember) throw new InternalServerErrorException(Messages.UPDATE_FAILED);
 
 		updatedMember.accessToken = await this.authService.createToken(updatedMember);
 		return updatedMember;
 	}
 
-	private async createSocialMember(identity: SocialIdentity, config: SocialAuthConfig): Promise<Member> {
+	private async createSocialMember(
+		identity: SocialIdentity,
+		config: SocialAuthConfig,
+	): Promise<Member> {
 		const email = 'email' in identity ? identity.email : undefined;
 		for (let attempt = 0; attempt < 10; attempt++) {
 			const memberNick = this.createSocialMemberNick(identity, config, attempt);
@@ -229,12 +250,16 @@ export class MemberService {
 				});
 				member.accessToken = await this.authService.createToken(member);
 				return member;
-			} catch (error) {//@ts-ignore
+			} catch (error) {
+				//@ts-ignore
 				const duplicateField = Object.keys(error?.keyPattern ?? {})[0];
 				if (duplicateField === 'memberNick') continue;
-				if (duplicateField === config.subjectField) {
-					const existingMember = await this.memberModel.findOne({ [config.subjectField]: identity.subject }).exec();
-					if (existingMember) return await this.completeSocialLogin(existingMember, identity, config);
+				if (duplicateField === config.subjectField || duplicateField === 'memberEmail') {
+					const existingMember = await this.memberModel
+						.findOne({ [config.subjectField]: identity.subject })
+						.exec();
+					if (existingMember)
+						return await this.completeSocialLogin(existingMember, identity, config);
 				}
 				if (duplicateField === 'memberEmail' && config.emailConflictMessage) {
 					throw new ConflictException(config.emailConflictMessage);
@@ -246,7 +271,11 @@ export class MemberService {
 		throw new BadRequestException(Messages.CREATE_FAILED);
 	}
 
-	private createSocialMemberNick(identity: SocialIdentity, config: SocialAuthConfig, attempt: number): string {
+	private createSocialMemberNick(
+		identity: SocialIdentity,
+		config: SocialAuthConfig,
+		attempt: number,
+	): string {
 		if (config.nicknameCandidates) {
 			const bases: string[] = [];
 			for (const [index, candidate] of config.nicknameCandidates.entries()) {
@@ -264,7 +293,9 @@ export class MemberService {
 		}
 
 		const email = 'email' in identity ? identity.email : undefined;
-		let base = this.normalizeSocialNickname(identity.name || email?.split('@')[0] || config.nicknameFallback);
+		let base = this.normalizeSocialNickname(
+			identity.name || email?.split('@')[0] || config.nicknameFallback,
+		);
 		if (!base || base.length < 3) base = config.nicknameFallback;
 
 		const suffix = attempt === 0 ? '' : randomBytes(3).toString('hex');
@@ -280,6 +311,9 @@ export class MemberService {
 	}
 
 	public async updateMember(memberId, input): Promise<Member> {
+		// Email is set only by verified social sign-in, never by a profile update
+		delete input.memberEmail;
+		this.clearBlankFields(input);
 		const result = await this.memberModel
 			.findOneAndUpdate(
 				{
@@ -289,12 +323,31 @@ export class MemberService {
 				input,
 				{ new: true },
 			)
-			.exec();
+			.exec()
+			.catch((err) => this.throwUpdateError(err));
 
 		if (!result) throw new InternalServerErrorException(Messages.UPDATE_FAILED);
 
 		result.accessToken = await this.authService.createToken(result);
 		return result;
+	}
+
+	/** The unique phone index counts '' as a real value and a blank name is no name, so both are stored as empty **/
+	private clearBlankFields(input: {
+		memberPhone?: string | null;
+		memberFullName?: string | null;
+	}): void {
+		for (const field of ['memberPhone', 'memberFullName'] as const) {
+			if (typeof input[field] === 'string' && !input[field].trim()) input[field] = null;
+		}
+	}
+
+	/** A taken nick, email or phone is a client error, not a leaked database failure **/
+	private throwUpdateError(err: unknown): never {
+		if ((err as { code?: number }).code === 11000) {
+			throw new BadRequestException(Messages.DUPLICATE_DATA);
+		}
+		throw err;
 	}
 
 	public async getMember(
@@ -309,7 +362,7 @@ export class MemberService {
 			},
 		};
 		const result = (await this.memberModel.findOne(search).lean().exec()) as unknown as Member;
-		if (!result) throw new InternalServerErrorException(Messages.NO_DATA_FOUND);
+		if (!result) throw new NotFoundException(Messages.MEMBER_NOT_FOUND);
 
 		if (memberId && recordView) {
 			const viewInput = {
@@ -321,7 +374,9 @@ export class MemberService {
 			const newView = await this.viewService.recordView(viewInput);
 
 			if (newView) {
-				await this.memberModel.findOneAndUpdate(search, { $inc: { memberViews: 1 } }, { new: true }).exec();
+				await this.memberModel
+					.findOneAndUpdate(search, { $inc: { memberViews: 1 } }, { new: true })
+					.exec();
 				result.memberViews++;
 			}
 		}
@@ -341,9 +396,7 @@ export class MemberService {
 		const result = await this.followModel
 			.findOne({ followingId: followingId, followerId: followerId })
 			.exec();
-		return result
-			? [{ followerId: followerId, followingId: followingId, myFollowing: true }]
-			: [];
+		return result ? [{ followerId: followerId, followingId: followingId, myFollowing: true }] : [];
 	}
 
 	public async memberStatusEditor(input: StatisticModifier): Promise<Member> {
@@ -356,7 +409,10 @@ export class MemberService {
 		return result;
 	}
 
-	public async getAllMembers(memberId: Types.ObjectId | null, input: MembersInquiry): Promise<Members> {
+	public async getAllMembers(
+		memberId: Types.ObjectId | null,
+		input: MembersInquiry,
+	): Promise<Members> {
 		const match: T = {
 			memberStatus: MemberStatus.ACTIVE,
 			deletedAt: null,
@@ -424,14 +480,22 @@ export class MemberService {
 		return result[0] as Members;
 	}
 
-	public async updateMemberByAdmin(input: MemberUpdate, _adminId?: Types.ObjectId): Promise<Member> {
-		const result = await this.memberModel
-			.findOneAndUpdate({ _id: input._id }, input, { new: true })
-			.exec();
-
-		if (!result) {
-			throw new InternalServerErrorException(Messages.UPDATE_FAILED);
+	public async updateMemberByAdmin(
+		input: AdminUpdateMemberInput,
+		_adminId?: Types.ObjectId,
+	): Promise<Member> {
+		this.clearBlankFields(input);
+		const update: T = { ...input };
+		// deletedAt follows the status: stamped when a member is deleted, cleared when restored
+		if (input.memberStatus) {
+			update.deletedAt = input.memberStatus === MemberStatus.DELETED ? new Date() : null;
 		}
+		const result = await this.memberModel
+			.findOneAndUpdate({ _id: input._id }, update, { new: true })
+			.exec()
+			.catch((err) => this.throwUpdateError(err));
+
+		if (!result) throw new NotFoundException(Messages.MEMBER_NOT_FOUND);
 		if (result.memberStatus !== MemberStatus.ACTIVE || result.deletedAt) {
 			this.chatGateway.disconnectMember(result._id as unknown as Types.ObjectId);
 		}

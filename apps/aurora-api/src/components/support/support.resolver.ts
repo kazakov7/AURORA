@@ -3,7 +3,11 @@ import { Args, Mutation, Query, Resolver } from '@nestjs/graphql';
 import { Types } from 'mongoose';
 import { shapeIntoMongoObjectId } from '../../libs/config';
 import { SupportTicket, SupportTickets } from '../../libs/dto/support/support';
-import { SupportTicketInput, SupportTicketsInquiry, SupportTicketUpdate } from '../../libs/dto/support/support.input';
+import {
+	SupportTicketInput,
+	SupportTicketsInquiry,
+	SupportTicketUpdate,
+} from '../../libs/dto/support/support.input';
 import { MemberType } from '../../libs/enums/member.enum';
 import { AuthMember } from '../auth/decorators/authMember.decorator';
 import { Roles } from '../auth/decorators/roles.decorator';
@@ -13,7 +17,7 @@ import { SupportService } from './support.service';
 
 @Resolver()
 export class SupportResolver {
-	constructor(private readonly supportService: SupportService) { }
+	constructor(private readonly supportService: SupportService) {}
 
 	@UseGuards(AuthGuard)
 	@Mutation(() => SupportTicket)
@@ -36,7 +40,9 @@ export class SupportResolver {
 	@Roles(MemberType.ADMIN)
 	@UseGuards(RolesGuard)
 	@Query(() => SupportTickets)
-	public async getAllSupportTicketsByAdmin(@Args('input') input: SupportTicketsInquiry): Promise<SupportTickets> {
+	public async getAllSupportTicketsByAdmin(
+		@Args('input') input: SupportTicketsInquiry,
+	): Promise<SupportTickets> {
 		return await this.supportService.getAllSupportTicketsByAdmin(input);
 	}
 

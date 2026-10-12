@@ -88,7 +88,13 @@ const DestinationSchema = new Schema(
 	},
 );
 
-DestinationSchema.index({ destinationStatus: 1, createdAt: 1 }, { name: 'destination_status_created_idx' });
-DestinationSchema.index({ destinationStatus: 1, destinationViews: -1 }, { name: 'destination_top_views_idx' });
+DestinationSchema.index(
+	{ destinationStatus: 1, createdAt: 1 },
+	{ name: 'destination_status_created_idx' },
+);
+DestinationSchema.index(
+	{ destinationStatus: 1, destinationViews: -1 },
+	{ name: 'destination_top_views_idx' },
+);
 
 export default DestinationSchema;

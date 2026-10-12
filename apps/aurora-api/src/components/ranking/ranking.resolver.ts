@@ -18,8 +18,13 @@ export class RankingResolver {
 	constructor(private readonly rankingService: RankingService) {}
 
 	@Query(() => Destinations)
-	public async getTrendingDestinations(@Args('input', { nullable: true }) input?: RankingInquiry): Promise<Destinations> {
-		return this.rankingService.getDestinations(RankingType.TRENDING_DESTINATIONS, input?.limit ?? 5);
+	public async getTrendingDestinations(
+		@Args('input', { nullable: true }) input?: RankingInquiry,
+	): Promise<Destinations> {
+		return this.rankingService.getDestinations(
+			RankingType.TRENDING_DESTINATIONS,
+			input?.limit ?? 5,
+		);
 	}
 
 	@UseGuards(WithoutGuard)
@@ -55,7 +60,12 @@ export class RankingResolver {
 	}
 
 	@Query(() => Destinations)
-	public async getPopularDestinationsByBookings(@Args('input', { nullable: true }) input?: RankingInquiry): Promise<Destinations> {
-		return this.rankingService.getDestinations(RankingType.POPULAR_DESTINATIONS_BY_BOOKINGS, input?.limit ?? 5);
+	public async getPopularDestinationsByBookings(
+		@Args('input', { nullable: true }) input?: RankingInquiry,
+	): Promise<Destinations> {
+		return this.rankingService.getDestinations(
+			RankingType.POPULAR_DESTINATIONS_BY_BOOKINGS,
+			input?.limit ?? 5,
+		);
 	}
 }

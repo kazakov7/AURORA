@@ -21,12 +21,15 @@ import { TourService } from './tour.service';
 
 @Resolver()
 export class TourResolver {
-	constructor(private readonly tourService: TourService) { }
+	constructor(private readonly tourService: TourService) {}
 
 	@Roles(MemberType.AGENT)
 	@UseGuards(RolesGuard)
 	@Mutation(() => Tour)
-	public async createTour(@Args('input') input: TourInput, @AuthMember('_id') memberId: Types.ObjectId): Promise<Tour> {
+	public async createTour(
+		@Args('input') input: TourInput,
+		@AuthMember('_id') memberId: Types.ObjectId,
+	): Promise<Tour> {
 		input.memberId = memberId;
 		input.destinationId = shapeIntoMongoObjectId(input.destinationId);
 		return this.tourService.createTour(input);
@@ -34,7 +37,10 @@ export class TourResolver {
 
 	@UseGuards(WithoutGuard)
 	@Query(() => Tour)
-	public async getTour(@Args('tourId') tourId: string, @AuthMember('_id') memberId: Types.ObjectId): Promise<Tour> {
+	public async getTour(
+		@Args('tourId') tourId: string,
+		@AuthMember('_id') memberId: Types.ObjectId,
+	): Promise<Tour> {
 		return this.tourService.getTour(memberId, shapeIntoMongoObjectId(tourId));
 	}
 
@@ -52,7 +58,10 @@ export class TourResolver {
 
 	@UseGuards(WithoutGuard)
 	@Query(() => Tours)
-	public async getTours(@Args('input') input: ToursInquiry, @AuthMember('_id') memberId: Types.ObjectId): Promise<Tours> {
+	public async getTours(
+		@Args('input') input: ToursInquiry,
+		@AuthMember('_id') memberId: Types.ObjectId,
+	): Promise<Tours> {
 		return this.tourService.getTours(memberId, input);
 	}
 
@@ -103,7 +112,10 @@ export class TourResolver {
 	@Roles(MemberType.ADMIN)
 	@UseGuards(RolesGuard)
 	@Mutation(() => Tour)
-	public async updateTourStatusByAdmin(@Args('input') input: UpdateTourStatusInput, @AuthMember('_id') adminId: Types.ObjectId): Promise<Tour> {
+	public async updateTourStatusByAdmin(
+		@Args('input') input: UpdateTourStatusInput,
+		@AuthMember('_id') adminId: Types.ObjectId,
+	): Promise<Tour> {
 		input._id = shapeIntoMongoObjectId(input._id);
 		return this.tourService.updateTourStatusByAdmin(input, adminId);
 	}

@@ -1,7 +1,11 @@
 import { Field, InputType, Int } from '@nestjs/graphql';
 import { IsEnum, IsIn, IsInt, IsNotEmpty, IsOptional, Max, Min } from 'class-validator';
 import { Direction } from '../../enums/common.enum';
-import { NotificationGroup, NotificationStatus, NotificationType } from '../../enums/notification.enum';
+import {
+	NotificationGroup,
+	NotificationStatus,
+	NotificationType,
+} from '../../enums/notification.enum';
 
 @InputType()
 class NotificationSearch {

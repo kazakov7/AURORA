@@ -149,7 +149,10 @@ const PropertySchema = new Schema(
 	},
 );
 
-PropertySchema.index({ destinationId: 1, propertyStatus: 1, pricePerNight: 1 }, { name: 'property_search_idx' });
+PropertySchema.index(
+	{ destinationId: 1, propertyStatus: 1, pricePerNight: 1 },
+	{ name: 'property_search_idx' },
+);
 PropertySchema.index({ memberId: 1, createdAt: 1 }, { name: 'property_owner_idx' });
 
 export default PropertySchema;

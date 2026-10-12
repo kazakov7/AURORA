@@ -18,5 +18,4 @@ export class View {
 
 	@Field(() => Date)
 	createdAt!: Date;
-
 }

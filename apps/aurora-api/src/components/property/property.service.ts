@@ -9,13 +9,21 @@ import {
 	OrdinaryInquery,
 	PropertiesInquiry,
 } from '../../libs/dto/property/property.input';
-import { UpdatePropertyInput, UpdatePropertyStatusInput } from '../../libs/dto/property/property.update';
+import {
+	UpdatePropertyInput,
+	UpdatePropertyStatusInput,
+} from '../../libs/dto/property/property.update';
 import { Direction, Messages } from '../../libs/enums/common.enum';
 import { LikeGroup } from '../../libs/enums/like.enum';
 import { PropertyStatus } from '../../libs/enums/property.enum';
 import { ViewGroup } from '../../libs/enums/view.enum';
 import { StatisticModifier, T } from '../../libs/types/common';
-import { lookUpAuthMemberLiked, lookupMember, shapeIntoMongoObjectId, escapeRegExp } from '../../libs/config';
+import {
+	lookUpAuthMemberLiked,
+	lookupMember,
+	shapeIntoMongoObjectId,
+	escapeRegExp,
+} from '../../libs/config';
 import { BookingService } from '../booking/booking.service';
 import { LikeService } from '../like/like.service';
 import { MemberService } from '../member/member.service';
@@ -37,7 +45,7 @@ export class PropertyService {
 		private readonly agentService: AgentService,
 		private readonly destinationService: DestinationService,
 		private readonly notificationService: NotificationService,
-	) { }
+	) {}
 
 	public async createProperty(input: CreatePropertyInput): Promise<Property> {
 		if (!input.memberId) throw new BadRequestException(Messages.NOT_AUTHENTICATED);
@@ -64,7 +72,10 @@ export class PropertyService {
 		}
 	}
 
-	public async getProperty(memberId: Types.ObjectId, propertyId: Types.ObjectId): Promise<Property> {
+	public async getProperty(
+		memberId: Types.ObjectId,
+		propertyId: Types.ObjectId,
+	): Promise<Property> {
 		const targetProperty = await this.propertyModel
 			.findOne({ _id: propertyId, propertyStatus: PropertyStatus.ACTIVE, deletedAt: null })
 			.lean<Property>()
@@ -80,7 +91,11 @@ export class PropertyService {
 			});
 
 			if (newView) {
-				await this.propertyStatsEditor({ _id: propertyId, targetKey: 'propertyViews', modifier: 1 });
+				await this.propertyStatsEditor({
+					_id: propertyId,
+					targetKey: 'propertyViews',
+					modifier: 1,
+				});
 				targetProperty.propertyViews += 1;
 			}
 
@@ -104,7 +119,15 @@ export class PropertyService {
 		const result = await this.propertyModel
 			.findByIdAndUpdate(
 				input._id,
-				[{ $set: { [input.targetKey]: { $max: [0, { $add: [{ $ifNull: [`$${input.targetKey}`, 0] }, input.modifier] }] } } }] as any,
+				[
+					{
+						$set: {
+							[input.targetKey]: {
+								$max: [0, { $add: [{ $ifNull: [`$${input.targetKey}`, 0] }, input.modifier] }],
+							},
+						},
+					},
+				] as any,
 				{ new: true },
 			)
 			.exec();
@@ -112,7 +135,10 @@ export class PropertyService {
 		return result as unknown as Property;
 	}
 
-	public async updateProperty(memberId: Types.ObjectId, input: UpdatePropertyInput): Promise<Property> {
+	public async updateProperty(
+		memberId: Types.ObjectId,
+		input: UpdatePropertyInput,
+	): Promise<Property> {
 		await this.agentService.assertApprovedAgent(memberId, AgentType.HOTEL);
 		const result = await this.propertyModel
 			.findOneAndUpdate(
@@ -131,13 +157,19 @@ export class PropertyService {
 		return result as unknown as Property;
 	}
 
-	public async getProperties(memberId: Types.ObjectId, input: PropertiesInquiry): Promise<Properties> {
+	public async getProperties(
+		memberId: Types.ObjectId,
+		input: PropertiesInquiry,
+	): Promise<Properties> {
 		const match: T = { propertyStatus: PropertyStatus.ACTIVE, deletedAt: null };
 		this.shapeMatchQuery(match, input);
 
 		const { checkIn, checkOut } = input.search;
 		if (checkIn && checkOut) {
-			const unavailablePropertyIds = await this.bookingService.getUnavailablePropertyIds(checkIn, checkOut);
+			const unavailablePropertyIds = await this.bookingService.getUnavailablePropertyIds(
+				checkIn,
+				checkOut,
+			);
 			if (unavailablePropertyIds.length) match._id = { $nin: unavailablePropertyIds };
 		}
 
@@ -180,7 +212,11 @@ export class PropertyService {
 			text,
 		} = input.search;
 
-		if ((checkIn && !checkOut) || (!checkIn && checkOut) || (checkIn && checkOut && checkOut <= checkIn)) {
+		if (
+			(checkIn && !checkOut) ||
+			(!checkIn && checkOut) ||
+			(checkIn && checkOut && checkOut <= checkIn)
+		) {
 			throw new BadRequestException(Messages.INVALID_DATA);
 		}
 
@@ -214,7 +250,10 @@ export class PropertyService {
 		return this.viewService.getVisitedProperties(memberId, input);
 	}
 
-	public async likeTargetProperty(memberId: Types.ObjectId, likeRefId: Types.ObjectId): Promise<Property> {
+	public async likeTargetProperty(
+		memberId: Types.ObjectId,
+		likeRefId: Types.ObjectId,
+	): Promise<Property> {
 		const target = await this.propertyModel.findOne({
 			_id: likeRefId,
 			propertyStatus: PropertyStatus.ACTIVE,
@@ -222,19 +261,31 @@ export class PropertyService {
 		});
 		if (!target) throw new InternalServerErrorException(Messages.PROPERTY_NOT_FOUND);
 
-		const modifier = await this.likeService.toggleLike({ memberId, likeRefId, likeGroup: LikeGroup.PROPERTY });
-		if (modifier === 1) await this.notificationService.createNotification({
-			receiverId: target.memberId as Types.ObjectId, authorId: memberId, notificationType: NotificationType.LIKE,
-			notificationGroup: NotificationGroup.PROPERTY, notificationRefId: likeRefId,
-			notificationTitle: 'New hotel like', notificationDesc: 'Someone liked your hotel.',
-			notificationEventKey: `property-like:${memberId}:${likeRefId}`,
+		const modifier = await this.likeService.toggleLike({
+			memberId,
+			likeRefId,
+			likeGroup: LikeGroup.PROPERTY,
 		});
+		if (modifier === 1)
+			await this.notificationService.createNotification({
+				receiverId: target.memberId as Types.ObjectId,
+				authorId: memberId,
+				notificationType: NotificationType.LIKE,
+				notificationGroup: NotificationGroup.PROPERTY,
+				notificationRefId: likeRefId,
+				notificationTitle: 'New hotel like',
+				notificationDesc: 'Someone liked your hotel.',
+				notificationEventKey: `property-like:${memberId}:${likeRefId}`,
+			});
 		const result = await this.propertyModel.findById(likeRefId).exec();
 		if (!result) throw new InternalServerErrorException(Messages.SOMETHING_WENT_WRONG);
 		return result as unknown as Property;
 	}
 
-	public async getAgentProperties(memberId: Types.ObjectId, input: AgentPropertiesInquiry): Promise<Properties> {
+	public async getAgentProperties(
+		memberId: Types.ObjectId,
+		input: AgentPropertiesInquiry,
+	): Promise<Properties> {
 		const match: T = {
 			memberId,
 			propertyStatus: input.search.propertyStatus ?? { $ne: PropertyStatus.INACTIVE },
@@ -265,7 +316,8 @@ export class PropertyService {
 		const { propertyStatus, destinationIdList, propertyCityList } = input.search;
 		const match: T = { deletedAt: null };
 		if (propertyStatus) match.propertyStatus = propertyStatus;
-		if (destinationIdList?.length) match.destinationId = { $in: destinationIdList.map(shapeIntoMongoObjectId) };
+		if (destinationIdList?.length)
+			match.destinationId = { $in: destinationIdList.map(shapeIntoMongoObjectId) };
 		if (propertyCityList?.length) match.propertyCity = { $in: propertyCityList };
 
 		const sort: T = { [input.sort ?? 'createdAt']: input.direction ?? Direction.DESC };
@@ -288,16 +340,27 @@ export class PropertyService {
 		return result[0] as Properties;
 	}
 
-	public async updatePropertyStatusByAdmin(input: UpdatePropertyStatusInput, adminId?: Types.ObjectId): Promise<Property> {
+	public async updatePropertyStatusByAdmin(
+		input: UpdatePropertyStatusInput,
+		adminId?: Types.ObjectId,
+	): Promise<Property> {
 		const result = await this.propertyModel
-			.findOneAndUpdate({ _id: input._id, deletedAt: null }, { propertyStatus: input.propertyStatus }, { new: true })
+			.findOneAndUpdate(
+				{ _id: input._id, deletedAt: null },
+				{ propertyStatus: input.propertyStatus },
+				{ new: true },
+			)
 			.exec();
 
 		if (!result) throw new InternalServerErrorException(Messages.UPDATE_FAILED);
 		await this.notificationService.createNotification({
-			receiverId: result.memberId as Types.ObjectId, authorId: adminId, notificationType: NotificationType.SYSTEM,
-			notificationGroup: NotificationGroup.SYSTEM, notificationRefId: result._id as Types.ObjectId,
-			notificationTitle: 'Hotel listing status updated', notificationDesc: `Your hotel listing status is now ${result.propertyStatus}.`,
+			receiverId: result.memberId as Types.ObjectId,
+			authorId: adminId,
+			notificationType: NotificationType.SYSTEM,
+			notificationGroup: NotificationGroup.SYSTEM,
+			notificationRefId: result._id as Types.ObjectId,
+			notificationTitle: 'Hotel listing status updated',
+			notificationDesc: `Your hotel listing status is now ${result.propertyStatus}.`,
 			notificationEventKey: `property-status:${result._id}:${result.propertyStatus}`,
 		});
 		return result as unknown as Property;

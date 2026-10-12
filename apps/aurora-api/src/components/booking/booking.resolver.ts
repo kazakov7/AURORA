@@ -94,9 +94,7 @@ export class BookingResolver {
 	@Roles(MemberType.ADMIN)
 	@UseGuards(RolesGuard)
 	@Query(() => Bookings)
-	public async getAllBookingsByAdmin(
-		@Args('input') input: BookingsInquiry,
-	): Promise<Bookings> {
+	public async getAllBookingsByAdmin(@Args('input') input: BookingsInquiry): Promise<Bookings> {
 		return this.bookingService.getAllBookingsByAdmin(input);
 	}
 }

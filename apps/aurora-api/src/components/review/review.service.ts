@@ -3,7 +3,11 @@ import { InjectModel } from '@nestjs/mongoose';
 import { Model, Types } from 'mongoose';
 import { lookupMember } from '../../libs/config';
 import { Reviews, Review } from '../../libs/dto/review/review';
-import { DestinationReviewInput, DestinationReviewsInquiry, RatingInput } from '../../libs/dto/review/review.input';
+import {
+	DestinationReviewInput,
+	DestinationReviewsInquiry,
+	RatingInput,
+} from '../../libs/dto/review/review.input';
 import { DestinationReviewUpdate } from '../../libs/dto/review/review.update';
 import { Messages } from '../../libs/enums/common.enum';
 import { ReviewGroup, ReviewStatus } from '../../libs/enums/review.enum';
@@ -33,7 +37,12 @@ export class ReviewService {
 		const reviewRefId = input.reviewRefId as unknown as Types.ObjectId;
 		await this.assertRatingTarget(input.reviewGroup, reviewRefId);
 		const existingRating = await this.reviewModel
-			.exists({ memberId, reviewGroup: input.reviewGroup, reviewRefId, reviewStatus: ReviewStatus.ACTIVE })
+			.exists({
+				memberId,
+				reviewGroup: input.reviewGroup,
+				reviewRefId,
+				reviewStatus: ReviewStatus.ACTIVE,
+			})
 			.exec();
 		if (existingRating) throw new BadRequestException(Messages.RATING_ALREADY_EXISTS);
 
@@ -57,18 +66,29 @@ export class ReviewService {
 		return result;
 	}
 
-	private async notifyReviewOwner(memberId: Types.ObjectId, group: ReviewGroup, refId: Types.ObjectId, review: Review): Promise<void> {
-		const target = group === ReviewGroup.PROPERTY
-			? await this.propertyModel.findById(refId).select('memberId').lean().exec()
-			: group === ReviewGroup.TOUR
-				? await this.tourModel.findById(refId).select('memberId').lean().exec()
-				: null;
+	private async notifyReviewOwner(
+		memberId: Types.ObjectId,
+		group: ReviewGroup,
+		refId: Types.ObjectId,
+		review: Review,
+	): Promise<void> {
+		const target =
+			group === ReviewGroup.PROPERTY
+				? await this.propertyModel.findById(refId).select('memberId').lean().exec()
+				: group === ReviewGroup.TOUR
+					? await this.tourModel.findById(refId).select('memberId').lean().exec()
+					: null;
 		if (!target?.memberId) return;
 		await this.notificationService.createNotification({
-			receiverId: target.memberId as Types.ObjectId, authorId: memberId, notificationType: NotificationType.REVIEW,
-			notificationGroup: group === ReviewGroup.PROPERTY ? NotificationGroup.PROPERTY : NotificationGroup.TOUR,
-			notificationRefId: refId, notificationTitle: 'New review received',
-			notificationDesc: 'A traveler left a review for your listing.', notificationEventKey: `review:${review._id}`,
+			receiverId: target.memberId as Types.ObjectId,
+			authorId: memberId,
+			notificationType: NotificationType.REVIEW,
+			notificationGroup:
+				group === ReviewGroup.PROPERTY ? NotificationGroup.PROPERTY : NotificationGroup.TOUR,
+			notificationRefId: refId,
+			notificationTitle: 'New review received',
+			notificationDesc: 'A traveler left a review for your listing.',
+			notificationEventKey: `review:${review._id}`,
 		});
 	}
 
@@ -131,7 +151,10 @@ export class ReviewService {
 		return result as unknown as Review;
 	}
 
-	public async removeDestinationReview(memberId: Types.ObjectId, reviewId: Types.ObjectId): Promise<Review> {
+	public async removeDestinationReview(
+		memberId: Types.ObjectId,
+		reviewId: Types.ObjectId,
+	): Promise<Review> {
 		return this.softRemoveDestinationReview({ _id: reviewId, memberId });
 	}
 
@@ -204,10 +227,17 @@ export class ReviewService {
 			.exec();
 
 		const stats = result[0];
-		await this.destinationService.setDestinationReviewStats(destinationId, stats?.count ?? 0, stats?.rating ?? 0);
+		await this.destinationService.setDestinationReviewStats(
+			destinationId,
+			stats?.count ?? 0,
+			stats?.rating ?? 0,
+		);
 	}
 
-	private async assertRatingTarget(reviewGroup: ReviewGroup, reviewRefId: Types.ObjectId): Promise<void> {
+	private async assertRatingTarget(
+		reviewGroup: ReviewGroup,
+		reviewRefId: Types.ObjectId,
+	): Promise<void> {
 		let exists = false;
 		switch (reviewGroup) {
 			case ReviewGroup.PROPERTY:
@@ -221,7 +251,11 @@ export class ReviewService {
 				break;
 			case ReviewGroup.TOUR:
 				exists = Boolean(
-					await this.tourModel.exists({ _id: reviewRefId, tourStatus: TourStatus.ACTIVE, deletedAt: null }),
+					await this.tourModel.exists({
+						_id: reviewRefId,
+						tourStatus: TourStatus.ACTIVE,
+						deletedAt: null,
+					}),
 				);
 				break;
 			case ReviewGroup.ARTICLE:
@@ -242,7 +276,10 @@ export class ReviewService {
 		if (!exists) throw new BadRequestException(Messages.RATING_TARGET_NOT_FOUND);
 	}
 
-	private async refreshRatingStats(reviewGroup: ReviewGroup, reviewRefId: Types.ObjectId): Promise<void> {
+	private async refreshRatingStats(
+		reviewGroup: ReviewGroup,
+		reviewRefId: Types.ObjectId,
+	): Promise<void> {
 		const [stats] = await this.reviewModel
 			.aggregate<{ count: number; rating: number }>([
 				{
@@ -266,7 +303,10 @@ export class ReviewService {
 				);
 				break;
 			case ReviewGroup.TOUR:
-				await this.tourModel.updateOne({ _id: reviewRefId }, { tourReviews: count, tourRating: rating });
+				await this.tourModel.updateOne(
+					{ _id: reviewRefId },
+					{ tourReviews: count, tourRating: rating },
+				);
 				break;
 			case ReviewGroup.ARTICLE:
 				await this.articleModel.updateOne(

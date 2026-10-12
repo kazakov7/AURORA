@@ -1,5 +1,16 @@
 import { Field, Float, InputType, Int } from '@nestjs/graphql';
-import { IsArray, IsIn, IsInt, IsNotEmpty, IsNumber, IsOptional, IsString, Max, MaxLength, Min } from 'class-validator';
+import {
+	IsArray,
+	IsIn,
+	IsInt,
+	IsNotEmpty,
+	IsNumber,
+	IsOptional,
+	IsString,
+	Max,
+	MaxLength,
+	Min,
+} from 'class-validator';
 import { availableDestinationSorts } from '../../config';
 import { Direction } from '../../enums/common.enum';
 
@@ -9,7 +20,6 @@ export class DestinationInput {
 	@IsString()
 	@IsNotEmpty()
 	destinationName: string;
-
 
 	@Field(() => String)
 	@IsString()
@@ -80,4 +90,4 @@ export class DestinationsInquiry {
 }
 
 @InputType()
-export class AdminDestinationsInquiry extends DestinationsInquiry { }
+export class AdminDestinationsInquiry extends DestinationsInquiry {}

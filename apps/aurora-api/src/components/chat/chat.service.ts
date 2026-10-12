@@ -16,9 +16,12 @@ export class ChatService {
 		@InjectModel('ChatRead') private readonly chatReadModel: Model<any>,
 		@InjectModel('Message') private readonly messageModel: Model<any>,
 		@InjectModel('Member') private readonly memberModel: Model<any>,
-	) { }
+	) {}
 
-	public async getOrCreateDirectChat(memberOneId: Types.ObjectId, memberTwoId: Types.ObjectId): Promise<Chat> {
+	public async getOrCreateDirectChat(
+		memberOneId: Types.ObjectId,
+		memberTwoId: Types.ObjectId,
+	): Promise<Chat> {
 		await this.assertMemberCanChat(memberOneId);
 		if (memberOneId.toString() === memberTwoId.toString()) {
 			throw new BadRequestException(Messages.CANNOT_MESSAGE_YOURSELF);
@@ -86,11 +89,15 @@ export class ChatService {
 		if (search?.chatType) match.chatType = search.chatType;
 		if (search?.memberId) {
 			match.chatType = ChatType.DIRECT;
-			match.$and = [{ $or: [{ memberOneId: memberId }, { memberTwoId: memberId }] }, { $or: [{ memberOneId: search.memberId }, { memberTwoId: search.memberId }] }];
+			match.$and = [
+				{ $or: [{ memberOneId: memberId }, { memberTwoId: memberId }] },
+				{ $or: [{ memberOneId: search.memberId }, { memberTwoId: search.memberId }] },
+			];
 		}
 		if (search?.text) match.lastMessage = { $regex: search.text, $options: 'i' };
 
-		const sort = input.sort && availableChatSorts.includes(input.sort) ? input.sort : 'lastMessageAt';
+		const sort =
+			input.sort && availableChatSorts.includes(input.sort) ? input.sort : 'lastMessageAt';
 		const direction = input.direction ?? Direction.DESC;
 		const epoch = new Date(0);
 		const result = await this.chatModel
@@ -104,10 +111,7 @@ export class ChatService {
 							{
 								$match: {
 									$expr: {
-										$and: [
-											{ $eq: ['$chatId', '$$chatId'] },
-											{ $eq: ['$memberId', memberId] },
-										],
+										$and: [{ $eq: ['$chatId', '$$chatId'] }, { $eq: ['$memberId', memberId] }],
 									},
 								},
 							},
@@ -123,7 +127,12 @@ export class ChatService {
 							$or: [
 								{ $eq: ['$chatType', ChatType.GLOBAL] },
 								{ $eq: [{ $ifNull: ['$currentMemberChatState.clearedAt', null] }, null] },
-								{ $gt: [{ $ifNull: ['$lastMessageAt', epoch] }, '$currentMemberChatState.clearedAt'] },
+								{
+									$gt: [
+										{ $ifNull: ['$lastMessageAt', epoch] },
+										'$currentMemberChatState.clearedAt',
+									],
+								},
 							],
 						},
 					},
@@ -174,10 +183,7 @@ export class ChatService {
 							{
 								$match: {
 									$expr: {
-										$and: [
-											{ $eq: ['$chatId', '$$chatId'] },
-											{ $eq: ['$memberId', memberId] },
-										],
+										$and: [{ $eq: ['$chatId', '$$chatId'] }, { $eq: ['$memberId', memberId] }],
 									},
 								},
 							},
@@ -188,12 +194,12 @@ export class ChatService {
 				{ $addFields: { readState: { $arrayElemAt: ['$readState', 0] } } },
 				{
 					$match: {
-					$expr: {
-						$and: [
-							{ $gt: ['$createdAt', { $ifNull: ['$readState.lastReadAt', epoch] }] },
-							{ $gt: ['$createdAt', { $ifNull: ['$readState.clearedAt', epoch] }] },
-						],
-					},
+						$expr: {
+							$and: [
+								{ $gt: ['$createdAt', { $ifNull: ['$readState.lastReadAt', epoch] }] },
+								{ $gt: ['$createdAt', { $ifNull: ['$readState.clearedAt', epoch] }] },
+							],
+						},
 					},
 				},
 				{ $group: { _id: '$chatId', unreadCount: { $sum: 1 } } },
@@ -234,7 +240,8 @@ export class ChatService {
 		let currentState: any = await this.chatReadModel.findOne({ chatId, memberId }).lean().exec();
 		const alreadyClearedAt = currentState?.clearedAt ? new Date(currentState.clearedAt) : undefined;
 		const hasNewMessage = Boolean(
-			chat.lastMessageAt && (!alreadyClearedAt || chat.lastMessageAt.getTime() > alreadyClearedAt.getTime()),
+			chat.lastMessageAt &&
+			(!alreadyClearedAt || chat.lastMessageAt.getTime() > alreadyClearedAt.getTime()),
 		);
 		if (alreadyClearedAt && !hasNewMessage) return true;
 
@@ -262,7 +269,9 @@ export class ChatService {
 		if (!updateResult.matchedCount) {
 			const latestState: any = await this.chatReadModel.findOne({ chatId, memberId }).lean().exec();
 			if (latestState?.clearedAt) return true;
-			await this.chatReadModel.updateOne({ chatId, memberId }, { $set: { lastReadAt: clearedAt, clearedAt } }).exec();
+			await this.chatReadModel
+				.updateOne({ chatId, memberId }, { $set: { lastReadAt: clearedAt, clearedAt } })
+				.exec();
 		}
 		return true;
 	}
@@ -273,10 +282,17 @@ export class ChatService {
 		return chat;
 	}
 
-	public async updateLastMessage(chatId: Types.ObjectId, lastMessage: string, lastMessageAt: Date): Promise<void> {
+	public async updateLastMessage(
+		chatId: Types.ObjectId,
+		lastMessage: string,
+		lastMessageAt: Date,
+	): Promise<void> {
 		await this.chatModel
 			.updateOne(
-				{ _id: chatId, $or: [{ lastMessageAt: { $exists: false } }, { lastMessageAt: { $lte: lastMessageAt } }] },
+				{
+					_id: chatId,
+					$or: [{ lastMessageAt: { $exists: false } }, { lastMessageAt: { $lte: lastMessageAt } }],
+				},
 				{ $set: { lastMessage, lastMessageAt } },
 			)
 			.exec();
@@ -308,7 +324,10 @@ export class ChatService {
 		if (!result || result.chatType !== ChatType.DIRECT) return result as Chat;
 
 		const memberIds = [result.memberOneId, result.memberTwoId].filter(Boolean);
-		const members = await this.memberModel.find({ _id: { $in: memberIds } }).lean().exec();
+		const members = await this.memberModel
+			.find({ _id: { $in: memberIds } })
+			.lean()
+			.exec();
 		const memberMap = new Map(members.map((member: any) => [member._id.toString(), member]));
 		return {
 			...result,

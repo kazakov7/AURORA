@@ -27,4 +27,4 @@ import { NotificationModule } from '../notification/notification.module';
 	providers: [PropertyResolver, PropertyService],
 	exports: [PropertyService],
 })
-export class PropertyModule { }
+export class PropertyModule {}

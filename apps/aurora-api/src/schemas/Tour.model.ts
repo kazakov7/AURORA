@@ -138,7 +138,10 @@ const TourSchema = new Schema(
 	},
 );
 
-TourSchema.index({ destinationId: 1, tourStatus: 1, tourStartDate: 1 }, { name: 'tour_search_idx' });
+TourSchema.index(
+	{ destinationId: 1, tourStatus: 1, tourStartDate: 1 },
+	{ name: 'tour_search_idx' },
+);
 TourSchema.index({ memberId: 1, createdAt: 1 }, { name: 'tour_owner_idx' });
 
 export default TourSchema;

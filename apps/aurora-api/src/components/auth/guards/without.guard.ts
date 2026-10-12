@@ -3,7 +3,7 @@ import { AuthService } from '../auth.service';
 
 @Injectable()
 export class WithoutGuard implements CanActivate {
-	constructor(private authService: AuthService) { }
+	constructor(private authService: AuthService) {}
 
 	// @ts-ignore
 	async canActivate(context: ExecutionContext | any): Promise<boolean> {

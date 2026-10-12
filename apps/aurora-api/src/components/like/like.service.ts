@@ -14,7 +14,6 @@ import { lookupFavoriteTour } from '../../libs/config';
 import { Tours } from '../../libs/dto/tour/tour';
 import { OrdinaryTourInquiry } from '../../libs/dto/tour/tour.input';
 
-
 @Injectable()
 export class LikeService {
 	constructor(
@@ -26,7 +25,7 @@ export class LikeService {
 		@InjectModel('BoardArticle') private readonly articleModel: Model<any>,
 		@InjectModel('Member') private readonly memberModel: Model<any>,
 		@InjectConnection() private readonly connection: Connection,
-	) { }
+	) {}
 
 	public async toggleLike(input: LikeInput): Promise<number> {
 		const session = await this.connection.startSession();
@@ -34,7 +33,11 @@ export class LikeService {
 			let modifier = 0;
 			await session.withTransaction(async () => {
 				modifier = await this.toggleLikeInTransaction(input, session);
-				await this.syncTargetLikeCounter(input.likeGroup, input.likeRefId as Types.ObjectId, session);
+				await this.syncTargetLikeCounter(
+					input.likeGroup,
+					input.likeRefId as Types.ObjectId,
+					session,
+				);
 			});
 			return modifier;
 		} finally {
@@ -50,7 +53,11 @@ export class LikeService {
 	}
 
 	private async toggleLikeInTransaction(input: LikeInput, session: any): Promise<number> {
-		const search = { memberId: input.memberId, likeGroup: input.likeGroup, likeRefId: input.likeRefId };
+		const search = {
+			memberId: input.memberId,
+			likeGroup: input.likeGroup,
+			likeRefId: input.likeRefId,
+		};
 		const removed = await this.likeModel.findOneAndDelete(search, { session }).exec();
 		if (removed) return -1;
 
@@ -58,28 +65,44 @@ export class LikeService {
 			await this.likeModel.create([{ ...input }], { session });
 			return 1;
 		} catch (error) {
-			if ((error as { code?: number }).code !== 11000) throw new BadRequestException(Messages.CREATE_FAILED);
+			if ((error as { code?: number }).code !== 11000)
+				throw new BadRequestException(Messages.CREATE_FAILED);
 			const concurrentLike = await this.likeModel.findOneAndDelete(search, { session }).exec();
 			if (concurrentLike) return -1;
 			throw new BadRequestException(Messages.CREATE_FAILED);
 		}
 	}
 
-	private async syncTargetLikeCounter(likeGroup: LikeGroup, likeRefId: Types.ObjectId, session: any): Promise<void> {
-		const count = await this.likeModel.countDocuments({ likeGroup, likeRefId }).session(session).exec();
+	private async syncTargetLikeCounter(
+		likeGroup: LikeGroup,
+		likeRefId: Types.ObjectId,
+		session: any,
+	): Promise<void> {
+		const count = await this.likeModel
+			.countDocuments({ likeGroup, likeRefId })
+			.session(session)
+			.exec();
 		const target = this.getLikeTarget(likeGroup);
 		if (!target) return;
-		await target.model.updateOne({ _id: likeRefId }, { $set: { [target.field]: count } }, { session }).exec();
+		await target.model
+			.updateOne({ _id: likeRefId }, { $set: { [target.field]: count } }, { session })
+			.exec();
 	}
 
 	private getLikeTarget(likeGroup: LikeGroup): { model: Model<any>; field: string } | null {
 		switch (likeGroup) {
-			case LikeGroup.PROPERTY: return { model: this.propertyModel, field: 'propertyLikes' };
-			case LikeGroup.TOUR: return { model: this.tourModel, field: 'tourLikes' };
-			case LikeGroup.DESTINATION: return { model: this.destinationModel, field: 'destinationLikes' };
-			case LikeGroup.ARTICLE: return { model: this.articleModel, field: 'articleLikes' };
-			case LikeGroup.MEMBER: return { model: this.memberModel, field: 'memberLikes' };
-			default: return null;
+			case LikeGroup.PROPERTY:
+				return { model: this.propertyModel, field: 'propertyLikes' };
+			case LikeGroup.TOUR:
+				return { model: this.tourModel, field: 'tourLikes' };
+			case LikeGroup.DESTINATION:
+				return { model: this.destinationModel, field: 'destinationLikes' };
+			case LikeGroup.ARTICLE:
+				return { model: this.articleModel, field: 'articleLikes' };
+			case LikeGroup.MEMBER:
+				return { model: this.memberModel, field: 'memberLikes' };
+			default:
+				return null;
 		}
 	}
 
@@ -123,7 +146,10 @@ export class LikeService {
 		return result;
 	}
 
-	public async getFavoriteTours(memberId: Types.ObjectId, input: OrdinaryTourInquiry): Promise<Tours> {
+	public async getFavoriteTours(
+		memberId: Types.ObjectId,
+		input: OrdinaryTourInquiry,
+	): Promise<Tours> {
 		const data: T = await this.likeModel
 			.aggregate([
 				{ $match: { likeGroup: LikeGroup.TOUR, memberId } },

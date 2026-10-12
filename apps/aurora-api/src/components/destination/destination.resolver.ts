@@ -2,7 +2,10 @@ import { Args, Mutation, Query, Resolver } from '@nestjs/graphql';
 import { UseGuards } from '@nestjs/common';
 import { Types } from 'mongoose';
 import { Destination, Destinations } from '../../libs/dto/destination/destination';
-import { DestinationInput, DestinationsInquiry } from '../../libs/dto/destination/destination.input';
+import {
+	DestinationInput,
+	DestinationsInquiry,
+} from '../../libs/dto/destination/destination.input';
 import { DestinationUpdate } from '../../libs/dto/destination/destination.update';
 import { shapeIntoMongoObjectId } from '../../libs/config';
 import { MemberType } from '../../libs/enums/member.enum';
@@ -15,8 +18,7 @@ import { DestinationService } from './destination.service';
 
 @Resolver()
 export class DestinationResolver {
-	constructor(private readonly destinationService: DestinationService) { }
-
+	constructor(private readonly destinationService: DestinationService) {}
 
 	@Roles(MemberType.ADMIN)
 	@UseGuards(RolesGuard)
@@ -43,35 +45,34 @@ export class DestinationResolver {
 		return this.destinationService.getDestinations(memberId, input);
 	}
 
-
-
 	@UseGuards(AuthGuard)
 	@Mutation(() => Destination)
 	public async likeTargetDestination(
 		@Args('destinationId') destinationId: string,
 		@AuthMember('_id') memberId: Types.ObjectId,
 	): Promise<Destination> {
-		return this.destinationService.likeTargetDestination(memberId, shapeIntoMongoObjectId(destinationId));
+		return this.destinationService.likeTargetDestination(
+			memberId,
+			shapeIntoMongoObjectId(destinationId),
+		);
 	}
-
-
 
 	@Roles(MemberType.ADMIN)
 	@UseGuards(RolesGuard)
 	@Mutation(() => Destination)
-	public async updateDestinationByAdmin(@Args('input') input: DestinationUpdate): Promise<Destination> {
+	public async updateDestinationByAdmin(
+		@Args('input') input: DestinationUpdate,
+	): Promise<Destination> {
 		input._id = shapeIntoMongoObjectId(input._id) as unknown as string;
 		return this.destinationService.updateDestinationByAdmin(input);
 	}
 
-
 	@Roles(MemberType.ADMIN)
 	@UseGuards(RolesGuard)
 	@Mutation(() => String)
-	public async removeDestinationByAdmin(@Args('destinationId') destinationId: string): Promise<String> {
+	public async removeDestinationByAdmin(
+		@Args('destinationId') destinationId: string,
+	): Promise<String> {
 		return this.destinationService.removeDestinationByAdmin(shapeIntoMongoObjectId(destinationId));
 	}
-
-
-
 }

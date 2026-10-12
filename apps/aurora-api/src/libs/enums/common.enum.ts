@@ -14,7 +14,7 @@ export enum Messages {
 	INVALID_ID = 'Invalid ID!',
 	INVALID_DATA = 'Invalid data!',
 	DUPLICATE_DATA = 'Data already exists!',
-	SELF_SUBSCRIPTION_DENIED = "SELF SUBSCRIPTION DENIED",
+	SELF_SUBSCRIPTION_DENIED = 'SELF SUBSCRIPTION DENIED',
 
 	// =========================
 	// AUTH
@@ -49,6 +49,8 @@ export enum Messages {
 	MEMBER_ALREADY_BLOCKED = 'This member is already blocked!',
 	CANNOT_BLOCK_YOURSELF = 'You cannot block yourself!',
 	CANNOT_UPDATE_MEMBER = 'You cannot update this member!',
+	INVALID_NICKNAME = 'Nickname can contain only Latin letters, numbers, dots and underscores!',
+	INVALID_PHONE = 'Phone number must be 7 to 15 digits with an optional leading +!',
 
 	// =========================
 	// AGENT
@@ -60,7 +62,7 @@ export enum Messages {
 	AGENT_APPLICATION_EXISTS = 'Agent application already exists!',
 	AGENT_APPLICATION_NOT_FOUND = 'Agent application not found!',
 	AGENT_NOT_ALLOWED = 'You are not allowed to perform this agent action!',
-	PROVIDE_ALLOWED_FORMAT = "PROVIDE_ALLOWED_FORMAT",
+	PROVIDE_ALLOWED_FORMAT = 'PROVIDE_ALLOWED_FORMAT',
 
 	// =========================
 	// COUNTRY / CITY / DESTINATION

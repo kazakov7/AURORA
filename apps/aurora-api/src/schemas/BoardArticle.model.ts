@@ -67,10 +67,20 @@ const BoardArticleSchema = new Schema(
 			default: null,
 		},
 	},
-	{ timestamps: true, collection: 'articles' },
+	{
+		timestamps: true,
+		collection: 'articles',
+	},
 );
 
-BoardArticleSchema.index({ articleStatus: 1, articleCategory: 1, createdAt: 1 }, { name: 'articles_feed_idx' });
+BoardArticleSchema.index(
+	{
+		articleStatus: 1,
+		articleCategory: 1,
+		createdAt: 1,
+	},
+	{ name: 'articles_feed_idx' },
+);
 BoardArticleSchema.index({ memberId: 1, createdAt: 1 }, { name: 'articles_author_idx' });
 
 export default BoardArticleSchema;

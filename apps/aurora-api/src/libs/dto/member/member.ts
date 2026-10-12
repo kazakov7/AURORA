@@ -77,8 +77,6 @@ export class Member {
 	@Field(() => String, { nullable: true })
 	accessToken?: string;
 
-
-
 	@Field(() => [MeFollowed], { nullable: true })
 	meFollowed?: MeFollowed[];
 
@@ -90,8 +88,6 @@ export class Member {
 
 	@Field(() => String)
 	updatedAt: Date;
-
-
 }
 @ObjectType()
 export class TotalCounter {

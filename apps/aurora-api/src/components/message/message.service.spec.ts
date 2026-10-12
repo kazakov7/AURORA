@@ -18,14 +18,26 @@ describe('MessageService.getMessages', () => {
 		const clearedAt = new Date('2026-01-02T00:00:00.000Z');
 		const messageModel = { find: jest.fn(() => chain([])) };
 		const chatModel = {
-			findById: jest.fn(() => chain({ _id: chatId, chatType: ChatType.DIRECT, memberOneId: memberId, memberTwoId: peerId })),
+			findById: jest.fn(() =>
+				chain({
+					_id: chatId,
+					chatType: ChatType.DIRECT,
+					memberOneId: memberId,
+					memberTwoId: peerId,
+				}),
+			),
 		};
 		const chatReadModel = { findOne: jest.fn(() => chain({ clearedAt })) };
 		const memberModel = {
 			findOne: jest.fn(() => chain({ _id: memberId })),
 			find: jest.fn(() => chain([])),
 		};
-		const service = new MessageService(messageModel as any, chatModel as any, chatReadModel as any, memberModel as any);
+		const service = new MessageService(
+			messageModel as any,
+			chatModel as any,
+			chatReadModel as any,
+			memberModel as any,
+		);
 
 		await service.getMessages(memberId, {
 			chatId,

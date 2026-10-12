@@ -5,7 +5,6 @@ import { LoggingInterceptor } from './interceptor/Logging.interceptor';
 import { ValidationPipe } from '@nestjs/common';
 import { graphqlUploadExpress } from 'graphql-upload';
 import { join } from 'path';
-import { createCorsOptions } from './libs/cors';
 
 async function bootstrap() {
 	const app = await NestFactory.create<NestExpressApplication>(AppModule, { rawBody: true });
@@ -13,7 +12,10 @@ async function bootstrap() {
 	app.useStaticAssets(join(process.cwd(), 'uploads'), { prefix: '/uploads/' });
 	app.useGlobalPipes(new ValidationPipe());
 	app.useGlobalInterceptors(new LoggingInterceptor());
-	app.enableCors(createCorsOptions());
-	await app.listen(process.env.AURORA_PORT ?? process.env.TRAVEL_PORT ?? 3000);
+	app.enableCors({
+		origin: process.env.CORS_ALLOWED_ORIGIN,
+		credentials: true,
+	});
+	await app.listen(process.env.AURORA_PORT ?? 3000);
 }
 bootstrap();

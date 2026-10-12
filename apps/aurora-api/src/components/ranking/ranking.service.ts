@@ -22,88 +22,172 @@ export class RankingService {
 
 	public async getDestinations(type: RankingType, limit: number): Promise<any> {
 		const entries = await this.getEntries(type, RankingScope.GLOBAL);
-		const list = await this.findInSnapshotOrder(this.destinationModel, entries, { destinationStatus: 'ACTIVE', deletedAt: null }, limit);
+		const list = await this.findInSnapshotOrder(
+			this.destinationModel,
+			entries,
+			{ destinationStatus: 'ACTIVE', deletedAt: null },
+			limit,
+		);
 		if (list.length >= limit) return this.withMeta(list);
 
 		const existingIds = list.map((item: any) => item._id);
-		const fallbackList = await this.destinationModel.aggregate([
-			{ $match: { destinationStatus: 'ACTIVE', deletedAt: null, _id: { $nin: existingIds } } },
-			{ $sort: { destinationViews: -1, destinationLikes: -1, createdAt: -1, _id: -1 } },
-			{ $limit: limit - list.length },
-		]).exec();
+		const fallbackList = await this.destinationModel
+			.aggregate([
+				{ $match: { destinationStatus: 'ACTIVE', deletedAt: null, _id: { $nin: existingIds } } },
+				{ $sort: { destinationViews: -1, destinationLikes: -1, createdAt: -1, _id: -1 } },
+				{ $limit: limit - list.length },
+			])
+			.exec();
 
 		return this.withMeta([...list, ...fallbackList]);
 	}
 
-	public async getProperties(destinationId: string | undefined, limit: number, memberId?: Types.ObjectId | null): Promise<any> {
+	public async getProperties(
+		destinationId: string | undefined,
+		limit: number,
+		memberId?: Types.ObjectId | null,
+	): Promise<any> {
 		const scope = destinationId ? RankingScope.DESTINATION : RankingScope.GLOBAL;
 		const entries = await this.getEntries(RankingType.TOP_PROPERTIES, scope, destinationId);
 		const filter: any = { propertyStatus: PropertyStatus.ACTIVE, deletedAt: null };
 		if (destinationId) filter.destinationId = new Types.ObjectId(destinationId);
-		const list = await this.findInSnapshotOrder(this.propertyModel, entries, filter, limit, memberId ? [lookUpAuthMemberLiked(memberId)] : []);
+		const list = await this.findInSnapshotOrder(
+			this.propertyModel,
+			entries,
+			filter,
+			limit,
+			memberId ? [lookUpAuthMemberLiked(memberId)] : [],
+		);
 		if (list.length || !destinationId) return this.withMeta(list);
 
-		const fallbackList = await this.propertyModel.aggregate([
-			{ $match: filter },
-			{ $sort: { propertyRating: -1, propertyBookings: -1, propertyViews: -1, createdAt: -1, _id: -1 } },
-			{ $limit: limit },
-			...(memberId ? [lookUpAuthMemberLiked(memberId)] : []),
-		]).exec();
+		const fallbackList = await this.propertyModel
+			.aggregate([
+				{ $match: filter },
+				{
+					$sort: {
+						propertyRating: -1,
+						propertyBookings: -1,
+						propertyViews: -1,
+						createdAt: -1,
+						_id: -1,
+					},
+				},
+				{ $limit: limit },
+				...(memberId ? [lookUpAuthMemberLiked(memberId)] : []),
+			])
+			.exec();
 		return this.withMeta(fallbackList);
 	}
 
-	public async getTours(destinationId: string | undefined, limit: number, memberId?: Types.ObjectId | null): Promise<any> {
+	public async getTours(
+		destinationId: string | undefined,
+		limit: number,
+		memberId?: Types.ObjectId | null,
+	): Promise<any> {
 		const scope = destinationId ? RankingScope.DESTINATION : RankingScope.GLOBAL;
 		const entries = await this.getEntries(RankingType.TOP_TOURS, scope, destinationId);
 		const filter: any = { tourStatus: TourStatus.ACTIVE, deletedAt: null };
 		if (destinationId) filter.destinationId = new Types.ObjectId(destinationId);
-		const list = await this.findInSnapshotOrder(this.tourModel, entries, filter, limit, memberId ? [lookUpAuthMemberLiked(memberId)] : []);
+		const list = await this.findInSnapshotOrder(
+			this.tourModel,
+			entries,
+			filter,
+			limit,
+			memberId ? [lookUpAuthMemberLiked(memberId)] : [],
+		);
 		return this.withMeta(list);
 	}
 
-	public async getTravelers(destinationId: string | undefined, limit: number, memberId?: Types.ObjectId | null): Promise<any> {
+	public async getTravelers(
+		destinationId: string | undefined,
+		limit: number,
+		memberId?: Types.ObjectId | null,
+	): Promise<any> {
 		const scope = destinationId ? RankingScope.DESTINATION : RankingScope.GLOBAL;
 		const entries = await this.getEntries(RankingType.TOP_TRAVELERS, scope, destinationId);
-		const authStages = memberId ? [lookUpAuthMemberFollowData({ followerId: memberId, followingId: '$_id' })] : [];
-		const list = await this.findInSnapshotOrder(this.memberModel, entries, { memberStatus: MemberStatus.ACTIVE, memberType: { $ne: MemberType.ADMIN }, deletedAt: null }, limit, authStages);
+		const authStages = memberId
+			? [lookUpAuthMemberFollowData({ followerId: memberId, followingId: '$_id' })]
+			: [];
+		const list = await this.findInSnapshotOrder(
+			this.memberModel,
+			entries,
+			{ memberStatus: MemberStatus.ACTIVE, memberType: { $ne: MemberType.ADMIN }, deletedAt: null },
+			limit,
+			authStages,
+		);
 		return this.withMeta(list);
 	}
 
 	public async getAgents(agentType: AgentType, limit: number): Promise<any> {
-		const type = agentType === AgentType.HOTEL ? RankingType.TOP_HOTEL_AGENTS : RankingType.TOP_TOUR_AGENTS;
+		const type =
+			agentType === AgentType.HOTEL ? RankingType.TOP_HOTEL_AGENTS : RankingType.TOP_TOUR_AGENTS;
 		const entries = await this.getEntries(type, RankingScope.GLOBAL);
 		const ids = entries.slice(0, limit).map((entry: any) => entry.entityId);
 		if (!ids.length) return this.withMeta([]);
-		const agents = await this.agentModel.aggregate([
-			{ $match: { _id: { $in: ids }, agentType, verificationStatus: AgentVerificationStatus.APPROVED } },
-			{ $lookup: { from: 'members', localField: 'memberId', foreignField: '_id', as: 'memberData' } },
-			{ $unwind: '$memberData' },
-			{ $match: { 'memberData.memberStatus': MemberStatus.ACTIVE, 'memberData.deletedAt': null } },
-			{ $addFields: { __rank: { $indexOfArray: [ids, '$_id'] } } },
-			{ $sort: { __rank: 1, _id: 1 } },
-			{ $project: { memberId: 1, agentType: 1, companyName: 1, companyDesc: 1, memberData: 1 } },
-		]).exec();
+		const agents = await this.agentModel
+			.aggregate([
+				{
+					$match: {
+						_id: { $in: ids },
+						agentType,
+						verificationStatus: AgentVerificationStatus.APPROVED,
+					},
+				},
+				{
+					$lookup: {
+						from: 'members',
+						localField: 'memberId',
+						foreignField: '_id',
+						as: 'memberData',
+					},
+				},
+				{ $unwind: '$memberData' },
+				{
+					$match: { 'memberData.memberStatus': MemberStatus.ACTIVE, 'memberData.deletedAt': null },
+				},
+				{ $addFields: { __rank: { $indexOfArray: [ids, '$_id'] } } },
+				{ $sort: { __rank: 1, _id: 1 } },
+				{ $project: { memberId: 1, agentType: 1, companyName: 1, companyDesc: 1, memberData: 1 } },
+			])
+			.exec();
 		return this.withMeta(agents);
 	}
 
-	private async getEntries(type: RankingType, scope: RankingScope, destinationId?: string): Promise<any[]> {
-		const publication: any = await this.publicationModel.findOne({ isActive: true }).sort({ publishedAt: -1 }).lean().exec();
+	private async getEntries(
+		type: RankingType,
+		scope: RankingScope,
+		destinationId?: string,
+	): Promise<any[]> {
+		const publication: any = await this.publicationModel
+			.findOne({ isActive: true })
+			.sort({ publishedAt: -1 })
+			.lean()
+			.exec();
 		if (!publication) return [];
 		const filter: any = { publicationId: publication._id, rankingType: type, scope };
-		if (scope === RankingScope.DESTINATION) filter.destinationId = new Types.ObjectId(destinationId);
+		if (scope === RankingScope.DESTINATION)
+			filter.destinationId = new Types.ObjectId(destinationId);
 		const snapshot = await this.snapshotModel.findOne(filter).select('entries').lean().exec();
 		return snapshot?.entries ?? [];
 	}
 
-	private async findInSnapshotOrder(model: Model<any>, entries: any[], filter: any, limit: number, authStages: any[] = []): Promise<any[]> {
+	private async findInSnapshotOrder(
+		model: Model<any>,
+		entries: any[],
+		filter: any,
+		limit: number,
+		authStages: any[] = [],
+	): Promise<any[]> {
 		const ids = entries.slice(0, limit).map((entry) => entry.entityId);
 		if (!ids.length) return [];
-		return await model.aggregate([
-			{ $match: { ...filter, _id: { $in: ids } } },
-			{ $addFields: { __rank: { $indexOfArray: [ids, '$_id'] } } },
-			{ $sort: { __rank: 1, _id: 1 } },
-			...authStages,
-		]).exec();
+		return await model
+			.aggregate([
+				{ $match: { ...filter, _id: { $in: ids } } },
+				{ $addFields: { __rank: { $indexOfArray: [ids, '$_id'] } } },
+				{ $sort: { __rank: 1, _id: 1 } },
+				...authStages,
+			])
+			.exec();
 	}
 
 	private withMeta(list: any[]): any {

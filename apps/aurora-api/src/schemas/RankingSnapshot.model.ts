@@ -8,7 +8,12 @@ const RankingSnapshotSchema = new Schema(
 		scope: { type: String, enum: RankingScope, required: true },
 		destinationId: { type: Schema.Types.ObjectId, ref: 'Destination', default: null },
 		periodDays: { type: Number, required: true },
-		entries: [{ entityId: { type: Schema.Types.ObjectId, required: true }, score: { type: Number, required: true } }],
+		entries: [
+			{
+				entityId: { type: Schema.Types.ObjectId, required: true },
+				score: { type: Number, required: true },
+			},
+		],
 		calculatedAt: { type: Date, required: true },
 	},
 	{ timestamps: true, collection: 'ranking-snapshots' },

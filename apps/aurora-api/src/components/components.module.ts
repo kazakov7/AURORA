@@ -48,4 +48,4 @@ import { SupportModule } from './support/support.module';
 		SupportModule,
 	],
 })
-export class ComponentsModule { }
+export class ComponentsModule {}

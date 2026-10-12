@@ -10,8 +10,17 @@ import { shapeIntoMongoObjectId } from '../../libs/config';
 import { WithoutGuard } from '../auth/guards/without.guard';
 import { Types } from 'mongoose';
 import { AuthGuard } from '../auth/guards/auth.guard';
-import { AgentPropertiesInquiry, AllPropertiesInquiry, CreatePropertyInput, OrdinaryInquery, PropertiesInquiry } from '../../libs/dto/property/property.input';
-import { UpdatePropertyInput, UpdatePropertyStatusInput } from '../../libs/dto/property/property.update';
+import {
+	AgentPropertiesInquiry,
+	AllPropertiesInquiry,
+	CreatePropertyInput,
+	OrdinaryInquery,
+	PropertiesInquiry,
+} from '../../libs/dto/property/property.input';
+import {
+	UpdatePropertyInput,
+	UpdatePropertyStatusInput,
+} from '../../libs/dto/property/property.update';
 
 @Resolver()
 export class PropertyResolver {
@@ -118,9 +127,7 @@ export class PropertyResolver {
 	@Roles(MemberType.ADMIN)
 	@UseGuards(RolesGuard)
 	@Mutation(() => Property)
-	public async removePropertyByAdmin(
-		@Args('propertyId') input: string,
-	): Promise<Property> {
+	public async removePropertyByAdmin(@Args('propertyId') input: string): Promise<Property> {
 		const propertyId = shapeIntoMongoObjectId(input);
 		return this.propertyService.removePropertyByAdmin(propertyId);
 	}

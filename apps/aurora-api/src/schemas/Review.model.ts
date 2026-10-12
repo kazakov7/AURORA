@@ -31,6 +31,9 @@ ReviewSchema.index(
 		name: 'reviews_member_target_uq',
 	},
 );
-ReviewSchema.index({ reviewGroup: 1, reviewRefId: 1, reviewStatus: 1, createdAt: 1 }, { name: 'reviews_target_idx' });
+ReviewSchema.index(
+	{ reviewGroup: 1, reviewRefId: 1, reviewStatus: 1, createdAt: 1 },
+	{ name: 'reviews_target_idx' },
+);
 
 export default ReviewSchema;

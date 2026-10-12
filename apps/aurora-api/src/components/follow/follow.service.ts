@@ -1,8 +1,4 @@
-import {
-	BadRequestException,
-	Injectable,
-	InternalServerErrorException,
-} from '@nestjs/common';
+import { BadRequestException, Injectable, InternalServerErrorException } from '@nestjs/common';
 import { InjectModel } from '@nestjs/mongoose';
 import { Model, Types } from 'mongoose';
 import { Follower, Followers, Following, Followings } from '../../libs/dto/follow/follow';
@@ -30,7 +26,7 @@ export class FollowService {
 		private readonly followModel: Model<Follower | Following>,
 		private memberService: MemberService,
 		private readonly notificationService: NotificationService,
-	) { }
+	) {}
 
 	public async subscribe(
 		followerId: Types.ObjectId,
@@ -51,7 +47,9 @@ export class FollowService {
 			result = (await this.followModel.create({ followingId, followerId })) as Follower;
 		} catch (err: any) {
 			if (err?.code !== 11000) throw new BadRequestException(Messages.CREATE_FAILED);
-			const concurrentSubscription = await this.followModel.findOne({ followerId, followingId }).exec();
+			const concurrentSubscription = await this.followModel
+				.findOne({ followerId, followingId })
+				.exec();
 			if (!concurrentSubscription) throw new BadRequestException(Messages.CREATE_FAILED);
 			return concurrentSubscription as Follower;
 		}

@@ -35,7 +35,6 @@ export class TourInput {
 	@MaxLength(200)
 	tourName: string;
 
-
 	@Field({ nullable: true })
 	@IsOptional()
 	@IsString()

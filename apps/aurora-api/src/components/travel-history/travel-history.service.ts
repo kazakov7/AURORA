@@ -43,7 +43,9 @@ export class TravelHistoryService implements OnModuleInit, OnModuleDestroy {
 
 		const tourBookings = await this.bookingModel
 			.aggregate([
-				{ $match: { bookingCategory: BookingCategory.TOUR, bookingStatus: BookingStatus.CONFIRMED } },
+				{
+					$match: { bookingCategory: BookingCategory.TOUR, bookingStatus: BookingStatus.CONFIRMED },
+				},
 				{
 					$lookup: {
 						from: 'tours',
@@ -63,7 +65,10 @@ export class TravelHistoryService implements OnModuleInit, OnModuleDestroy {
 		}
 	}
 
-	public async getMyTravelHistories(memberId: Types.ObjectId, input: TravelHistoriesInquiry): Promise<TravelHistories> {
+	public async getMyTravelHistories(
+		memberId: Types.ObjectId,
+		input: TravelHistoriesInquiry,
+	): Promise<TravelHistories> {
 		const result = await this.travelHistoryModel
 			.aggregate([
 				{ $match: { memberId } },
@@ -136,7 +141,9 @@ export class TravelHistoryService implements OnModuleInit, OnModuleDestroy {
 				if (!target?.destinationId) return;
 
 				const finishedAt =
-					booking.bookingCategory === BookingCategory.PROPERTY ? booking.checkOut : target.tourEndDate;
+					booking.bookingCategory === BookingCategory.PROPERTY
+						? booking.checkOut
+						: target.tourEndDate;
 				if (!finishedAt || finishedAt > new Date()) return;
 
 				const completedBooking = await this.bookingModel

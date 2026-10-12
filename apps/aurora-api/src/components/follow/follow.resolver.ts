@@ -11,7 +11,7 @@ import { FollowInquiry } from '../../libs/dto/follow/follow.input';
 
 @Resolver()
 export class FollowResolver {
-	constructor(private readonly followService: FollowService) { }
+	constructor(private readonly followService: FollowService) {}
 
 	@UseGuards(AuthGuard)
 	@Mutation((returns) => Follower)

@@ -4,7 +4,14 @@ import { io, Socket } from 'socket.io-client';
 import { NotificationService } from '../src/components/notification/notification.service';
 import { MemberType } from '../src/libs/enums/member.enum';
 import { NotificationGroup, NotificationType } from '../src/libs/enums/notification.enum';
-import { clearDatabase, createTestApp, getTestUrl, graphQL, model, seedMember } from './helpers/e2e.helper';
+import {
+	clearDatabase,
+	createTestApp,
+	getTestUrl,
+	graphQL,
+	model,
+	seedMember,
+} from './helpers/e2e.helper';
 
 describe('Notice, Notification, Chat and Socket.IO (e2e)', () => {
 	let app: INestApplication;
@@ -65,7 +72,9 @@ describe('Notice, Notification, Chat and Socket.IO (e2e)', () => {
 		);
 		expect(created.body.errors).toBeUndefined();
 		const noticeId = created.body.data.createNotice._id;
-		const userNotifications = await model(app, 'Notification').find({ receiverId: user._id }).lean();
+		const userNotifications = await model(app, 'Notification')
+			.find({ receiverId: user._id })
+			.lean();
 		expect(userNotifications).toHaveLength(1);
 		expect(userNotifications[0]).toMatchObject({
 			notificationType: NotificationType.SYSTEM,
@@ -113,7 +122,12 @@ describe('Notice, Notification, Chat and Socket.IO (e2e)', () => {
 			notificationDesc: 'Welcome to AURA',
 		});
 
-		const unread = await graphQL(app, `query { getUnreadNotificationCount }`, {}, receiver.accessToken);
+		const unread = await graphQL(
+			app,
+			`query { getUnreadNotificationCount }`,
+			{},
+			receiver.accessToken,
+		);
 		expect(unread.body.data.getUnreadNotificationCount).toBe(1);
 		const inbox = await graphQL(
 			app,
@@ -151,7 +165,12 @@ describe('Notice, Notification, Chat and Socket.IO (e2e)', () => {
 			notificationGroup: NotificationGroup.SYSTEM,
 			notificationTitle: 'Second',
 		});
-		const allRead = await graphQL(app, `mutation { markAllNotificationsAsRead }`, {}, receiver.accessToken);
+		const allRead = await graphQL(
+			app,
+			`mutation { markAllNotificationsAsRead }`,
+			{},
+			receiver.accessToken,
+		);
 		expect(allRead.body.data.markAllNotificationsAsRead).toBe(1);
 	});
 
@@ -193,7 +212,12 @@ describe('Notice, Notification, Chat and Socket.IO (e2e)', () => {
 			socket.once('notification:new', resolve);
 			setTimeout(() => reject(new Error('notification:new timeout')), 5000);
 		});
-		const followed = await graphQL(app, `mutation Follow($input: String!) { subscribe(input: $input) { _id } }`, { input: owner._id }, follower.accessToken);
+		const followed = await graphQL(
+			app,
+			`mutation Follow($input: String!) { subscribe(input: $input) { _id } }`,
+			{ input: owner._id },
+			follower.accessToken,
+		);
 		expect(followed.body.errors).toBeUndefined();
 		const notification = await event;
 		expect(notification.notificationType).toBe(NotificationType.FOLLOW);
@@ -208,7 +232,9 @@ describe('Notice, Notification, Chat and Socket.IO (e2e)', () => {
 
 		const own = await graphQL(app, query, { input: member._id }, member.accessToken);
 		expect(own.body.errors).toBeUndefined();
-		const payload = JSON.parse(Buffer.from(own.body.data.getMember.accessToken.split('.')[1], 'base64').toString());
+		const payload = JSON.parse(
+			Buffer.from(own.body.data.getMember.accessToken.split('.')[1], 'base64').toString(),
+		);
 		expect(payload.memberType).toBe(MemberType.AGENT);
 		expect(payload.memberPassword).toBeUndefined();
 
@@ -255,20 +281,30 @@ describe('Notice, Notification, Chat and Socket.IO (e2e)', () => {
 
 		const deniedJoin: any = await emitAck(outsiderSocket, 'chat:join', { chatId });
 		expect(deniedJoin.ok).toBe(false);
-		const deniedSend: any = await emitAck(outsiderSocket, 'message:send', { chatId, messageContent: 'Denied' });
+		const deniedSend: any = await emitAck(outsiderSocket, 'message:send', {
+			chatId,
+			messageContent: 'Denied',
+		});
 		expect(deniedSend.ok).toBe(false);
 
 		const newMessage = new Promise<any>((resolve, reject) => {
 			receiverSocket.once('message:new', resolve);
 			setTimeout(() => reject(new Error('message:new timeout')), 5000);
 		});
-		const payload = { chatId, messageContent: 'Hello from socket', messageType: 'TEXT', clientMessageId: 'retry-001' };
+		const payload = {
+			chatId,
+			messageContent: 'Hello from socket',
+			messageType: 'TEXT',
+			clientMessageId: 'retry-001',
+		};
 		const sent: any = await emitAck(senderSocket, 'message:send', payload);
 		expect(sent.ok).toBe(true);
 		expect((await newMessage).messageContent).toBe('Hello from socket');
 		const retry: any = await emitAck(senderSocket, 'message:send', payload);
 		expect(retry.message._id).toBe(sent.message._id);
-		expect(await model(app, 'Message').countDocuments({ chatId, clientMessageId: 'retry-001' })).toBe(1);
+		expect(
+			await model(app, 'Message').countDocuments({ chatId, clientMessageId: 'retry-001' }),
+		).toBe(1);
 
 		const history = await graphQL(
 			app,

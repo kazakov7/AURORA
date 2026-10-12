@@ -15,7 +15,7 @@ export class NoticeService {
 	constructor(
 		@InjectModel('Notice') private readonly noticeModel: Model<any>,
 		private readonly notificationService: NotificationService,
-	) { }
+	) {}
 
 	public async createNotice(memberId: Types.ObjectId, input: NoticeInput): Promise<Notice> {
 		try {
@@ -45,7 +45,8 @@ export class NoticeService {
 
 	public async updateNoticeByAdmin(input: NoticeUpdate): Promise<Notice> {
 		const { _id, ...update } = input;
-		if (update.noticeStatus === NoticeStatus.DELETED) throw new BadRequestException(Messages.BAD_REQUEST);
+		if (update.noticeStatus === NoticeStatus.DELETED)
+			throw new BadRequestException(Messages.BAD_REQUEST);
 
 		const result = await this.noticeModel.findByIdAndUpdate(_id, update, { new: true }).exec();
 		if (!result) throw new InternalServerErrorException(Messages.NO_DATA_FOUND);
@@ -54,7 +55,11 @@ export class NoticeService {
 
 	public async removeNoticeByAdmin(noticeId: Types.ObjectId): Promise<string> {
 		const result = await this.noticeModel
-			.findOneAndUpdate({ _id: noticeId, noticeStatus: { $ne: NoticeStatus.DELETED } }, { noticeStatus: NoticeStatus.DELETED }, { new: true })
+			.findOneAndUpdate(
+				{ _id: noticeId, noticeStatus: { $ne: NoticeStatus.DELETED } },
+				{ noticeStatus: NoticeStatus.DELETED },
+				{ new: true },
+			)
 			.exec();
 		if (!result) throw new InternalServerErrorException(Messages.REMOVE_FAILED);
 		return 'Notice successfully deleted';
@@ -70,7 +75,10 @@ export class NoticeService {
 			match.$or = [{ noticeTitle: regex }, { noticeContent: regex }];
 		}
 
-		const sort: T = { [input.sort ?? 'createdAt']: input.direction ?? Direction.DESC, _id: Direction.DESC };
+		const sort: T = {
+			[input.sort ?? 'createdAt']: input.direction ?? Direction.DESC,
+			_id: Direction.DESC,
+		};
 		const result = await this.noticeModel
 			.aggregate([
 				{ $match: match },

@@ -10,9 +10,7 @@ import { lookupMember } from '../../libs/config';
 
 @Injectable()
 export class BookingService {
-	constructor(
-		@InjectModel('Booking') private readonly bookingModel: Model<any>,
-	) { }
+	constructor(@InjectModel('Booking') private readonly bookingModel: Model<any>) {}
 
 	public async getUnavailablePropertyIds(checkIn: Date, checkOut: Date): Promise<Types.ObjectId[]> {
 		const now = new Date();
@@ -36,8 +34,15 @@ export class BookingService {
 	 * Calendar availability uses half-open intervals: [checkIn, checkOut).
 	 * Therefore a guest can check in on the same date a previous guest checks out.
 	 */
-	public async getPropertyAvailability(input: PropertyAvailabilityInquiry): Promise<PropertyAvailabilityRange[]> {
-		if (!Types.ObjectId.isValid(input.propertyId) || !(input.startDate instanceof Date) || !(input.endDate instanceof Date) || input.endDate <= input.startDate) {
+	public async getPropertyAvailability(
+		input: PropertyAvailabilityInquiry,
+	): Promise<PropertyAvailabilityRange[]> {
+		if (
+			!Types.ObjectId.isValid(input.propertyId) ||
+			!(input.startDate instanceof Date) ||
+			!(input.endDate instanceof Date) ||
+			input.endDate <= input.startDate
+		) {
 			throw new BadRequestException(Messages.INVALID_DATA);
 		}
 
@@ -76,7 +81,10 @@ export class BookingService {
 		return this.getBookings(match, input);
 	}
 
-	public async getAgentPropertyBookings(memberId: Types.ObjectId, input: BookingsInquiry): Promise<Bookings> {
+	public async getAgentPropertyBookings(
+		memberId: Types.ObjectId,
+		input: BookingsInquiry,
+	): Promise<Bookings> {
 		const match: T = { bookingCategory: BookingCategory.PROPERTY };
 		if (input.search?.bookingStatusList?.length) {
 			match.bookingStatus = { $in: input.search.bookingStatusList };
@@ -113,7 +121,10 @@ export class BookingService {
 		return result[0] as Bookings;
 	}
 
-	public async getMyTourBookings(memberId: Types.ObjectId, input: BookingsInquiry): Promise<Bookings> {
+	public async getMyTourBookings(
+		memberId: Types.ObjectId,
+		input: BookingsInquiry,
+	): Promise<Bookings> {
 		const match: T = { memberId, bookingCategory: BookingCategory.TOUR };
 		if (input.search?.bookingStatusList?.length) {
 			match.bookingStatus = { $in: input.search.bookingStatusList };
@@ -121,7 +132,10 @@ export class BookingService {
 		return this.getTourBookings(match, input);
 	}
 
-	public async getAgentTourBookings(memberId: Types.ObjectId, input: BookingsInquiry): Promise<Bookings> {
+	public async getAgentTourBookings(
+		memberId: Types.ObjectId,
+		input: BookingsInquiry,
+	): Promise<Bookings> {
 		const match: T = { bookingCategory: BookingCategory.TOUR };
 		if (input.search?.bookingStatusList?.length) {
 			match.bookingStatus = { $in: input.search.bookingStatusList };
@@ -158,7 +172,6 @@ export class BookingService {
 		return result[0] as Bookings;
 	}
 
-
 	public async getAllBookingsByAdmin(input: BookingsInquiry): Promise<Bookings> {
 		const match: T = {};
 		if (input.search?.bookingStatusList?.length) {
@@ -176,10 +189,24 @@ export class BookingService {
 							{ $limit: input.limit },
 							lookupMember,
 							{ $unwind: { path: '$memberData', preserveNullAndEmptyArrays: true } },
-							{ $lookup: { from: 'properties', localField: 'bookingRefId', foreignField: '_id', as: 'propertyData' } },
+							{
+								$lookup: {
+									from: 'properties',
+									localField: 'bookingRefId',
+									foreignField: '_id',
+									as: 'propertyData',
+								},
+							},
 							{ $unwind: { path: '$propertyData', preserveNullAndEmptyArrays: true } },
-							{ $lookup: { from: 'tours', localField: 'bookingRefId', foreignField: '_id', as: 'tourData' } },
-							{ $unwind: { path: '$tourData', preserveNullAndEmptyArrays: true } }
+							{
+								$lookup: {
+									from: 'tours',
+									localField: 'bookingRefId',
+									foreignField: '_id',
+									as: 'tourData',
+								},
+							},
+							{ $unwind: { path: '$tourData', preserveNullAndEmptyArrays: true } },
 						],
 						metaCounter: [{ $count: 'total' }],
 					},
@@ -256,5 +283,4 @@ export class BookingService {
 
 		return result[0] as Bookings;
 	}
-
 }

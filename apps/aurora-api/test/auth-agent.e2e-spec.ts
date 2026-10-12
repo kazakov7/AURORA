@@ -32,7 +32,13 @@ describe('Auth, Member and Agent (e2e)', () => {
 			`mutation Signup($input: MemberInput!) {
 				signup(input: $input) { _id memberNick memberFullName memberType accessToken }
 			}`,
-			{ input: { memberNick: 'authuser', memberFullName: 'Aura User', memberPassword: 'pass1234', memberEmail: 'auth@aura.test' } },
+			{
+				input: {
+					memberNick: 'authuser',
+					memberFullName: 'Aura User',
+					memberPassword: 'pass1234',
+				},
+			},
 		);
 		expect(signup.body.errors).toBeUndefined();
 		expect(signup.body.data.signup.memberFullName).toBe('Aura User');
@@ -47,20 +53,12 @@ describe('Auth, Member and Agent (e2e)', () => {
 			{ input: { memberNick: 'authuser', memberPassword: 'pass1234' } },
 		);
 		expect(login.body.errors).toBeUndefined();
+		const token = login.body.data.login.accessToken;
 
-		const emailLogin = await graphQL(
+		const unauthorized = await graphQL(
 			app,
-			`mutation Login($input: LoginInput!) {
-				login(input: $input) { _id memberNick accessToken }
-			}`,
-			{ input: { memberNick: '  AUTH@AURA.TEST  ', memberPassword: 'pass1234' } },
+			`mutation { updateMember(input: { memberFullName: "Blocked" }) { _id } }`,
 		);
-		expect(emailLogin.body.errors).toBeUndefined();
-		expect(emailLogin.body.data.login._id).toBe(login.body.data.login._id);
-		expect(emailLogin.body.data.login.memberNick).toBe('authuser');
-		const token = emailLogin.body.data.login.accessToken;
-
-		const unauthorized = await graphQL(app, `mutation { updateMember(input: { memberFullName: "Blocked" }) { _id } }`);
 		expect(unauthorized.body.errors?.[0].message).toContain('Bearer token');
 
 		const invalidToken = await graphQL(
@@ -82,14 +80,22 @@ describe('Auth, Member and Agent (e2e)', () => {
 	});
 
 	it('rejects invalid signup DTO and invalid ObjectId', async () => {
-		const invalidDto = await graphQL(app, `mutation Signup($input: MemberInput!) { signup(input: $input) { _id } }`, {
-			input: { memberNick: 'x', memberPassword: '1' },
-		});
+		const invalidDto = await graphQL(
+			app,
+			`mutation Signup($input: MemberInput!) { signup(input: $input) { _id } }`,
+			{
+				input: { memberNick: 'x', memberPassword: '1' },
+			},
+		);
 		expect(invalidDto.body.errors).toBeDefined();
 
-		const invalidLogin = await graphQL(app, `mutation Login($input: LoginInput!) { login(input: $input) { _id } }`, {
-			input: { memberNick: 'x'.repeat(255), memberPassword: 'pass1234' },
-		});
+		const invalidLogin = await graphQL(
+			app,
+			`mutation Login($input: LoginInput!) { login(input: $input) { _id } }`,
+			{
+				input: { memberNick: 'x'.repeat(255), memberPassword: 'pass1234' },
+			},
+		);
 		expect(invalidLogin.body.errors?.[0]).toMatchObject({
 			extensions: { code: 'BAD_REQUEST' },
 			message: 'memberNick must be shorter than or equal to 254 characters',
@@ -99,24 +105,36 @@ describe('Auth, Member and Agent (e2e)', () => {
 		expect(invalidId.body.errors?.[0].message).toBe('Invalid ID!');
 	});
 
-	it('does not store blank optional contact fields during signup', async () => {
-		const first = await graphQL(
-			app,
-			`mutation Signup($input: MemberInput!) { signup(input: $input) { _id memberEmail memberPhone } }`,
-			{ input: { memberNick: 'blankphone1', memberPassword: 'pass1234', memberEmail: '', memberPhone: '' } },
-		);
-		const second = await graphQL(
-			app,
-			`mutation Signup($input: MemberInput!) { signup(input: $input) { _id memberEmail memberPhone } }`,
-			{ input: { memberNick: 'blankphone2', memberPassword: 'pass1234', memberEmail: '', memberPhone: '' } },
-		);
+	it('treats the full name as optional and accepts no email during signup', async () => {
+		const signupMutation = `mutation Signup($input: MemberInput!) {
+			signup(input: $input) { _id memberFullName memberEmail }
+		}`;
+		const trimmed = await graphQL(app, signupMutation, {
+			input: {
+				memberNick: 'fullname1',
+				memberPassword: 'pass1234',
+				memberFullName: '  Aura User ',
+			},
+		});
+		const blank = await graphQL(app, signupMutation, {
+			input: { memberNick: 'fullname2', memberPassword: 'pass1234', memberFullName: '   ' },
+		});
+		const omitted = await graphQL(app, signupMutation, {
+			input: { memberNick: 'fullname3', memberPassword: 'pass1234' },
+		});
 
-		expect(first.body.errors).toBeUndefined();
-		expect(second.body.errors).toBeUndefined();
-		expect(first.body.data.signup.memberEmail).toBeNull();
-		expect(second.body.data.signup.memberEmail).toBeNull();
-		expect(first.body.data.signup.memberPhone).toBeNull();
-		expect(second.body.data.signup.memberPhone).toBeNull();
+		expect(trimmed.body.data.signup.memberFullName).toBe('Aura User');
+		expect(blank.body.errors).toBeUndefined();
+		expect(blank.body.data.signup.memberFullName).toBeNull();
+		expect(omitted.body.errors).toBeUndefined();
+		expect(omitted.body.data.signup.memberFullName).toBeNull();
+		expect(omitted.body.data.signup.memberEmail).toBeNull();
+
+		const withEmail = await graphQL(app, signupMutation, {
+			input: { memberNick: 'emailuser', memberPassword: 'pass1234', memberEmail: 'a@aura.test' },
+		});
+		expect(withEmail.body.errors?.[0].extensions.code).toBe('BAD_USER_INPUT');
+		expect(await model(app, 'Member').countDocuments({})).toBe(3);
 	});
 
 	it('verifies Google identities server-side, creates passwordless users and reuses the AURORA JWT flow', async () => {
@@ -169,13 +187,15 @@ describe('Auth, Member and Agent (e2e)', () => {
 			email: 'existing@example.com',
 			name: 'Existing Google Traveler',
 		});
-		await app.get(MemberService).signup({
-			memberNick: 'existing',
-			memberPassword: 'pass1234',
-			memberEmail: 'existing@example.com',
-		});
+		await app.get(MemberService).signup({ memberNick: 'existing', memberPassword: 'pass1234' });
+		await model(app, 'Member').updateOne(
+			{ memberNick: 'existing' },
+			{ memberEmail: 'existing@example.com' },
+		);
 
-		const collision = await graphQL(app, googleMutation, { input: { credential: 'google-id-token' } });
+		const collision = await graphQL(app, googleMutation, {
+			input: { credential: 'google-id-token' },
+		});
 		expect(collision.body.errors?.[0].message).toBe(Messages.GOOGLE_EMAIL_CONFLICT);
 	});
 
@@ -192,7 +212,9 @@ describe('Auth, Member and Agent (e2e)', () => {
 			googleAuth(input: $input) { _id memberNick }
 		}`;
 
-		const created = await graphQL(app, googleMutation, { input: { credential: 'google-id-token' } });
+		const created = await graphQL(app, googleMutation, {
+			input: { credential: 'google-id-token' },
+		});
 		expect(created.body.errors).toBeUndefined();
 		expect(created.body.data.googleAuth.memberNick).not.toBe('googletravel');
 		expect(created.body.data.googleAuth.memberNick).toHaveLength(12);
@@ -200,7 +222,9 @@ describe('Auth, Member and Agent (e2e)', () => {
 		await model(app, 'Member').findByIdAndUpdate(created.body.data.googleAuth._id, {
 			memberStatus: MemberStatus.BLOCKED,
 		});
-		const blocked = await graphQL(app, googleMutation, { input: { credential: 'google-id-token' } });
+		const blocked = await graphQL(app, googleMutation, {
+			input: { credential: 'google-id-token' },
+		});
 		expect(blocked.body.errors?.[0].message).toBe(Messages.NOT_AUTHENTICATED);
 	});
 
@@ -215,7 +239,9 @@ describe('Auth, Member and Agent (e2e)', () => {
 		const kakaoMutation = `mutation KakaoAuth($input: KakaoAuthInput!) {
 			kakaoAuth(input: $input) { _id memberNick memberImage memberType memberAuthType memberEmail accessToken }
 		}`;
-		const variables = { input: { code: 'kakao-code', redirectUri: 'https://app.aurora.test/auth/kakao' } };
+		const variables = {
+			input: { code: 'kakao-code', redirectUri: 'https://app.aurora.test/auth/kakao' },
+		};
 
 		const first = await graphQL(app, kakaoMutation, variables);
 		expect(first.body.errors).toBeUndefined();
@@ -275,11 +301,15 @@ describe('Auth, Member and Agent (e2e)', () => {
 		const memberService = app.get(MemberService);
 		await memberService.signup({ memberNick: 'kakaouser', memberPassword: 'pass1234' });
 		const authService = app.get(AuthService);
-		jest.spyOn(authService, 'verifyKakaoAuthorizationCode').mockResolvedValue({ subject: 'kakao-subject-2' });
+		jest
+			.spyOn(authService, 'verifyKakaoAuthorizationCode')
+			.mockResolvedValue({ subject: 'kakao-subject-2' });
 		const kakaoMutation = `mutation KakaoAuth($input: KakaoAuthInput!) {
 			kakaoAuth(input: $input) { _id memberNick memberEmail memberImage }
 		}`;
-		const variables = { input: { code: 'kakao-code', redirectUri: 'https://app.aurora.test/auth/kakao' } };
+		const variables = {
+			input: { code: 'kakao-code', redirectUri: 'https://app.aurora.test/auth/kakao' },
+		};
 
 		const created = await graphQL(app, kakaoMutation, variables);
 		expect(created.body.errors).toBeUndefined();
@@ -323,7 +353,9 @@ describe('Auth, Member and Agent (e2e)', () => {
 	it('rejects invalid Kakao authorization codes and email collisions with password or Google accounts', async () => {
 		const authService = app.get(AuthService);
 		const kakaoMutation = `mutation KakaoAuth($input: KakaoAuthInput!) { kakaoAuth(input: $input) { _id } }`;
-		const variables = { input: { code: 'kakao-code', redirectUri: 'https://app.aurora.test/auth/kakao' } };
+		const variables = {
+			input: { code: 'kakao-code', redirectUri: 'https://app.aurora.test/auth/kakao' },
+		};
 		jest
 			.spyOn(authService, 'verifyKakaoAuthorizationCode')
 			.mockRejectedValue(new BadRequestException(Messages.INVALID_KAKAO_AUTHORIZATION_CODE));
@@ -332,11 +364,11 @@ describe('Auth, Member and Agent (e2e)', () => {
 
 		jest.restoreAllMocks();
 		const memberService = app.get(MemberService);
-		await memberService.signup({
-			memberNick: 'passwordusr',
-			memberPassword: 'pass1234',
-			memberEmail: 'password@example.com',
-		});
+		await memberService.signup({ memberNick: 'passwordusr', memberPassword: 'pass1234' });
+		await model(app, 'Member').updateOne(
+			{ memberNick: 'passwordusr' },
+			{ memberEmail: 'password@example.com' },
+		);
 		jest.spyOn(authService, 'verifyKakaoAuthorizationCode').mockResolvedValue({
 			subject: 'kakao-subject-3',
 			email: 'password@example.com',
@@ -509,7 +541,9 @@ describe('Auth, Member and Agent (e2e)', () => {
 				},
 			},
 		);
-		expect(providerField.body.errors?.[0].message).toContain('Cannot query field "telegramSubject"');
+		expect(providerField.body.errors?.[0].message).toContain(
+			'Cannot query field "telegramSubject"',
+		);
 	});
 
 	it('handles application approve/reject, duplicate and role authorization', async () => {
@@ -527,11 +561,21 @@ describe('Auth, Member and Agent (e2e)', () => {
 			businessNumber: 'HOTEL-001',
 			companyAddress: 'Seoul',
 		};
-		const submitted = await graphQL(app, submitMutation, { input: hotelInput }, hotelApplicant.accessToken);
+		const submitted = await graphQL(
+			app,
+			submitMutation,
+			{ input: hotelInput },
+			hotelApplicant.accessToken,
+		);
 		expect(submitted.body.errors).toBeUndefined();
 		const hotelApplicationId = submitted.body.data.submitAgentApplication._id;
 
-		const duplicate = await graphQL(app, submitMutation, { input: hotelInput }, hotelApplicant.accessToken);
+		const duplicate = await graphQL(
+			app,
+			submitMutation,
+			{ input: hotelInput },
+			hotelApplicant.accessToken,
+		);
 		expect(duplicate.body.errors?.[0].message).toContain('application already exists');
 
 		const forbiddenApprove = await graphQL(
@@ -573,7 +617,12 @@ describe('Auth, Member and Agent (e2e)', () => {
 			`mutation Reject($input: RejectAgentApplicationInput!) {
 				rejectAgentApplication(input: $input) { _id verificationStatus rejectionReason }
 			}`,
-			{ input: { _id: tourSubmitted.body.data.submitAgentApplication._id, rejectionReason: 'Incomplete documents' } },
+			{
+				input: {
+					_id: tourSubmitted.body.data.submitAgentApplication._id,
+					rejectionReason: 'Incomplete documents',
+				},
+			},
 			admin.accessToken,
 		);
 		expect(rejected.body.errors).toBeUndefined();
@@ -603,11 +652,15 @@ describe('Auth, Member and Agent (e2e)', () => {
 			`mutation Reject($input: RejectAgentApplicationInput!) {
 				rejectAgentApplication(input: $input) { _id verificationStatus rejectionReason }
 			}`,
-			{ input: { _id: firstId, rejectionReason: 'Please provide current registration documents.' } },
+			{
+				input: { _id: firstId, rejectionReason: 'Please provide current registration documents.' },
+			},
 			admin.accessToken,
 		);
 		expect(rejected.body.errors).toBeUndefined();
-		expect(rejected.body.data.rejectAgentApplication.rejectionReason).toBe('Please provide current registration documents.');
+		expect(rejected.body.data.rejectAgentApplication.rejectionReason).toBe(
+			'Please provide current registration documents.',
+		);
 
 		const resubmitted = await graphQL(
 			app,
@@ -635,13 +688,20 @@ describe('Auth, Member and Agent (e2e)', () => {
 			applicant.accessToken,
 		);
 		expect(myApplications.body.errors).toBeUndefined();
-		expect(myApplications.body.data.getMyAgentApplications.list.map((item: { _id: string }) => item._id)).toEqual([resubmittedId, firstId]);
+		expect(
+			myApplications.body.data.getMyAgentApplications.list.map((item: { _id: string }) => item._id),
+		).toEqual([resubmittedId, firstId]);
 		expect(myApplications.body.data.getMyAgentApplications.list[1]).toMatchObject({
 			verificationStatus: 'REJECTED',
 			rejectionReason: 'Please provide current registration documents.',
 		});
 
-		const duplicate = await graphQL(app, submitMutation, { input: firstInput }, applicant.accessToken);
+		const duplicate = await graphQL(
+			app,
+			submitMutation,
+			{ input: firstInput },
+			applicant.accessToken,
+		);
 		expect(duplicate.body.errors?.[0].message).toContain('application already exists');
 
 		const historicalRejection = await graphQL(
@@ -663,7 +723,11 @@ describe('Auth, Member and Agent (e2e)', () => {
 			graphQL(app, submitMutation, { input: concurrentInput }, concurrentApplicant.accessToken),
 		]);
 		expect(concurrentResults.filter((result) => !result.body.errors)).toHaveLength(1);
-		expect(concurrentResults.filter((result) => result.body.errors?.[0].message.includes('application already exists'))).toHaveLength(1);
+		expect(
+			concurrentResults.filter((result) =>
+				result.body.errors?.[0].message.includes('application already exists'),
+			),
+		).toHaveLength(1);
 
 		const approved = await graphQL(
 			app,
@@ -673,7 +737,9 @@ describe('Auth, Member and Agent (e2e)', () => {
 		);
 		expect(approved.body.errors).toBeUndefined();
 		expect(approved.body.data.approveAgentApplication.verificationStatus).toBe('APPROVED');
-		expect((await model(app, 'Member').findById(applicant._id).lean()).memberType).toBe(MemberType.AGENT);
+		expect((await model(app, 'Member').findById(applicant._id).lean()).memberType).toBe(
+			MemberType.AGENT,
+		);
 
 		const adminList = await graphQL(
 			app,
@@ -684,7 +750,9 @@ describe('Auth, Member and Agent (e2e)', () => {
 			admin.accessToken,
 		);
 		expect(adminList.body.errors).toBeUndefined();
-		const history = adminList.body.data.getAgentApplications.list.filter((item: { _id: string }) => item._id === firstId || item._id === resubmittedId);
+		const history = adminList.body.data.getAgentApplications.list.filter(
+			(item: { _id: string }) => item._id === firstId || item._id === resubmittedId,
+		);
 		expect(history).toHaveLength(2);
 		expect(history.find((item: { _id: string }) => item._id === firstId)).toMatchObject({
 			verificationStatus: 'REJECTED',

@@ -13,7 +13,7 @@ import { NoticeService } from './notice.service';
 
 @Resolver()
 export class NoticeResolver {
-	constructor(private readonly noticeService: NoticeService) { }
+	constructor(private readonly noticeService: NoticeService) {}
 
 	@Roles(MemberType.ADMIN)
 	@UseGuards(RolesGuard)

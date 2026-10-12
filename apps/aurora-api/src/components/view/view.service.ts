@@ -17,7 +17,7 @@ export class ViewService implements OnModuleInit {
 	constructor(
 		@InjectModel('View')
 		private readonly viewModel: Model<View>,
-	) { }
+	) {}
 
 	public async onModuleInit(): Promise<void> {
 		await this.removeDuplicateAuthenticatedViews();
@@ -33,11 +33,13 @@ export class ViewService implements OnModuleInit {
 
 	public async recordView(input: ViewInput): Promise<View | null> {
 		try {
-			const result = await this.viewModel.updateOne(
-				{ memberId: input.memberId, viewGroup: input.viewGroup, viewRefId: input.viewRefId },
-				{ $setOnInsert: input },
-				{ upsert: true },
-			).exec();
+			const result = await this.viewModel
+				.updateOne(
+					{ memberId: input.memberId, viewGroup: input.viewGroup, viewRefId: input.viewRefId },
+					{ $setOnInsert: input },
+					{ upsert: true },
+				)
+				.exec();
 			return result.upsertedCount === 1 ? ({ ...input } as View) : null;
 		} catch (error) {
 			if ((error as { code?: number }).code === 11000) return null;
@@ -46,12 +48,20 @@ export class ViewService implements OnModuleInit {
 	}
 
 	private async removeDuplicateAuthenticatedViews(): Promise<void> {
-		const duplicates = await this.viewModel.aggregate<{ ids: Types.ObjectId[] }>([
-			{ $match: { memberId: { $type: 'objectId' } } },
-			{ $sort: { createdAt: 1, _id: 1 } },
-			{ $group: { _id: { memberId: '$memberId', viewGroup: '$viewGroup', viewRefId: '$viewRefId' }, ids: { $push: '$_id' }, count: { $sum: 1 } } },
-			{ $match: { count: { $gt: 1 } } },
-		]).exec();
+		const duplicates = await this.viewModel
+			.aggregate<{ ids: Types.ObjectId[] }>([
+				{ $match: { memberId: { $type: 'objectId' } } },
+				{ $sort: { createdAt: 1, _id: 1 } },
+				{
+					$group: {
+						_id: { memberId: '$memberId', viewGroup: '$viewGroup', viewRefId: '$viewRefId' },
+						ids: { $push: '$_id' },
+						count: { $sum: 1 },
+					},
+				},
+				{ $match: { count: { $gt: 1 } } },
+			])
+			.exec();
 
 		for (const duplicate of duplicates) {
 			await this.viewModel.deleteMany({ _id: { $in: duplicate.ids.slice(1) } }).exec();
@@ -98,7 +108,10 @@ export class ViewService implements OnModuleInit {
 		return result;
 	}
 
-	public async getVisitedTours(memberId: Types.ObjectId, input: OrdinaryTourInquiry): Promise<Tours> {
+	public async getVisitedTours(
+		memberId: Types.ObjectId,
+		input: OrdinaryTourInquiry,
+	): Promise<Tours> {
 		const data: T = await this.viewModel
 			.aggregate([
 				{ $match: { viewGroup: ViewGroup.TOUR, memberId } },

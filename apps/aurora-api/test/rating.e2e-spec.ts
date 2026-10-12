@@ -59,7 +59,13 @@ describe('One-time ratings (e2e)', () => {
 			const comment = await graphQL(
 				app,
 				`mutation Comment($input: CommentInput!) { createComment(input: $input) { _id } }`,
-				{ input: { commentGroup: 'PROPERTY', commentRefId: property._id.toString(), commentContent } },
+				{
+					input: {
+						commentGroup: 'PROPERTY',
+						commentRefId: property._id.toString(),
+						commentContent,
+					},
+				},
 				user.accessToken,
 			);
 			expect(comment.body.errors).toBeUndefined();
@@ -85,45 +91,48 @@ describe('One-time ratings (e2e)', () => {
 	it.each([
 		['TOUR', 'Tour', 'tourRating', 'tourReviews'],
 		['ARTICLE', 'BoardArticle', 'articleRating', 'articleReviews'],
-	] as const)('stores one %s rating and refreshes its aggregate', async (group, modelName, ratingField, countField) => {
-		const user = await seedMember(app, `rate${group.toLowerCase()}`.slice(0, 12));
-		const owner = await seedMember(app, `owner${group.toLowerCase()}`.slice(0, 12));
-		const destination = await model(app, 'Destination').create({
-			destinationName: `${group} Country`,
-			destinationSlug: `${group.toLowerCase()}-country`,
-			destinationCountry: group.slice(0, 2),
-			destinationStatus: 'ACTIVE',
-		});
-		const target =
-			group === 'TOUR'
-				? await model(app, modelName).create({
-						memberId: owner._id,
-						destinationId: destination._id,
-						tourName: 'Rating Tour',
-						tourStatus: 'ACTIVE',
-						tourPrice: 50000,
-						tourCurrency: 'USD',
-						tourStartDate: new Date(Date.now() + 86_400_000),
-						tourEndDate: new Date(Date.now() + 172_800_000),
-						tourCapacity: 10,
-					})
-				: await model(app, modelName).create({
-						memberId: owner._id,
-						articleCategory: 'GUIDE',
-						articleStatus: 'PUBLISHED',
-						articleTitle: 'Rating Article',
-						articleContent: 'A detailed travel article.',
-					});
+	] as const)(
+		'stores one %s rating and refreshes its aggregate',
+		async (group, modelName, ratingField, countField) => {
+			const user = await seedMember(app, `rate${group.toLowerCase()}`.slice(0, 12));
+			const owner = await seedMember(app, `owner${group.toLowerCase()}`.slice(0, 12));
+			const destination = await model(app, 'Destination').create({
+				destinationName: `${group} Country`,
+				destinationSlug: `${group.toLowerCase()}-country`,
+				destinationCountry: group.slice(0, 2),
+				destinationStatus: 'ACTIVE',
+			});
+			const target =
+				group === 'TOUR'
+					? await model(app, modelName).create({
+							memberId: owner._id,
+							destinationId: destination._id,
+							tourName: 'Rating Tour',
+							tourStatus: 'ACTIVE',
+							tourPrice: 50000,
+							tourCurrency: 'USD',
+							tourStartDate: new Date(Date.now() + 86_400_000),
+							tourEndDate: new Date(Date.now() + 172_800_000),
+							tourCapacity: 10,
+						})
+					: await model(app, modelName).create({
+							memberId: owner._id,
+							articleCategory: 'GUIDE',
+							articleStatus: 'PUBLISHED',
+							articleTitle: 'Rating Article',
+							articleContent: 'A detailed travel article.',
+						});
 
-		const result = await graphQL(
-			app,
-			`mutation SubmitRating($input: RatingInput!) { submitRating(input: $input) { reviewRating } }`,
-			{ input: { reviewGroup: group, reviewRefId: target._id.toString(), reviewRating: 5 } },
-			user.accessToken,
-		);
-		expect(result.body.errors).toBeUndefined();
-		const stored = await model(app, modelName).findById(target._id).lean();
-		expect(stored[ratingField]).toBe(5);
-		expect(stored[countField]).toBe(1);
-	});
+			const result = await graphQL(
+				app,
+				`mutation SubmitRating($input: RatingInput!) { submitRating(input: $input) { reviewRating } }`,
+				{ input: { reviewGroup: group, reviewRefId: target._id.toString(), reviewRating: 5 } },
+				user.accessToken,
+			);
+			expect(result.body.errors).toBeUndefined();
+			const stored = await model(app, modelName).findById(target._id).lean();
+			expect(stored[ratingField]).toBe(5);
+			expect(stored[countField]).toBe(1);
+		},
+	);
 });

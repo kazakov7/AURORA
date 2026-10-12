@@ -3,7 +3,11 @@ import { Args, Mutation, Query, Resolver } from '@nestjs/graphql';
 import { Types } from 'mongoose';
 import { shapeIntoMongoObjectId } from '../../libs/config';
 import { Reviews, Review } from '../../libs/dto/review/review';
-import { DestinationReviewInput, DestinationReviewsInquiry, RatingInput } from '../../libs/dto/review/review.input';
+import {
+	DestinationReviewInput,
+	DestinationReviewsInquiry,
+	RatingInput,
+} from '../../libs/dto/review/review.input';
 import { DestinationReviewUpdate } from '../../libs/dto/review/review.update';
 import { MemberType } from '../../libs/enums/member.enum';
 import { AuthMember } from '../auth/decorators/authMember.decorator';
@@ -16,7 +20,7 @@ import { ReviewGroup } from '../../libs/enums/review.enum';
 
 @Resolver()
 export class ReviewResolver {
-	constructor(private readonly reviewService: ReviewService) { }
+	constructor(private readonly reviewService: ReviewService) {}
 
 	@UseGuards(AuthGuard)
 	@Mutation(() => Review)
@@ -35,7 +39,11 @@ export class ReviewResolver {
 		@Args('reviewRefId', { type: () => String }) reviewRefId: string,
 		@AuthMember('_id') memberId: Types.ObjectId,
 	): Promise<Review | null> {
-		return this.reviewService.getMyRating(memberId, reviewGroup, shapeIntoMongoObjectId(reviewRefId));
+		return this.reviewService.getMyRating(
+			memberId,
+			reviewGroup,
+			shapeIntoMongoObjectId(reviewRefId),
+		);
 	}
 
 	@UseGuards(AuthGuard)

@@ -38,7 +38,10 @@ const CommentSchema = new Schema(
 	{ timestamps: true, collection: 'comments' },
 );
 
-CommentSchema.index({ commentGroup: 1, commentRefId: 1, createdAt: 1 }, { name: 'comments_target_idx' });
+CommentSchema.index(
+	{ commentGroup: 1, commentRefId: 1, createdAt: 1 },
+	{ name: 'comments_target_idx' },
+);
 CommentSchema.index({ memberId: 1, createdAt: 1 }, { name: 'comments_author_idx' });
 
 export default CommentSchema;

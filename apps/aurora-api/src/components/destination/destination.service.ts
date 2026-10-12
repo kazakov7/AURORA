@@ -2,7 +2,10 @@ import { BadRequestException, Injectable, InternalServerErrorException } from '@
 import { InjectModel } from '@nestjs/mongoose';
 import { Model, Types } from 'mongoose';
 import { Destination, Destinations } from '../../libs/dto/destination/destination';
-import { DestinationInput, DestinationsInquiry } from '../../libs/dto/destination/destination.input';
+import {
+	DestinationInput,
+	DestinationsInquiry,
+} from '../../libs/dto/destination/destination.input';
 import { DestinationUpdate } from '../../libs/dto/destination/destination.update';
 import { lookUpAuthMemberLiked, escapeRegExp } from '../../libs/config';
 import { Direction, Messages } from '../../libs/enums/common.enum';
@@ -19,13 +22,10 @@ export class DestinationService {
 		@InjectModel('Destination') private readonly destinationModel: Model<Destination>,
 		private readonly likeService: LikeService,
 		private readonly viewService: ViewService,
-	) { }
+	) {}
 
 	public async createDestination(input: DestinationInput): Promise<Destination> {
-		const slug = input.destinationName
-			.toLowerCase()
-			.trim()
-			.replace(/\s+/g, '-');
+		const slug = input.destinationName.toLowerCase().trim().replace(/\s+/g, '-');
 
 		try {
 			const result = await this.destinationModel.create({
@@ -39,7 +39,10 @@ export class DestinationService {
 		}
 	}
 
-	public async getDestination(memberId: Types.ObjectId, destinationId: Types.ObjectId): Promise<Destination> {
+	public async getDestination(
+		memberId: Types.ObjectId,
+		destinationId: Types.ObjectId,
+	): Promise<Destination> {
 		const destination = await this.getActiveDestination(destinationId);
 		return this.attachViewerData(destination, memberId);
 	}
@@ -54,7 +57,10 @@ export class DestinationService {
 		return destination;
 	}
 
-	public async getDestinations(memberId: Types.ObjectId, input: DestinationsInquiry): Promise<Destinations> {
+	public async getDestinations(
+		memberId: Types.ObjectId,
+		input: DestinationsInquiry,
+	): Promise<Destinations> {
 		const match: T = { destinationStatus: DestinationStatus.ACTIVE, deletedAt: null };
 		if (input.search.destinationCountry) match.destinationCountry = input.search.destinationCountry;
 		if (input.search.text) {
@@ -63,7 +69,11 @@ export class DestinationService {
 				.map((t) => escapeRegExp(t.trim()))
 				.filter(Boolean);
 			const regex = new RegExp(terms.join('|'), 'i');
-			match.$or = [{ destinationName: regex }, { destinationCountry: regex }, { destinationDesc: regex }];
+			match.$or = [
+				{ destinationName: regex },
+				{ destinationCountry: regex },
+				{ destinationDesc: regex },
+			];
 		}
 
 		const sort: T = { [input.sort ?? 'createdAt']: input.direction ?? Direction.DESC };
@@ -91,7 +101,15 @@ export class DestinationService {
 		const result = await this.destinationModel
 			.findByIdAndUpdate(
 				input._id,
-				[{ $set: { [input.targetKey]: { $max: [0, { $add: [{ $ifNull: [`$${input.targetKey}`, 0] }, input.modifier] }] } } }] as any,
+				[
+					{
+						$set: {
+							[input.targetKey]: {
+								$max: [0, { $add: [{ $ifNull: [`$${input.targetKey}`, 0] }, input.modifier] }],
+							},
+						},
+					},
+				] as any,
 				{ new: true },
 			)
 			.exec();
@@ -105,18 +123,17 @@ export class DestinationService {
 		destinationRating: number,
 	): Promise<Destination> {
 		const result = await this.destinationModel
-			.findByIdAndUpdate(
-				destinationId,
-				{ destinationReviews, destinationRating },
-				{ new: true },
-			)
+			.findByIdAndUpdate(destinationId, { destinationReviews, destinationRating }, { new: true })
 			.exec();
 
 		if (!result) throw new InternalServerErrorException(Messages.UPDATE_FAILED);
 		return result as unknown as Destination;
 	}
 
-	public async likeTargetDestination(memberId: Types.ObjectId, destinationId: Types.ObjectId): Promise<Destination> {
+	public async likeTargetDestination(
+		memberId: Types.ObjectId,
+		destinationId: Types.ObjectId,
+	): Promise<Destination> {
 		await this.getActiveDestination(destinationId);
 		await this.likeService.toggleLike({
 			memberId,
@@ -136,32 +153,35 @@ export class DestinationService {
 			: undefined;
 
 		const result = await this.destinationModel
-			.findOneAndUpdate({ _id: _id as unknown as Types.ObjectId, deletedAt: null }, {
-				...update,
-				...(destinationSlug && { destinationSlug }),
-			}, { new: true })
+			.findOneAndUpdate(
+				{ _id: _id as unknown as Types.ObjectId, deletedAt: null },
+				{
+					...update,
+					...(destinationSlug && { destinationSlug }),
+				},
+				{ new: true },
+			)
 			.exec();
 
 		if (!result) throw new InternalServerErrorException(Messages.UPDATE_FAILED);
 		return result as unknown as Destination;
 	}
 
-
-
 	public async removeDestinationByAdmin(destinationId: Types.ObjectId): Promise<String> {
 		const result = await this.destinationModel
-			.findOne(
-				{ _id: destinationId, destinationStatus: DestinationStatus.INACTIVE }
-			)
+			.findOne({ _id: destinationId, destinationStatus: DestinationStatus.INACTIVE })
 			.exec();
 		if (!result) throw new InternalServerErrorException(Messages.REMOVE_FAILED);
 
 		await this.destinationModel.deleteOne({ _id: destinationId });
 
-		return 'Destination successfully deleted'
+		return 'Destination successfully deleted';
 	}
 
-	private async attachViewerData(destination: Destination, memberId: Types.ObjectId): Promise<Destination> {
+	private async attachViewerData(
+		destination: Destination,
+		memberId: Types.ObjectId,
+	): Promise<Destination> {
 		if (!memberId) return destination;
 
 		const newView = await this.viewService.recordView({

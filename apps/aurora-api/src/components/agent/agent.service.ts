@@ -1,4 +1,9 @@
-import { BadRequestException, ForbiddenException, Injectable, InternalServerErrorException } from '@nestjs/common';
+import {
+	BadRequestException,
+	ForbiddenException,
+	Injectable,
+	InternalServerErrorException,
+} from '@nestjs/common';
 import { InjectConnection, InjectModel } from '@nestjs/mongoose';
 import { Connection, Model, Types } from 'mongoose';
 import { Agents, Agent } from '../../libs/dto/agent/agent';
@@ -19,7 +24,7 @@ export class AgentService {
 		@InjectModel('Member') private readonly memberModel: Model<any>,
 		@InjectConnection() private readonly connection: Connection,
 		private readonly notificationService: NotificationService,
-	) { }
+	) {}
 
 	public async submitAgentApplication(memberId: Types.ObjectId, input: AgentInput): Promise<Agent> {
 		const member = await this.memberModel
@@ -30,7 +35,9 @@ export class AgentService {
 		const existingActiveApplication = await this.agentModel
 			.exists({
 				memberId,
-				verificationStatus: { $in: [AgentVerificationStatus.PENDING, AgentVerificationStatus.APPROVED] },
+				verificationStatus: {
+					$in: [AgentVerificationStatus.PENDING, AgentVerificationStatus.APPROVED],
+				},
 			})
 			.exec();
 		if (existingActiveApplication) throw new BadRequestException(Messages.AGENT_APPLICATION_EXISTS);
@@ -55,28 +62,36 @@ export class AgentService {
 		}
 	}
 
-
 	public async getMemberAgent(memberId: string): Promise<Agent> {
-
 		const result = await this.agentModel
-			.findOne({ memberId: shapeIntoMongoObjectId(memberId), verificationStatus: AgentVerificationStatus.APPROVED })
+			.findOne({
+				memberId: shapeIntoMongoObjectId(memberId),
+				verificationStatus: AgentVerificationStatus.APPROVED,
+			})
 			.exec();
 
 		return result as unknown as Agent;
 	}
 
-	public async getMyAgentApplications(memberId: Types.ObjectId, input: AgentApplicationsInquiry): Promise<Agents> {
+	public async getMyAgentApplications(
+		memberId: Types.ObjectId,
+		input: AgentApplicationsInquiry,
+	): Promise<Agents> {
 		return this.getAgentList({ memberId }, input);
 	}
 
 	public async getAgentApplications(input: AgentApplicationsInquiry): Promise<Agents> {
 		const match: T = {};
 		if (input.search?.agentType) match.agentType = input.search.agentType;
-		if (input.search?.verificationStatus) match.verificationStatus = input.search.verificationStatus;
+		if (input.search?.verificationStatus)
+			match.verificationStatus = input.search.verificationStatus;
 		return this.getAgentList(match, input);
 	}
 
-	public async approveAgentApplication(agentId: Types.ObjectId, adminId?: Types.ObjectId): Promise<Agent> {
+	public async approveAgentApplication(
+		agentId: Types.ObjectId,
+		adminId?: Types.ObjectId,
+	): Promise<Agent> {
 		const session = await this.connection.startSession();
 		try {
 			let agent: Agent | null = null;
@@ -96,7 +111,11 @@ export class AgentService {
 
 				const member = await this.memberModel
 					.findOneAndUpdate(
-						{ _id: result.memberId, memberType: MemberType.USER, memberStatus: MemberStatus.ACTIVE },
+						{
+							_id: result.memberId,
+							memberType: MemberType.USER,
+							memberStatus: MemberStatus.ACTIVE,
+						},
 						{ memberType: MemberType.AGENT },
 						{ new: true, session },
 					)
@@ -128,11 +147,17 @@ export class AgentService {
 		}
 	}
 
-	public async rejectAgentApplication(input: RejectAgentApplicationInput, adminId?: Types.ObjectId): Promise<Agent> {
+	public async rejectAgentApplication(
+		input: RejectAgentApplicationInput,
+		adminId?: Types.ObjectId,
+	): Promise<Agent> {
 		const result = await this.agentModel
 			.findOneAndUpdate(
 				{ _id: input._id, verificationStatus: AgentVerificationStatus.PENDING },
-				{ verificationStatus: AgentVerificationStatus.REJECTED, rejectionReason: input.rejectionReason },
+				{
+					verificationStatus: AgentVerificationStatus.REJECTED,
+					rejectionReason: input.rejectionReason,
+				},
 				{ new: true },
 			)
 			.exec();
@@ -161,7 +186,10 @@ export class AgentService {
 	private async getAgentList(match: T, input: AgentApplicationsInquiry): Promise<Agents> {
 		const sortField = input.sort ?? 'createdAt';
 		const sortDirection = input.direction ?? Direction.DESC;
-		const sort: T = { [sortField]: sortDirection, ...(sortField === '_id' ? {} : { _id: sortDirection }) };
+		const sort: T = {
+			[sortField]: sortDirection,
+			...(sortField === '_id' ? {} : { _id: sortDirection }),
+		};
 		const result = await this.agentModel
 			.aggregate([
 				{ $match: match },

@@ -7,7 +7,11 @@ import { SupportResolver } from './support.resolver';
 import { SupportService } from './support.service';
 
 @Module({
-	imports: [MongooseModule.forFeature([{ name: 'SupportTicket', schema: SupportTicketSchema }]), AuthModule, NotificationModule],
+	imports: [
+		MongooseModule.forFeature([{ name: 'SupportTicket', schema: SupportTicketSchema }]),
+		AuthModule,
+		NotificationModule,
+	],
 	providers: [SupportResolver, SupportService],
 	exports: [SupportService],
 })

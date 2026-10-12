@@ -1,35 +1,45 @@
 import { Field, InputType, Int } from '@nestjs/graphql';
-import { IsEmail, IsEnum, IsIn, IsInt, IsNotEmpty, IsOptional, IsString, Length, Matches, Max, Min, ValidateIf } from 'class-validator';
-import { availableMemberSorts } from '../../config';
-import { Direction } from '../../enums/common.enum';
+import {
+	IsEmail,
+	IsEnum,
+	IsIn,
+	IsInt,
+	IsNotEmpty,
+	IsOptional,
+	IsString,
+	Length,
+	Matches,
+	Max,
+	MaxLength,
+	Min,
+	ValidateIf,
+} from 'class-validator';
+import { Transform } from 'class-transformer';
+import { availableMemberSorts, memberNickRegex, trimString } from '../../config';
+import { Direction, Messages } from '../../enums/common.enum';
 import { MemberAuthType, MemberStatus, MemberType } from '../../enums/member.enum';
 
 @InputType()
 export class MemberInput {
 	@IsNotEmpty()
 	@Length(3, 12)
+	@Matches(memberNickRegex, { message: Messages.INVALID_NICKNAME })
 	@IsString()
+	@Transform(trimString)
 	@Field(() => String, { nullable: true })
 	memberNick: string;
 
+	// Spaces alone are not a password
 	@Field({ nullable: true })
 	@IsNotEmpty()
 	@Length(5, 12)
+	@Matches(/\S/)
 	memberPassword: string;
-
-	@Field({ nullable: true })
-	@ValidateIf((_member, value) => typeof value === 'string' && value.trim().length > 0)
-	@IsEmail()
-	memberEmail?: string;
 
 	@Field({ nullable: true })
 	@IsOptional()
 	@IsString()
-	memberPhone?: string;
-
-	@Field({ nullable: true })
-	@ValidateIf((_member, value) => typeof value === 'string' && value.trim().length > 0)
-	@IsString()
+	@MaxLength(100)
 	memberFullName?: string;
 }
 @InputType()
@@ -56,6 +66,7 @@ export class ChangePasswordInput {
 	@IsNotEmpty()
 	@IsString()
 	@Length(5, 12)
+	@Matches(/\S/)
 	@Field(() => String)
 	newPassword!: string;
 

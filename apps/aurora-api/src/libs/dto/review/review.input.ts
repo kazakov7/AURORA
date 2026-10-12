@@ -1,5 +1,15 @@
 import { Field, InputType, Int } from '@nestjs/graphql';
-import { IsEnum, IsInt, IsMongoId, IsNotEmpty, IsOptional, IsString, Max, MaxLength, Min } from 'class-validator';
+import {
+	IsEnum,
+	IsInt,
+	IsMongoId,
+	IsNotEmpty,
+	IsOptional,
+	IsString,
+	Max,
+	MaxLength,
+	Min,
+} from 'class-validator';
 import { ReviewGroup } from '../../enums/review.enum';
 
 @InputType()

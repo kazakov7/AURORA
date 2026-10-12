@@ -2,7 +2,11 @@ import { BadRequestException, Injectable, InternalServerErrorException } from '@
 import { InjectModel } from '@nestjs/mongoose';
 import { Model, Types } from 'mongoose';
 import { SupportTicket, SupportTickets } from '../../libs/dto/support/support';
-import { SupportTicketInput, SupportTicketsInquiry, SupportTicketUpdate } from '../../libs/dto/support/support.input';
+import {
+	SupportTicketInput,
+	SupportTicketsInquiry,
+	SupportTicketUpdate,
+} from '../../libs/dto/support/support.input';
 import { Direction, Messages } from '../../libs/enums/common.enum';
 import { NotificationGroup, NotificationType } from '../../libs/enums/notification.enum';
 import { SupportStatus } from '../../libs/enums/support.enum';
@@ -14,12 +18,19 @@ export class SupportService {
 	constructor(
 		@InjectModel('SupportTicket') private readonly supportTicketModel: Model<any>,
 		private readonly notificationService: NotificationService,
-	) { }
+	) {}
 
-	public async createSupportTicket(memberId: Types.ObjectId, input: SupportTicketInput): Promise<SupportTicket> {
+	public async createSupportTicket(
+		memberId: Types.ObjectId,
+		input: SupportTicketInput,
+	): Promise<SupportTicket> {
 		let result: any;
 		try {
-			result = await this.supportTicketModel.create({ ...input, memberId, ticketStatus: SupportStatus.OPEN });
+			result = await this.supportTicketModel.create({
+				...input,
+				memberId,
+				ticketStatus: SupportStatus.OPEN,
+			});
 		} catch (err) {
 			console.error('Support ticket creation failed:', err);
 			throw new BadRequestException(Messages.CREATE_FAILED);
@@ -37,7 +48,10 @@ export class SupportService {
 		return result;
 	}
 
-	public async getMySupportTickets(memberId: Types.ObjectId, input: SupportTicketsInquiry): Promise<SupportTickets> {
+	public async getMySupportTickets(
+		memberId: Types.ObjectId,
+		input: SupportTicketsInquiry,
+	): Promise<SupportTickets> {
 		return await this.findSupportTickets(input, { memberId });
 	}
 
@@ -45,7 +59,10 @@ export class SupportService {
 		return await this.findSupportTickets(input, {});
 	}
 
-	public async updateSupportTicketByAdmin(adminId: Types.ObjectId, input: SupportTicketUpdate): Promise<SupportTicket> {
+	public async updateSupportTicketByAdmin(
+		adminId: Types.ObjectId,
+		input: SupportTicketUpdate,
+	): Promise<SupportTicket> {
 		const { _id, ...update } = input;
 		const set: T = { ...update };
 		if (update.ticketReply) {
@@ -70,17 +87,28 @@ export class SupportService {
 		return result;
 	}
 
-	private async findSupportTickets(input: SupportTicketsInquiry, baseMatch: T): Promise<SupportTickets> {
+	private async findSupportTickets(
+		input: SupportTicketsInquiry,
+		baseMatch: T,
+	): Promise<SupportTickets> {
 		const match: T = { ...baseMatch };
 		const { search } = input;
 		if (search?.ticketCategory) match.ticketCategory = search.ticketCategory;
 		if (search?.ticketStatus) match.ticketStatus = search.ticketStatus;
 		if (search?.text) {
 			const regex = new RegExp(search.text.replace(/[.*+?^${}()|[\]\\]/g, '\\$&'), 'i');
-			match.$or = [{ ticketSubject: regex }, { ticketMessage: regex }, { ticketName: regex }, { ticketEmail: regex }];
+			match.$or = [
+				{ ticketSubject: regex },
+				{ ticketMessage: regex },
+				{ ticketName: regex },
+				{ ticketEmail: regex },
+			];
 		}
 
-		const sort: T = { [input.sort ?? 'createdAt']: input.direction ?? Direction.DESC, _id: Direction.DESC };
+		const sort: T = {
+			[input.sort ?? 'createdAt']: input.direction ?? Direction.DESC,
+			_id: Direction.DESC,
+		};
 		const result = await this.supportTicketModel
 			.aggregate([
 				{ $match: match },

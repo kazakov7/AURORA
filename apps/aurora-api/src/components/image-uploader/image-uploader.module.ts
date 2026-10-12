@@ -3,9 +3,7 @@ import { ImageUploaderResolver } from './image-uploader.resolver';
 import { AuthModule } from '../auth/auth.module';
 
 @Module({
-  imports: [
-    AuthModule
-  ],
-  providers: [ImageUploaderResolver]
+	imports: [AuthModule],
+	providers: [ImageUploaderResolver],
 })
-export class ImageUploaderModule { }
+export class ImageUploaderModule {}

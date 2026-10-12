@@ -10,6 +10,9 @@ const RankingPublicationSchema = new Schema(
 	{ timestamps: true, collection: 'ranking-publications' },
 );
 
-RankingPublicationSchema.index({ isActive: 1, publishedAt: -1 }, { name: 'ranking_publication_active_idx' });
+RankingPublicationSchema.index(
+	{ isActive: 1, publishedAt: -1 },
+	{ name: 'ranking_publication_active_idx' },
+);
 
 export default RankingPublicationSchema;

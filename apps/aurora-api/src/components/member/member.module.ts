@@ -21,4 +21,4 @@ import { ChatModule } from '../chat/chat.module';
 	providers: [MemberResolver, MemberService],
 	exports: [MemberService],
 })
-export class MemberModule { }
+export class MemberModule {}

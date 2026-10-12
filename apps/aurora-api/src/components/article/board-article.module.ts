@@ -21,4 +21,4 @@ import { NotificationModule } from '../notification/notification.module';
 	providers: [BoardArticleService, BoardArticleResolver],
 	exports: [BoardArticleService],
 })
-export class BoardArticleModule { }
+export class BoardArticleModule {}

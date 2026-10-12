@@ -144,16 +144,44 @@ const MemberSchema = new Schema(
 	},
 );
 
-MemberSchema.index({ memberPhone: 1 }, { unique: true, partialFilterExpression: { memberPhone: { $type: 'string' } } });
-MemberSchema.index({ memberEmail: 1 }, { unique: true, partialFilterExpression: { memberEmail: { $type: 'string' } } });
-MemberSchema.index({ memberNick: 1 }, { unique: true, partialFilterExpression: { memberNick: { $type: 'string' } } });
-MemberSchema.index({ googleSubject: 1 }, { unique: true, partialFilterExpression: { googleSubject: { $type: 'string' } } });
-MemberSchema.index({ kakaoSubject: 1 }, { unique: true, partialFilterExpression: { kakaoSubject: { $type: 'string' } } });
+MemberSchema.index(
+	{ memberPhone: 1 },
+	{ unique: true, partialFilterExpression: { memberPhone: { $type: 'string' } } },
+);
+MemberSchema.index(
+	{ memberEmail: 1 },
+	{ unique: true, partialFilterExpression: { memberEmail: { $type: 'string' } } },
+);
+MemberSchema.index(
+	{ memberNick: 1 },
+	{ unique: true, partialFilterExpression: { memberNick: { $type: 'string' } } },
+);
+// 'alice' and 'Alice' are one nickname; the index above still serves the exact-match lookups
+MemberSchema.index(
+	{ memberNick: 1 },
+	{
+		name: 'members_nick_case_insensitive_uq',
+		unique: true,
+		collation: { locale: 'en', strength: 2 },
+		partialFilterExpression: { memberNick: { $type: 'string' } },
+	},
+);
+MemberSchema.index(
+	{ googleSubject: 1 },
+	{ unique: true, partialFilterExpression: { googleSubject: { $type: 'string' } } },
+);
+MemberSchema.index(
+	{ kakaoSubject: 1 },
+	{ unique: true, partialFilterExpression: { kakaoSubject: { $type: 'string' } } },
+);
 MemberSchema.index(
 	{ telegramSubject: 1 },
 	{ unique: true, partialFilterExpression: { telegramSubject: { $type: 'string' } } },
 );
-MemberSchema.index({ memberType: 1, memberStatus: 1, memberRank: 1 }, { name: 'members_ranking_idx' });
+MemberSchema.index(
+	{ memberType: 1, memberStatus: 1, memberRank: 1 },
+	{ name: 'members_ranking_idx' },
+);
 MemberSchema.index({ memberStatus: 1, createdAt: 1 }, { name: 'members_status_created_idx' });
 
 export default MemberSchema;

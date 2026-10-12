@@ -15,23 +15,28 @@ export class MessageService {
 		@InjectModel('Chat') private readonly chatModel: Model<any>,
 		@InjectModel('ChatRead') private readonly chatReadModel: Model<any>,
 		@InjectModel('Member') private readonly memberModel: Model<any>,
-	) { }
+	) {}
 
 	public async createMessage(memberId: Types.ObjectId, input: MessageInput): Promise<Message> {
 		await this.assertMemberCanMessage(memberId);
 		const chatId = new Types.ObjectId(input.chatId.toString());
 		const chat = await this.assertChatAccess(memberId, chatId);
 		const messageContent = input.messageContent?.trim();
-		if (!messageContent || messageContent.length > 1000) throw new BadRequestException(ErrorMessages.BAD_REQUEST);
+		if (!messageContent || messageContent.length > 1000)
+			throw new BadRequestException(ErrorMessages.BAD_REQUEST);
 
 		const messageType = input.messageType ?? MessageType.TEXT;
-		if (!Object.values(MessageType).includes(messageType)) throw new BadRequestException(ErrorMessages.BAD_REQUEST);
+		if (!Object.values(MessageType).includes(messageType))
+			throw new BadRequestException(ErrorMessages.BAD_REQUEST);
 
 		const clientMessageId = input.clientMessageId?.trim();
-		if (clientMessageId && clientMessageId.length > 100) throw new BadRequestException(ErrorMessages.BAD_REQUEST);
+		if (clientMessageId && clientMessageId.length > 100)
+			throw new BadRequestException(ErrorMessages.BAD_REQUEST);
 
 		if (clientMessageId) {
-			const existingMessage = await this.messageModel.findOne({ chatId, senderId: memberId, clientMessageId }).exec();
+			const existingMessage = await this.messageModel
+				.findOne({ chatId, senderId: memberId, clientMessageId })
+				.exec();
 			if (existingMessage) return await this.withSenderData(existingMessage);
 		}
 
@@ -46,21 +51,33 @@ export class MessageService {
 
 			await this.chatModel
 				.updateOne(
-					{ _id: chat._id, $or: [{ lastMessageAt: { $exists: false } }, { lastMessageAt: { $lte: message.createdAt } }] },
+					{
+						_id: chat._id,
+						$or: [
+							{ lastMessageAt: { $exists: false } },
+							{ lastMessageAt: { $lte: message.createdAt } },
+						],
+					},
 					{ $set: { lastMessage: messageContent, lastMessageAt: message.createdAt } },
 				)
 				.exec();
 			return await this.withSenderData(message);
 		} catch (err: any) {
-			if (err?.code !== 11000 || !clientMessageId) throw new BadRequestException(ErrorMessages.CREATE_FAILED);
+			if (err?.code !== 11000 || !clientMessageId)
+				throw new BadRequestException(ErrorMessages.CREATE_FAILED);
 
-			const existingMessage = await this.messageModel.findOne({ chatId, senderId: memberId, clientMessageId }).exec();
+			const existingMessage = await this.messageModel
+				.findOne({ chatId, senderId: memberId, clientMessageId })
+				.exec();
 			if (!existingMessage) throw new BadRequestException(ErrorMessages.CREATE_FAILED);
 			return await this.withSenderData(existingMessage);
 		}
 	}
 
-	public async getMessages(memberId: Types.ObjectId, input: MessagesCursorInquiry): Promise<Messages> {
+	public async getMessages(
+		memberId: Types.ObjectId,
+		input: MessagesCursorInquiry,
+	): Promise<Messages> {
 		await this.assertMemberCanMessage(memberId);
 		const chatId = new Types.ObjectId(input.chatId.toString());
 		await this.assertChatAccess(memberId, chatId);
@@ -80,14 +97,23 @@ export class MessageService {
 			.lean()
 			.exec();
 		const list = messages.reverse();
-		const senderIds = [...new Set(list.map((message) => message.senderId.toString()))].map((member) => new Types.ObjectId(member));
-		const members = await this.memberModel.find({ _id: { $in: senderIds } }).lean().exec();
+		const senderIds = [...new Set(list.map((message) => message.senderId.toString()))].map(
+			(member) => new Types.ObjectId(member),
+		);
+		const members = await this.memberModel
+			.find({ _id: { $in: senderIds } })
+			.lean()
+			.exec();
 		const memberMap = new Map(members.map((member: any) => [member._id.toString(), member]));
 
 		return {
-			list: list.map((message) => ({ ...message, senderData: memberMap.get(message.senderId.toString()) })) as unknown as Message[],
+			list: list.map((message) => ({
+				...message,
+				senderData: memberMap.get(message.senderId.toString()),
+			})) as unknown as Message[],
 			metaCounter: [],
-			nextCursor: messages.length === input.limit ? messages[messages.length - 1]?.createdAt : undefined,
+			nextCursor:
+				messages.length === input.limit ? messages[messages.length - 1]?.createdAt : undefined,
 		};
 	}
 

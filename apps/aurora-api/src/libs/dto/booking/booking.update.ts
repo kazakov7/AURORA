@@ -12,5 +12,4 @@ export class BookingUpdate {
 	@Length(3, 500)
 	@Field(() => String, { nullable: true })
 	bookingNote?: string;
-
 }

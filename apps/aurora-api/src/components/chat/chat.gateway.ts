@@ -1,4 +1,10 @@
-import { SubscribeMessage, WebSocketGateway, WebSocketServer, ConnectedSocket, MessageBody } from '@nestjs/websockets';
+import {
+	SubscribeMessage,
+	WebSocketGateway,
+	WebSocketServer,
+	ConnectedSocket,
+	MessageBody,
+} from '@nestjs/websockets';
 import { Server, Socket } from 'socket.io';
 import { Types } from 'mongoose';
 import { MessageInput } from '../../libs/dto/message/message.input';
@@ -21,7 +27,7 @@ export class ChatGateway {
 		private readonly authService: AuthService,
 		private readonly chatService: ChatService,
 		private readonly messageService: MessageService,
-	) { }
+	) {}
 
 	public async handleConnection(client: Socket): Promise<void> {
 		try {
@@ -42,7 +48,10 @@ export class ChatGateway {
 	}
 
 	@SubscribeMessage('chat:join')
-	public async joinChat(@MessageBody() payload: { chatId?: string }, @ConnectedSocket() client: Socket) {
+	public async joinChat(
+		@MessageBody() payload: { chatId?: string },
+		@ConnectedSocket() client: Socket,
+	) {
 		try {
 			const memberId = await this.getMemberId(client);
 			await this.chatService.assertMemberCanChat(memberId);
@@ -56,7 +65,10 @@ export class ChatGateway {
 	}
 
 	@SubscribeMessage('chat:leave')
-	public async leaveChat(@MessageBody() payload: { chatId?: string }, @ConnectedSocket() client: Socket) {
+	public async leaveChat(
+		@MessageBody() payload: { chatId?: string },
+		@ConnectedSocket() client: Socket,
+	) {
 		try {
 			const memberId = await this.getMemberId(client);
 			const chatId = this.getObjectId(payload?.chatId);
@@ -69,15 +81,22 @@ export class ChatGateway {
 	}
 
 	@SubscribeMessage('message:send')
-	public async sendMessage(@MessageBody() payload: MessageInput, @ConnectedSocket() client: Socket) {
+	public async sendMessage(
+		@MessageBody() payload: MessageInput,
+		@ConnectedSocket() client: Socket,
+	) {
 		try {
 			const memberId = await this.getMemberId(client);
 			if (!this.canSendMessage(memberId)) throw new Error(Messages.MESSAGE_RATE_LIMITED);
 			const message = await this.messageService.createMessage(memberId, payload);
-			const recipients = await this.messageService.getChatRecipients(message.chatId as unknown as Types.ObjectId);
+			const recipients = await this.messageService.getChatRecipients(
+				message.chatId as unknown as Types.ObjectId,
+			);
 
 			if (recipients.length) {
-				this.server.to(recipients.map((recipient) => this.memberRoom(recipient))).emit('message:new', message);
+				this.server
+					.to(recipients.map((recipient) => this.memberRoom(recipient)))
+					.emit('message:new', message);
 			} else {
 				this.server.to(this.chatRoom(message.chatId)).emit('message:new', message);
 			}

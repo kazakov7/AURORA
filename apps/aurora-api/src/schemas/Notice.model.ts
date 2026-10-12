@@ -34,6 +34,9 @@ const NoticeSchema = new Schema(
 	{ timestamps: true, collection: 'notices' },
 );
 
-NoticeSchema.index({ noticeStatus: 1, noticeCategory: 1, createdAt: 1 }, { name: 'notices_feed_idx' });
+NoticeSchema.index(
+	{ noticeStatus: 1, noticeCategory: 1, createdAt: 1 },
+	{ name: 'notices_feed_idx' },
+);
 
 export default NoticeSchema;

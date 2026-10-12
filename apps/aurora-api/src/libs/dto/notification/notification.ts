@@ -1,5 +1,9 @@
 import { Field, ObjectType } from '@nestjs/graphql';
-import { NotificationGroup, NotificationStatus, NotificationType } from '../../enums/notification.enum';
+import {
+	NotificationGroup,
+	NotificationStatus,
+	NotificationType,
+} from '../../enums/notification.enum';
 import { TotalCounter } from '../member/member';
 
 @ObjectType()

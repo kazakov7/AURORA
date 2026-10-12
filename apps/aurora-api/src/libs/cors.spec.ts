@@ -14,7 +14,9 @@ describe('CORS allowlist', () => {
 		expect(isCorsOriginAllowed('https://admin.aurora.example', 'production', allowlist)).toBe(true);
 		expect(isCorsOriginAllowed('http://localhost:3000', 'production', allowlist)).toBe(false);
 		expect(isCorsOriginAllowed('https://evil.example', 'production', allowlist)).toBe(false);
-		expect(isCorsOriginAllowed('https://aurora.example.evil.test', 'production', allowlist)).toBe(false);
+		expect(isCorsOriginAllowed('https://aurora.example.evil.test', 'production', allowlist)).toBe(
+			false,
+		);
 		expect(isCorsOriginAllowed('https://anything.example', 'production', '*')).toBe(false);
 	});
 });

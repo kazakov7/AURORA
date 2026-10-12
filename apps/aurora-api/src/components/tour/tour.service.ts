@@ -10,7 +10,12 @@ import {
 	ToursInquiry,
 } from '../../libs/dto/tour/tour.input';
 import { TourUpdateInput, UpdateTourStatusInput } from '../../libs/dto/tour/tour.update';
-import { lookUpAuthMemberLiked, lookupMember, shapeIntoMongoObjectId, escapeRegExp } from '../../libs/config';
+import {
+	lookUpAuthMemberLiked,
+	lookupMember,
+	shapeIntoMongoObjectId,
+	escapeRegExp,
+} from '../../libs/config';
 import { Direction, Messages } from '../../libs/enums/common.enum';
 import { LikeGroup } from '../../libs/enums/like.enum';
 import { TourStatus } from '../../libs/enums/tour.enum';
@@ -35,7 +40,7 @@ export class TourService {
 		private readonly agentService: AgentService,
 		private readonly destinationService: DestinationService,
 		private readonly notificationService: NotificationService,
-	) { }
+	) {}
 
 	public async createTour(input: TourInput): Promise<Tour> {
 		if (!input.memberId) throw new BadRequestException(Messages.NOT_AUTHENTICATED);
@@ -72,7 +77,11 @@ export class TourService {
 		if (!targetTour) throw new InternalServerErrorException(Messages.TOUR_NOT_FOUND);
 
 		if (memberId) {
-			const newView = await this.viewService.recordView({ memberId, viewRefId: tourId, viewGroup: ViewGroup.TOUR });
+			const newView = await this.viewService.recordView({
+				memberId,
+				viewRefId: tourId,
+				viewGroup: ViewGroup.TOUR,
+			});
 			if (newView) {
 				await this.tourStatsEditor({ _id: tourId, targetKey: 'tourViews', modifier: 1 });
 				targetTour.tourViews += 1;
@@ -96,7 +105,15 @@ export class TourService {
 		const result = await this.tourModel
 			.findByIdAndUpdate(
 				input._id,
-				[{ $set: { [input.targetKey]: { $max: [0, { $add: [{ $ifNull: [`$${input.targetKey}`, 0] }, input.modifier] }] } } }] as any,
+				[
+					{
+						$set: {
+							[input.targetKey]: {
+								$max: [0, { $add: [{ $ifNull: [`$${input.targetKey}`, 0] }, input.modifier] }],
+							},
+						},
+					},
+				] as any,
 				{ new: true },
 			)
 			.exec();
@@ -118,7 +135,10 @@ export class TourService {
 
 		if (!existingTour) throw new InternalServerErrorException(Messages.UPDATE_FAILED);
 
-		this.validateTourDates(input.tourStartDate ?? existingTour.tourStartDate, input.tourEndDate ?? existingTour.tourEndDate);
+		this.validateTourDates(
+			input.tourStartDate ?? existingTour.tourStartDate,
+			input.tourEndDate ?? existingTour.tourEndDate,
+		);
 		if (input.tourCapacity !== undefined && input.tourCapacity < existingTour.tourReservedSeats) {
 			throw new BadRequestException(Messages.TOUR_FULL);
 		}
@@ -183,12 +203,14 @@ export class TourService {
 		if (tourDestinationCity) match.tourDestinationCity = tourDestinationCity;
 
 		if (tourStartDateRange) {
-			if (tourStartDateRange.end < tourStartDateRange.start) throw new BadRequestException(Messages.INVALID_DATA);
+			if (tourStartDateRange.end < tourStartDateRange.start)
+				throw new BadRequestException(Messages.INVALID_DATA);
 			match.tourStartDate = { $gte: tourStartDateRange.start, $lte: tourStartDateRange.end };
 		}
 
 		if (tourPriceRange) {
-			if (tourPriceRange.end < tourPriceRange.start) throw new BadRequestException(Messages.INVALID_DATA);
+			if (tourPriceRange.end < tourPriceRange.start)
+				throw new BadRequestException(Messages.INVALID_DATA);
 			match.tourPrice = { $gte: tourPriceRange.start, $lte: tourPriceRange.end };
 		}
 
@@ -209,11 +231,17 @@ export class TourService {
 		}
 	}
 
-	public async getFavoriteTours(memberId: Types.ObjectId, input: OrdinaryTourInquiry): Promise<Tours> {
+	public async getFavoriteTours(
+		memberId: Types.ObjectId,
+		input: OrdinaryTourInquiry,
+	): Promise<Tours> {
 		return this.likeService.getFavoriteTours(memberId, input);
 	}
 
-	public async getVisitedTours(memberId: Types.ObjectId, input: OrdinaryTourInquiry): Promise<Tours> {
+	public async getVisitedTours(
+		memberId: Types.ObjectId,
+		input: OrdinaryTourInquiry,
+	): Promise<Tours> {
 		return this.viewService.getVisitedTours(memberId, input);
 	}
 
@@ -225,13 +253,22 @@ export class TourService {
 		});
 		if (!target) throw new InternalServerErrorException(Messages.TOUR_NOT_FOUND);
 
-		const modifier = await this.likeService.toggleLike({ memberId, likeRefId, likeGroup: LikeGroup.TOUR });
-		if (modifier === 1) await this.notificationService.createNotification({
-			receiverId: target.memberId as Types.ObjectId, authorId: memberId, notificationType: NotificationType.LIKE,
-			notificationGroup: NotificationGroup.TOUR, notificationRefId: likeRefId,
-			notificationTitle: 'New tour like', notificationDesc: 'Someone liked your tour.',
-			notificationEventKey: `tour-like:${memberId}:${likeRefId}`,
+		const modifier = await this.likeService.toggleLike({
+			memberId,
+			likeRefId,
+			likeGroup: LikeGroup.TOUR,
 		});
+		if (modifier === 1)
+			await this.notificationService.createNotification({
+				receiverId: target.memberId as Types.ObjectId,
+				authorId: memberId,
+				notificationType: NotificationType.LIKE,
+				notificationGroup: NotificationGroup.TOUR,
+				notificationRefId: likeRefId,
+				notificationTitle: 'New tour like',
+				notificationDesc: 'Someone liked your tour.',
+				notificationEventKey: `tour-like:${memberId}:${likeRefId}`,
+			});
 		const result = await this.tourModel.findById(likeRefId).exec();
 		if (!result) throw new InternalServerErrorException(Messages.SOMETHING_WENT_WRONG);
 		return result;
@@ -249,21 +286,33 @@ export class TourService {
 	public async getAllToursByAdmin(input: AllToursInquiry): Promise<Tours> {
 		const match: T = { deletedAt: null };
 		if (input.search.tourStatus) match.tourStatus = input.search.tourStatus;
-		if (input.search.destinationId) match.destinationId = shapeIntoMongoObjectId(input.search.destinationId);
+		if (input.search.destinationId)
+			match.destinationId = shapeIntoMongoObjectId(input.search.destinationId);
 		if (input.search.tourDepartureCity) match.tourDepartureCity = input.search.tourDepartureCity;
 		return this.getTourList(match, input);
 	}
 
-	public async updateTourStatusByAdmin(input: UpdateTourStatusInput, adminId?: Types.ObjectId): Promise<Tour> {
+	public async updateTourStatusByAdmin(
+		input: UpdateTourStatusInput,
+		adminId?: Types.ObjectId,
+	): Promise<Tour> {
 		const result = await this.tourModel
-			.findOneAndUpdate({ _id: input._id, deletedAt: null }, { tourStatus: input.tourStatus }, { new: true })
+			.findOneAndUpdate(
+				{ _id: input._id, deletedAt: null },
+				{ tourStatus: input.tourStatus },
+				{ new: true },
+			)
 			.exec();
 
 		if (!result) throw new InternalServerErrorException(Messages.UPDATE_FAILED);
 		await this.notificationService.createNotification({
-			receiverId: result.memberId as Types.ObjectId, authorId: adminId, notificationType: NotificationType.SYSTEM,
-			notificationGroup: NotificationGroup.SYSTEM, notificationRefId: result._id as Types.ObjectId,
-			notificationTitle: 'Tour listing status updated', notificationDesc: `Your tour listing status is now ${result.tourStatus}.`,
+			receiverId: result.memberId as Types.ObjectId,
+			authorId: adminId,
+			notificationType: NotificationType.SYSTEM,
+			notificationGroup: NotificationGroup.SYSTEM,
+			notificationRefId: result._id as Types.ObjectId,
+			notificationTitle: 'Tour listing status updated',
+			notificationDesc: `Your tour listing status is now ${result.tourStatus}.`,
 			notificationEventKey: `tour-status:${result._id}:${result.tourStatus}`,
 		});
 		return result as unknown as Tour;
@@ -287,7 +336,10 @@ export class TourService {
 		return result as unknown as Tour;
 	}
 
-	private async getTourList(match: T, input: Pick<ToursInquiry, 'page' | 'limit' | 'sort' | 'direction'>): Promise<Tours> {
+	private async getTourList(
+		match: T,
+		input: Pick<ToursInquiry, 'page' | 'limit' | 'sort' | 'direction'>,
+	): Promise<Tours> {
 		const sort: T = { [input.sort ?? 'createdAt']: input.direction ?? Direction.DESC };
 		const result = await this.tourModel
 			.aggregate([
@@ -311,7 +363,11 @@ export class TourService {
 	}
 
 	private validateTourDates(tourStartDate: Date, tourEndDate: Date): void {
-		if (!(tourStartDate instanceof Date) || !(tourEndDate instanceof Date) || tourEndDate <= tourStartDate) {
+		if (
+			!(tourStartDate instanceof Date) ||
+			!(tourEndDate instanceof Date) ||
+			tourEndDate <= tourStartDate
+		) {
 			throw new BadRequestException(Messages.INVALID_DATA);
 		}
 	}

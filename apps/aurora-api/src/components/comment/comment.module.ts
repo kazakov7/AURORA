@@ -15,12 +15,13 @@ import PropertySchema from '../../schemas/Property.model';
 import TourSchema from '../../schemas/Tour.model';
 import BoardArticleSchema from '../../schemas/BoardArticle.model';
 
-
 @Module({
 	imports: [
 		MongooseModule.forFeature([
-			{ name: 'Comment', schema: CommentSchema }, { name: 'Property', schema: PropertySchema },
-			{ name: 'Tour', schema: TourSchema }, { name: 'BoardArticle', schema: BoardArticleSchema },
+			{ name: 'Comment', schema: CommentSchema },
+			{ name: 'Property', schema: PropertySchema },
+			{ name: 'Tour', schema: TourSchema },
+			{ name: 'BoardArticle', schema: BoardArticleSchema },
 		]),
 		AuthModule,
 		MemberModule,
@@ -33,4 +34,4 @@ import BoardArticleSchema from '../../schemas/BoardArticle.model';
 	providers: [CommentResolver, CommentService],
 	exports: [CommentService],
 })
-export class CommentModule { }
+export class CommentModule {}

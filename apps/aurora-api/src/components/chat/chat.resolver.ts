@@ -14,7 +14,7 @@ export class ChatResolver {
 	constructor(
 		private readonly chatService: ChatService,
 		private readonly chatGateway: ChatGateway,
-	) { }
+	) {}
 
 	@UseGuards(AuthGuard)
 	@Mutation(() => Chat)
@@ -22,7 +22,10 @@ export class ChatResolver {
 		@Args('memberTwoId') memberTwoId: string,
 		@AuthMember('_id') memberOneId: Types.ObjectId,
 	): Promise<Chat> {
-		return await this.chatService.getOrCreateDirectChat(memberOneId, shapeIntoMongoObjectId(memberTwoId));
+		return await this.chatService.getOrCreateDirectChat(
+			memberOneId,
+			shapeIntoMongoObjectId(memberTwoId),
+		);
 	}
 
 	@UseGuards(AuthGuard)
@@ -31,7 +34,8 @@ export class ChatResolver {
 		@Args('input') input: ChatsInquiry,
 		@AuthMember('_id') memberId: Types.ObjectId,
 	): Promise<Chats> {
-		if (input.search?.memberId) input.search.memberId = shapeIntoMongoObjectId(input.search.memberId) as any;
+		if (input.search?.memberId)
+			input.search.memberId = shapeIntoMongoObjectId(input.search.memberId) as any;
 		return await this.chatService.getMyChats(memberId, input);
 	}
 

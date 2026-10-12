@@ -56,8 +56,13 @@ describe('Member list (e2e)', () => {
 		);
 
 		expect(result.body.errors).toBeUndefined();
-		expect(result.body.data.getAllMembers.list.map((member) => member.memberNick)).toEqual(['alpha', 'bravo']);
-		expect(result.body.data.getAllMembers.list.every((member) => member.memberStatus === 'ACTIVE')).toBe(true);
+		expect(result.body.data.getAllMembers.list.map((member) => member.memberNick)).toEqual([
+			'alpha',
+			'bravo',
+		]);
+		expect(
+			result.body.data.getAllMembers.list.every((member) => member.memberStatus === 'ACTIVE'),
+		).toBe(true);
 		expect(result.body.data.getAllMembers.metaCounter).toEqual([{ total: 3 }]);
 	});
 
@@ -104,7 +109,11 @@ describe('Member list (e2e)', () => {
 
 		expect(result.body.errors).toBeUndefined();
 		expect(result.body.data.getAllMembers.list).toEqual([
-			expect.objectContaining({ memberNick: 'tourguide', memberType: 'AGENT', memberAuthType: 'GOOGLE' }),
+			expect.objectContaining({
+				memberNick: 'tourguide',
+				memberType: 'AGENT',
+				memberAuthType: 'GOOGLE',
+			}),
 		]);
 		expect(result.body.data.getAllMembers.metaCounter).toEqual([{ total: 1 }]);
 	});

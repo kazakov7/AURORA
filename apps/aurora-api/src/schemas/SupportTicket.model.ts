@@ -56,7 +56,10 @@ const SupportTicketSchema = new Schema(
 	{ timestamps: true, collection: 'supportTickets' },
 );
 
-SupportTicketSchema.index({ ticketStatus: 1, ticketCategory: 1, createdAt: -1 }, { name: 'support_tickets_admin_idx' });
+SupportTicketSchema.index(
+	{ ticketStatus: 1, ticketCategory: 1, createdAt: -1 },
+	{ name: 'support_tickets_admin_idx' },
+);
 SupportTicketSchema.index({ memberId: 1, createdAt: -1 }, { name: 'support_tickets_member_idx' });
 
 export default SupportTicketSchema;

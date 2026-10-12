@@ -1,15 +1,11 @@
-import {
-	BadRequestException,
-	Injectable,
-	InternalServerErrorException,
-} from '@nestjs/common';
+import { BadRequestException, Injectable, InternalServerErrorException } from '@nestjs/common';
 import { InjectModel } from '@nestjs/mongoose';
 import { Model, type ObjectId, Types } from 'mongoose';
 
 import { PropertyService } from '../property/property.service';
 import { Comment, Comments } from '../../libs/dto/comment/comment';
 import { CommentInput, CommentsInquiry } from '../../libs/dto/comment/comment.input';
-import { CommentGroup, CommentStatus, } from '../../libs/enums/comment.enum';
+import { CommentGroup, CommentStatus } from '../../libs/enums/comment.enum';
 
 import { MemberService } from '../member/member.service';
 import { CommentUpdate } from '../../libs/dto/comment/comment.update';
@@ -36,12 +32,9 @@ export class CommentService {
 		@InjectModel('Tour') private readonly tourModel: Model<any>,
 		@InjectModel('BoardArticle') private readonly articleModel: Model<any>,
 		private readonly notificationService: NotificationService,
-	) { }
+	) {}
 
-	public async createComment(
-		memberId: Types.ObjectId,
-		input: CommentInput,
-	): Promise<Comment> {
+	public async createComment(memberId: Types.ObjectId, input: CommentInput): Promise<Comment> {
 		input.memberId = memberId;
 
 		let result: Comment | null;
@@ -86,7 +79,6 @@ export class CommentService {
 					modifier: 1,
 				});
 				break;
-
 		}
 
 		if (!result) throw new InternalServerErrorException(Messages.CREATE_FAILED);
@@ -103,20 +95,25 @@ export class CommentService {
 		};
 		const target = targets[comment.commentGroup];
 		if (!target) return;
-		const content = await target.model.findById(comment.commentRefId).select('memberId').lean().exec() as any;
+		const content = (await target.model
+			.findById(comment.commentRefId)
+			.select('memberId')
+			.lean()
+			.exec()) as any;
 		if (!content?.memberId) return;
 		await this.notificationService.createNotification({
-			receiverId: content.memberId as Types.ObjectId, authorId, notificationType: NotificationType.COMMENT,
-			notificationGroup: target.group, notificationRefId: comment.commentRefId as unknown as Types.ObjectId,
-			notificationTitle: 'New comment on your content', notificationDesc: 'Someone left a comment on your content.',
+			receiverId: content.memberId as Types.ObjectId,
+			authorId,
+			notificationType: NotificationType.COMMENT,
+			notificationGroup: target.group,
+			notificationRefId: comment.commentRefId as unknown as Types.ObjectId,
+			notificationTitle: 'New comment on your content',
+			notificationDesc: 'Someone left a comment on your content.',
 			notificationEventKey: `comment:${comment._id}`,
 		});
 	}
 
-	public async updateComment(
-		memberId: Types.ObjectId,
-		input: CommentUpdate,
-	): Promise<Comment> {
+	public async updateComment(memberId: Types.ObjectId, input: CommentUpdate): Promise<Comment> {
 		const { _id } = input;
 
 		const result = await this.commentModel
@@ -138,10 +135,7 @@ export class CommentService {
 		return result;
 	}
 
-	public async getComments(
-		memberId: Types.ObjectId,
-		input: CommentsInquiry,
-	): Promise<Comments> {
+	public async getComments(memberId: Types.ObjectId, input: CommentsInquiry): Promise<Comments> {
 		const { commentRefId, commentGroup } = input.search;
 
 		const match: T = {
@@ -187,25 +181,46 @@ export class CommentService {
 			throw new InternalServerErrorException(Messages.REMOVE_FAILED);
 		}
 
-
-		await this.decrementTargetCommentCounter(result.commentGroup, result.commentRefId as unknown as Types.ObjectId);
+		await this.decrementTargetCommentCounter(
+			result.commentGroup,
+			result.commentRefId as unknown as Types.ObjectId,
+		);
 
 		return result;
 	}
 
-	private async decrementTargetCommentCounter(commentGroup: CommentGroup, commentRefId: Types.ObjectId): Promise<void> {
+	private async decrementTargetCommentCounter(
+		commentGroup: CommentGroup,
+		commentRefId: Types.ObjectId,
+	): Promise<void> {
 		switch (commentGroup) {
 			case CommentGroup.PROPERTY:
-				await this.propertyService.propertyStatsEditor({ _id: commentRefId, targetKey: 'propertyComments', modifier: -1 });
+				await this.propertyService.propertyStatsEditor({
+					_id: commentRefId,
+					targetKey: 'propertyComments',
+					modifier: -1,
+				});
 				break;
 			case CommentGroup.TOUR:
-				await this.tourService.tourStatsEditor({ _id: commentRefId, targetKey: 'tourComments', modifier: -1 });
+				await this.tourService.tourStatsEditor({
+					_id: commentRefId,
+					targetKey: 'tourComments',
+					modifier: -1,
+				});
 				break;
 			case CommentGroup.DESTINATION:
-				await this.destinationService.destinationStatsEditor({ _id: commentRefId, targetKey: 'destinationComments', modifier: -1 });
+				await this.destinationService.destinationStatsEditor({
+					_id: commentRefId,
+					targetKey: 'destinationComments',
+					modifier: -1,
+				});
 				break;
 			case CommentGroup.ARTICLE:
-				await this.boardArticleService.boardArticleStatsEditor({ _id: commentRefId, targetKey: 'articleComments', modifier: -1 });
+				await this.boardArticleService.boardArticleStatsEditor({
+					_id: commentRefId,
+					targetKey: 'articleComments',
+					modifier: -1,
+				});
 				break;
 		}
 	}

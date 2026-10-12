@@ -1,5 +1,14 @@
 import { Field, InputType, Int } from '@nestjs/graphql';
-import { IsDate, IsInt, IsMongoId, IsNotEmpty, IsOptional, IsUUID, Length, Min } from 'class-validator';
+import {
+	IsDate,
+	IsInt,
+	IsMongoId,
+	IsNotEmpty,
+	IsOptional,
+	IsUUID,
+	Length,
+	Min,
+} from 'class-validator';
 
 @InputType()
 export class StartPropertyPaymentInput {

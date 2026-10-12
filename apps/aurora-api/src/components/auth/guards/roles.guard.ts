@@ -1,4 +1,10 @@
-import { CanActivate, ExecutionContext, Injectable, ForbiddenException, UnauthorizedException } from '@nestjs/common';
+import {
+	CanActivate,
+	ExecutionContext,
+	Injectable,
+	ForbiddenException,
+	UnauthorizedException,
+} from '@nestjs/common';
 import { Reflector } from '@nestjs/core';
 import { AuthService } from '../auth.service';
 import { Messages } from '../../../libs/enums/common.enum';
@@ -8,7 +14,7 @@ export class RolesGuard implements CanActivate {
 	constructor(
 		private reflector: Reflector,
 		private authService: AuthService,
-	) { }
+	) {}
 
 	// @ts-ignore
 	async canActivate(context: ExecutionContext | any): Promise<boolean> {

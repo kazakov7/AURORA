@@ -1,6 +1,16 @@
 import { Field, Int, InputType } from '@nestjs/graphql';
 import { ObjectId } from 'mongoose';
-import { IsIn, IsInt, IsNotEmpty, IsOptional, IsString, Length, Max, MaxLength, Min } from 'class-validator';
+import {
+	IsIn,
+	IsInt,
+	IsNotEmpty,
+	IsOptional,
+	IsString,
+	Length,
+	Max,
+	MaxLength,
+	Min,
+} from 'class-validator';
 import { MessageType } from '../../enums/message.enum';
 // import { availableMessageSorts } from '../../config';
 

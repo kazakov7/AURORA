@@ -1,5 +1,17 @@
 import { Field, Float, InputType, Int } from '@nestjs/graphql';
-import { IsArray, IsEnum, IsIn, IsInt, IsMongoId, IsNotEmpty, IsNumber, IsOptional, IsString, MaxLength, Min } from 'class-validator';
+import {
+	IsArray,
+	IsEnum,
+	IsIn,
+	IsInt,
+	IsMongoId,
+	IsNotEmpty,
+	IsNumber,
+	IsOptional,
+	IsString,
+	MaxLength,
+	Min,
+} from 'class-validator';
 import { Types } from 'mongoose';
 import { TourStatus } from '../../enums/tour.enum';
 

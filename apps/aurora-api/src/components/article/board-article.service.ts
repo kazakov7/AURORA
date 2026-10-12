@@ -1,8 +1,4 @@
-import {
-	BadRequestException,
-	Injectable,
-	InternalServerErrorException,
-} from '@nestjs/common';
+import { BadRequestException, Injectable, InternalServerErrorException } from '@nestjs/common';
 import { InjectModel } from '@nestjs/mongoose';
 import { Model, ObjectId, Types } from 'mongoose';
 import { MemberService } from '../member/member.service';
@@ -41,7 +37,7 @@ export class BoardArticleService {
 		private likeService: LikeService,
 		private viewService: ViewService,
 		private readonly notificationService: NotificationService,
-	) { }
+	) {}
 
 	public async createBoardArticle(
 		memberId: ObjectId,
@@ -78,8 +74,7 @@ export class BoardArticleService {
 			.lean()
 			.exec()) as BoardArticle | null;
 
-		if (!targetBoardArticle)
-			throw new InternalServerErrorException(Messages.NO_DATA_FOUND);
+		if (!targetBoardArticle) throw new InternalServerErrorException(Messages.NO_DATA_FOUND);
 
 		if (memberId) {
 			const viewInput = {
@@ -120,9 +115,19 @@ export class BoardArticleService {
 		const { _id, targetKey, modifier } = input;
 
 		return (await this.boardArticleModel
-			.findByIdAndUpdate(_id, [{ $set: { [targetKey]: { $max: [0, { $add: [{ $ifNull: [`$${targetKey}`, 0] }, modifier] }] } } }] as any, {
-				new: true,
-			})
+			.findByIdAndUpdate(
+				_id,
+				[
+					{
+						$set: {
+							[targetKey]: { $max: [0, { $add: [{ $ifNull: [`$${targetKey}`, 0] }, modifier] }] },
+						},
+					},
+				] as any,
+				{
+					new: true,
+				},
+			)
 			.exec()) as unknown as BoardArticle;
 	}
 
@@ -134,7 +139,8 @@ export class BoardArticleService {
 
 		const result = await this.boardArticleModel
 			.findOneAndUpdate(
-				{//@ts-ignore
+				{
+					//@ts-ignore
 					_id: _id,
 					memberId: memberId,
 					articleStatus: BoardArticleStatus.PUBLISHED,
@@ -156,13 +162,14 @@ export class BoardArticleService {
 			});
 		}
 
-		return result as unknown as BoardArticle
+		return result as unknown as BoardArticle;
 	}
 	public async likeTargetArticle(
 		memberId: Types.ObjectId,
 		likeRefId: Types.ObjectId,
 	): Promise<BoardArticle> {
-		const target = await this.boardArticleModel.findOne({ //@ts-ignore
+		const target = await this.boardArticleModel.findOne({
+			//@ts-ignore
 			_id: likeRefId,
 			articleStatus: BoardArticleStatus.PUBLISHED,
 		});
@@ -176,12 +183,17 @@ export class BoardArticleService {
 
 		// LIKE TOGGLE via Like modules
 		const modifier = await this.likeService.toggleLike(input);
-		if (modifier === 1) await this.notificationService.createNotification({
-			receiverId: target.memberId as Types.ObjectId, authorId: memberId, notificationType: NotificationType.LIKE,
-			notificationGroup: NotificationGroup.ARTICLE, notificationRefId: likeRefId,
-			notificationTitle: 'New community like', notificationDesc: 'Someone liked your community story.',
-			notificationEventKey: `article-like:${memberId}:${likeRefId}`,
-		});
+		if (modifier === 1)
+			await this.notificationService.createNotification({
+				receiverId: target.memberId as Types.ObjectId,
+				authorId: memberId,
+				notificationType: NotificationType.LIKE,
+				notificationGroup: NotificationGroup.ARTICLE,
+				notificationRefId: likeRefId,
+				notificationTitle: 'New community like',
+				notificationDesc: 'Someone liked your community story.',
+				notificationEventKey: `article-like:${memberId}:${likeRefId}`,
+			});
 		const result = await this.boardArticleModel.findById(likeRefId).exec();
 
 		if (!result) throw new InternalServerErrorException(Messages.SOMETHING_WENT_WRONG);
@@ -236,9 +248,7 @@ export class BoardArticleService {
 		return result[0];
 	}
 	// ADMIN
-	public async getAllBoardArticlesByAdmin(
-		input: AllBoardArticlesInquiry,
-	): Promise<BoardArticles> {
+	public async getAllBoardArticlesByAdmin(input: AllBoardArticlesInquiry): Promise<BoardArticles> {
 		const { articleStatus, articleCategory } = input.search;
 		const match: T = {};
 
@@ -270,9 +280,7 @@ export class BoardArticleService {
 		return result[0];
 	}
 
-	public async updateBoardArticleByAdmin(
-		input: BoardArticleUpdate,
-	): Promise<BoardArticle> {
+	public async updateBoardArticleByAdmin(input: BoardArticleUpdate): Promise<BoardArticle> {
 		const { _id, articleStatus } = input;
 
 		const result = await this.boardArticleModel
@@ -284,14 +292,15 @@ export class BoardArticleService {
 		if (!result) throw new InternalServerErrorException(Messages.UPDATE_FAILED);
 
 		if (articleStatus === BoardArticleStatus.DELETED) {
-			await this.memberService.memberStatusEditor({ //@ts-ignore
+			await this.memberService.memberStatusEditor({
+				//@ts-ignore
 				_id: result.memberId,
 				targetKey: 'memberArticles',
 				modifier: -1,
 			});
 		}
 
-		return result as unknown as BoardArticle
+		return result as unknown as BoardArticle;
 	}
 
 	public async removeBoardArticleByAdmin(articleId: ObjectId): Promise<BoardArticle> {

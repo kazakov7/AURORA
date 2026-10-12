@@ -42,7 +42,13 @@ describe('Catalog and social domains (e2e)', () => {
 			`mutation Create($input: DestinationInput!) {
 				createDestination(input: $input) { _id destinationName destinationStatus }
 			}`,
-			{ input: { destinationName: 'South Korea', destinationCountry: 'KR', destinationDesc: 'Travel Korea' } },
+			{
+				input: {
+					destinationName: 'South Korea',
+					destinationCountry: 'KR',
+					destinationDesc: 'Travel Korea',
+				},
+			},
 			admin.accessToken,
 		);
 		expect(create.body.errors).toBeUndefined();
@@ -115,13 +121,25 @@ describe('Catalog and social domains (e2e)', () => {
 		const createMutation = `mutation Create($input: CreatePropertyInput!) {
 			createProperty(input: $input) { _id propertyName propertyStatus memberId }
 		}`;
-		const wrongType = await graphQL(app, createMutation, { input: propertyInput }, tourAgent.accessToken);
+		const wrongType = await graphQL(
+			app,
+			createMutation,
+			{ input: propertyInput },
+			tourAgent.accessToken,
+		);
 		expect(wrongType.body.errors?.[0].message).toContain('not verified');
 
-		const created = await graphQL(app, createMutation, { input: propertyInput }, hotelAgent.accessToken);
+		const created = await graphQL(
+			app,
+			createMutation,
+			{ input: propertyInput },
+			hotelAgent.accessToken,
+		);
 		expect(created.body.errors).toBeUndefined();
 		expect(created.body.data.createProperty.propertyStatus).toBe('PENDING');
-		expect((await model(app, 'Destination').findById(destination._id).lean()).destinationProperties).toBe(1);
+		expect(
+			(await model(app, 'Destination').findById(destination._id).lean()).destinationProperties,
+		).toBe(1);
 		const propertyId = created.body.data.createProperty._id;
 
 		const ownershipViolation = await graphQL(
@@ -147,7 +165,10 @@ describe('Catalog and social domains (e2e)', () => {
 		const otherTour = await approvedAgent('toursvc2', AgentType.TOUR);
 		const hotelAgent = await approvedAgent('hotelsvc', AgentType.HOTEL);
 		const destination = await model(app, 'Destination').create({
-			destinationName: 'Thailand', destinationSlug: 'thailand', destinationCountry: 'TH', destinationStatus: 'ACTIVE',
+			destinationName: 'Thailand',
+			destinationSlug: 'thailand',
+			destinationCountry: 'TH',
+			destinationStatus: 'ACTIVE',
 		});
 		const input = {
 			destinationId: destination._id.toString(),
@@ -191,13 +212,18 @@ describe('Catalog and social domains (e2e)', () => {
 		const user = await seedMember(app, 'socialone');
 		const target = await seedMember(app, 'socialtwo');
 		const destination = await model(app, 'Destination').create({
-			destinationName: 'Vietnam', destinationSlug: 'vietnam', destinationCountry: 'VN', destinationStatus: 'ACTIVE',
+			destinationName: 'Vietnam',
+			destinationSlug: 'vietnam',
+			destinationCountry: 'VN',
+			destinationStatus: 'ACTIVE',
 		});
 
 		const detailQuery = `query Detail($id: String!) { getDestination(destinationId: $id) { _id destinationViews } }`;
 		await graphQL(app, detailQuery, { id: destination._id.toString() }, user.accessToken);
 		await graphQL(app, detailQuery, { id: destination._id.toString() }, user.accessToken);
-		expect(await model(app, 'View').countDocuments({ memberId: user._id, viewRefId: destination._id })).toBe(1);
+		expect(
+			await model(app, 'View').countDocuments({ memberId: user._id, viewRefId: destination._id }),
+		).toBe(1);
 
 		const like = await graphQL(
 			app,
@@ -206,12 +232,20 @@ describe('Catalog and social domains (e2e)', () => {
 			user.accessToken,
 		);
 		expect(like.body.errors).toBeUndefined();
-		expect(await model(app, 'Like').countDocuments({ memberId: user._id, likeRefId: destination._id })).toBe(1);
+		expect(
+			await model(app, 'Like').countDocuments({ memberId: user._id, likeRefId: destination._id }),
+		).toBe(1);
 
 		const comment = await graphQL(
 			app,
 			`mutation Comment($input: CommentInput!) { createComment(input: $input) { _id commentContent } }`,
-			{ input: { commentGroup: 'DESTINATION', commentContent: 'Beautiful country', commentRefId: destination._id.toString() } },
+			{
+				input: {
+					commentGroup: 'DESTINATION',
+					commentContent: 'Beautiful country',
+					commentRefId: destination._id.toString(),
+				},
+			},
 			user.accessToken,
 		);
 		expect(comment.body.errors).toBeUndefined();
@@ -229,7 +263,13 @@ describe('Catalog and social domains (e2e)', () => {
 			`mutation Review($input: DestinationReviewInput!) {
 				createDestinationReview(input: $input) { _id reviewRating reviewContent }
 			}`,
-			{ input: { destinationId: destination._id.toString(), reviewRating: 5, reviewContent: 'Excellent' } },
+			{
+				input: {
+					destinationId: destination._id.toString(),
+					reviewRating: 5,
+					reviewContent: 'Excellent',
+				},
+			},
 			user.accessToken,
 		);
 		expect(review.body.errors).toBeUndefined();
@@ -263,7 +303,12 @@ describe('Catalog and social domains (e2e)', () => {
 			}
 		}`;
 
-		const initial = await graphQL(app, detailQuery, { id: property._id.toString() }, viewer.accessToken);
+		const initial = await graphQL(
+			app,
+			detailQuery,
+			{ id: property._id.toString() },
+			viewer.accessToken,
+		);
 		expect(initial.body.errors).toBeUndefined();
 		expect(initial.body.data.getProperty.meLiked).toEqual([]);
 		expect(initial.body.data.getProperty.memberData.meFollowed).toEqual([]);
@@ -284,10 +329,17 @@ describe('Catalog and social domains (e2e)', () => {
 		);
 		expect(followed.body.errors).toBeUndefined();
 
-		const refreshed = await graphQL(app, detailQuery, { id: property._id.toString() }, viewer.accessToken);
+		const refreshed = await graphQL(
+			app,
+			detailQuery,
+			{ id: property._id.toString() },
+			viewer.accessToken,
+		);
 		expect(refreshed.body.errors).toBeUndefined();
 		expect(refreshed.body.data.getProperty.propertyLikes).toBe(1);
-		expect(refreshed.body.data.getProperty.meLiked).toEqual([expect.objectContaining({ myFavorite: true })]);
+		expect(refreshed.body.data.getProperty.meLiked).toEqual([
+			expect.objectContaining({ myFavorite: true }),
+		]);
 		expect(refreshed.body.data.getProperty.memberData.meFollowed).toEqual([
 			expect.objectContaining({ myFollowing: true }),
 		]);
@@ -298,21 +350,54 @@ describe('Catalog and social domains (e2e)', () => {
 		const owner = await seedMember(app, 'rankowner');
 		const viewer = await seedMember(app, 'rankviewer');
 		const destination = await model(app, 'Destination').create({
-			destinationName: 'Japan', destinationSlug: 'japan', destinationCountry: 'JP', destinationStatus: DestinationStatus.ACTIVE,
+			destinationName: 'Japan',
+			destinationSlug: 'japan',
+			destinationCountry: 'JP',
+			destinationStatus: DestinationStatus.ACTIVE,
 		});
 		const property = await model(app, 'Property').create({
-			memberId: owner._id, destinationId: destination._id, propertyType: 'HOTEL', propertyStatus: PropertyStatus.ACTIVE,
-			propertyName: 'Kyoto Aura', propertyAddress: 'Kyoto', pricePerNight: 150000, currency: 'USD', maxGuests: 2,
+			memberId: owner._id,
+			destinationId: destination._id,
+			propertyType: 'HOTEL',
+			propertyStatus: PropertyStatus.ACTIVE,
+			propertyName: 'Kyoto Aura',
+			propertyAddress: 'Kyoto',
+			pricePerNight: 150000,
+			currency: 'USD',
+			maxGuests: 2,
 		});
-		const publication = await model(app, 'RankingPublication').create({ isActive: true, publishedAt: new Date(), calculatedAt: new Date(), snapshotCount: 2 });
+		const publication = await model(app, 'RankingPublication').create({
+			isActive: true,
+			publishedAt: new Date(),
+			calculatedAt: new Date(),
+			snapshotCount: 2,
+		});
 		const snapshot = (rankingType: string, entityId: unknown) => ({
-			publicationId: publication._id, rankingType, scope: 'GLOBAL', periodDays: 30, calculatedAt: new Date(), entries: [{ entityId, score: 1 }],
+			publicationId: publication._id,
+			rankingType,
+			scope: 'GLOBAL',
+			periodDays: 30,
+			calculatedAt: new Date(),
+			entries: [{ entityId, score: 1 }],
 		});
-		await model(app, 'RankingSnapshot').create([snapshot('TOP_PROPERTIES', property._id), snapshot('TOP_TRAVELERS', owner._id)]);
+		await model(app, 'RankingSnapshot').create([
+			snapshot('TOP_PROPERTIES', property._id),
+			snapshot('TOP_TRAVELERS', owner._id),
+		]);
 
-		const liked = await graphQL(app, `mutation Like($propertyId: String!) { likeTargetProperty(propertyId: $propertyId) { _id } }`, { propertyId: property._id.toString() }, viewer.accessToken);
+		const liked = await graphQL(
+			app,
+			`mutation Like($propertyId: String!) { likeTargetProperty(propertyId: $propertyId) { _id } }`,
+			{ propertyId: property._id.toString() },
+			viewer.accessToken,
+		);
 		expect(liked.body.errors).toBeUndefined();
-		const followed = await graphQL(app, `mutation Follow($input: String!) { subscribe(input: $input) { _id } }`, { input: owner._id }, viewer.accessToken);
+		const followed = await graphQL(
+			app,
+			`mutation Follow($input: String!) { subscribe(input: $input) { _id } }`,
+			{ input: owner._id },
+			viewer.accessToken,
+		);
 		expect(followed.body.errors).toBeUndefined();
 
 		const rankingQuery = `query Home($input: RankingInquiry) {
@@ -332,12 +417,24 @@ describe('Catalog and social domains (e2e)', () => {
 	it('returns destination hotels when a destination ranking snapshot has not been published yet', async () => {
 		const owner = await seedMember(app, 'destinationrankowner');
 		const destination = await model(app, 'Destination').create({
-			destinationName: 'Fallback City', destinationSlug: 'fallback-city', destinationCountry: 'US', destinationStatus: DestinationStatus.ACTIVE,
+			destinationName: 'Fallback City',
+			destinationSlug: 'fallback-city',
+			destinationCountry: 'US',
+			destinationStatus: DestinationStatus.ACTIVE,
 		});
 		const property = await model(app, 'Property').create({
-			memberId: owner._id, destinationId: destination._id, propertyType: 'HOTEL', propertyStatus: PropertyStatus.ACTIVE,
-			propertyName: 'Fallback Hotel', propertyAddress: 'Fallback City', pricePerNight: 150, currency: 'USD', maxGuests: 2,
-			propertyRating: 4.8, propertyBookings: 12, propertyViews: 80,
+			memberId: owner._id,
+			destinationId: destination._id,
+			propertyType: 'HOTEL',
+			propertyStatus: PropertyStatus.ACTIVE,
+			propertyName: 'Fallback Hotel',
+			propertyAddress: 'Fallback City',
+			pricePerNight: 150,
+			currency: 'USD',
+			maxGuests: 2,
+			propertyRating: 4.8,
+			propertyBookings: 12,
+			propertyViews: 80,
 		});
 
 		const result = await graphQL(
@@ -347,7 +444,9 @@ describe('Catalog and social domains (e2e)', () => {
 		);
 
 		expect(result.body.errors).toBeUndefined();
-		expect(result.body.data.getTopProperties.list).toEqual([{ _id: property._id.toString(), destinationId: destination._id.toString() }]);
+		expect(result.body.data.getTopProperties.list).toEqual([
+			{ _id: property._id.toString(), destinationId: destination._id.toString() },
+		]);
 		expect(result.body.data.getTopProperties.metaCounter).toEqual([{ total: 1 }]);
 	});
 });

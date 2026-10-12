@@ -14,7 +14,7 @@ import { AgentService } from './agent.service';
 
 @Resolver()
 export class AgentResolver {
-	constructor(private readonly agentService: AgentService) { }
+	constructor(private readonly agentService: AgentService) {}
 
 	@UseGuards(AuthGuard)
 	@Mutation(() => Agent)
@@ -42,21 +42,29 @@ export class AgentResolver {
 	@Roles(MemberType.ADMIN)
 	@UseGuards(RolesGuard)
 	@Query(() => Agents)
-	public async getAgentApplications(@Args('input') input: AgentApplicationsInquiry): Promise<Agents> {
+	public async getAgentApplications(
+		@Args('input') input: AgentApplicationsInquiry,
+	): Promise<Agents> {
 		return this.agentService.getAgentApplications(input);
 	}
 
 	@Roles(MemberType.ADMIN)
 	@UseGuards(RolesGuard)
 	@Mutation(() => Agent)
-	public async approveAgentApplication(@Args('input') agentId: string, @AuthMember('_id') adminId: Types.ObjectId): Promise<Agent> {
+	public async approveAgentApplication(
+		@Args('input') agentId: string,
+		@AuthMember('_id') adminId: Types.ObjectId,
+	): Promise<Agent> {
 		return this.agentService.approveAgentApplication(shapeIntoMongoObjectId(agentId), adminId);
 	}
 
 	@Roles(MemberType.ADMIN)
 	@UseGuards(RolesGuard)
 	@Mutation(() => Agent)
-	public async rejectAgentApplication(@Args('input') input: RejectAgentApplicationInput, @AuthMember('_id') adminId: Types.ObjectId): Promise<Agent> {
+	public async rejectAgentApplication(
+		@Args('input') input: RejectAgentApplicationInput,
+		@AuthMember('_id') adminId: Types.ObjectId,
+	): Promise<Agent> {
 		input._id = shapeIntoMongoObjectId(input._id) as unknown as string;
 		return this.agentService.rejectAgentApplication(input, adminId);
 	}

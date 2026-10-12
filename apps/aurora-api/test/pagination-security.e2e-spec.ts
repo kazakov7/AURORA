@@ -21,19 +21,22 @@ describe('Pagination security (e2e)', () => {
 		getAllMembers(input: $input) { list { _id } metaCounter { total } }
 	}`;
 
-	it.each([1, 20, 100])('accepts the standard limit boundary %i and preserves metadata', async (limit) => {
-		await model(app, 'Member').create([
-			{ memberNick: 'pageone', memberStatus: MemberStatus.ACTIVE, memberType: MemberType.USER },
-			{ memberNick: 'pagetwo', memberStatus: MemberStatus.ACTIVE, memberType: MemberType.USER },
-			{ memberNick: 'pagethree', memberStatus: MemberStatus.ACTIVE, memberType: MemberType.USER },
-		]);
+	it.each([1, 20, 100])(
+		'accepts the standard limit boundary %i and preserves metadata',
+		async (limit) => {
+			await model(app, 'Member').create([
+				{ memberNick: 'pageone', memberStatus: MemberStatus.ACTIVE, memberType: MemberType.USER },
+				{ memberNick: 'pagetwo', memberStatus: MemberStatus.ACTIVE, memberType: MemberType.USER },
+				{ memberNick: 'pagethree', memberStatus: MemberStatus.ACTIVE, memberType: MemberType.USER },
+			]);
 
-		const result = await graphQL(app, membersQuery, { input: { page: 1, limit } });
+			const result = await graphQL(app, membersQuery, { input: { page: 1, limit } });
 
-		expect(result.body.errors).toBeUndefined();
-		expect(result.body.data.getAllMembers.list).toHaveLength(Math.min(limit, 3));
-		expect(result.body.data.getAllMembers.metaCounter).toEqual([{ total: 3 }]);
-	});
+			expect(result.body.errors).toBeUndefined();
+			expect(result.body.data.getAllMembers.list).toHaveLength(Math.min(limit, 3));
+			expect(result.body.data.getAllMembers.metaCounter).toEqual([{ total: 3 }]);
+		},
+	);
 
 	it.each([0, -1, 101, 500000])('rejects an unsafe standard limit %i', async (limit) => {
 		const result = await graphQL(app, membersQuery, { input: { page: 1, limit } });
@@ -42,12 +45,15 @@ describe('Pagination security (e2e)', () => {
 		expect(result.body.data).toBeNull();
 	});
 
-	it.each([0, -1])('rejects an invalid page %i before calculating a negative skip', async (page) => {
-		const result = await graphQL(app, membersQuery, { input: { page, limit: 20 } });
+	it.each([0, -1])(
+		'rejects an invalid page %i before calculating a negative skip',
+		async (page) => {
+			const result = await graphQL(app, membersQuery, { input: { page, limit: 20 } });
 
-		expect(result.body.errors).toBeDefined();
-		expect(result.body.data).toBeNull();
-	});
+			expect(result.body.errors).toBeDefined();
+			expect(result.body.data).toBeNull();
+		},
+	);
 
 	it('rejects a non-integer GraphQL page value', async () => {
 		const result = await graphQL(app, membersQuery, { input: { page: 1.5, limit: 20 } });
@@ -100,7 +106,12 @@ describe('Pagination security (e2e)', () => {
 		];
 
 		for (const testCase of cases) {
-			const result = await graphQL(app, testCase.query, { input: testCase.input }, member.accessToken);
+			const result = await graphQL(
+				app,
+				testCase.query,
+				{ input: testCase.input },
+				member.accessToken,
+			);
 			expect(result.body.errors).toBeDefined();
 			expect(result.body.errors[0].extensions.code).toBe('BAD_REQUEST');
 		}

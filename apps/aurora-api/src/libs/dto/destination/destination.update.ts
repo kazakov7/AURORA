@@ -1,5 +1,14 @@
 import { Field, Float, InputType } from '@nestjs/graphql';
-import { IsArray, IsEnum, IsMongoId, IsNotEmpty, IsNumber, IsOptional, IsString, MaxLength } from 'class-validator';
+import {
+	IsArray,
+	IsEnum,
+	IsMongoId,
+	IsNotEmpty,
+	IsNumber,
+	IsOptional,
+	IsString,
+	MaxLength,
+} from 'class-validator';
 import { DestinationStatus } from '../../enums/destination';
 
 @InputType()
@@ -50,4 +59,3 @@ export class DestinationUpdate {
 	@MaxLength(2000)
 	destinationDesc?: string;
 }
-

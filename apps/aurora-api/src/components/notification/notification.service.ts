@@ -6,7 +6,11 @@ import { Notification, Notifications } from '../../libs/dto/notification/notific
 import { NotificationsInquiry } from '../../libs/dto/notification/notification.input';
 import { Direction, Messages } from '../../libs/enums/common.enum';
 import { MemberStatus, MemberType } from '../../libs/enums/member.enum';
-import { NotificationGroup, NotificationStatus, NotificationType } from '../../libs/enums/notification.enum';
+import {
+	NotificationGroup,
+	NotificationStatus,
+	NotificationType,
+} from '../../libs/enums/notification.enum';
 import { T } from '../../libs/types/common';
 
 export interface CreateNotificationInput {
@@ -26,7 +30,7 @@ export class NotificationService {
 		@InjectModel('Notification') private readonly notificationModel: Model<any>,
 		@InjectModel('Member') private readonly memberModel: Model<any>,
 		private readonly chatGateway: ChatGateway,
-	) { }
+	) {}
 
 	public async createNotification(input: CreateNotificationInput): Promise<Notification | null> {
 		// A completed business transition must never fail or be rolled back because
@@ -45,17 +49,22 @@ export class NotificationService {
 				if (!author) return null;
 			}
 
-			if (input.notificationType === NotificationType.SYSTEM && input.notificationGroup !== NotificationGroup.SYSTEM) {
+			if (
+				input.notificationType === NotificationType.SYSTEM &&
+				input.notificationGroup !== NotificationGroup.SYSTEM
+			) {
 				throw new BadRequestException(Messages.BAD_REQUEST);
 			}
 
-			const result = await this.notificationModel.findOneAndUpdate(
-				input.notificationEventKey
-					? { receiverId: input.receiverId, notificationEventKey: input.notificationEventKey }
-					: { _id: new Types.ObjectId() },
-				{ $setOnInsert: { ...input, notificationStatus: NotificationStatus.WAIT } },
-				{ new: true, upsert: true, includeResultMetadata: true },
-			).exec();
+			const result = await this.notificationModel
+				.findOneAndUpdate(
+					input.notificationEventKey
+						? { receiverId: input.receiverId, notificationEventKey: input.notificationEventKey }
+						: { _id: new Types.ObjectId() },
+					{ $setOnInsert: { ...input, notificationStatus: NotificationStatus.WAIT } },
+					{ new: true, upsert: true, includeResultMetadata: true },
+				)
+				.exec();
 			const notification = result.value as Notification;
 			if (notification && !result.lastErrorObject?.updatedExisting) {
 				this.chatGateway.emitNotification(input.receiverId, notification);
@@ -67,13 +76,20 @@ export class NotificationService {
 		}
 	}
 
-	public async getMyNotifications(memberId: Types.ObjectId, input: NotificationsInquiry): Promise<Notifications> {
+	public async getMyNotifications(
+		memberId: Types.ObjectId,
+		input: NotificationsInquiry,
+	): Promise<Notifications> {
 		const match: T = { receiverId: memberId };
-		if (input.search?.notificationStatus) match.notificationStatus = input.search.notificationStatus;
+		if (input.search?.notificationStatus)
+			match.notificationStatus = input.search.notificationStatus;
 		if (input.search?.notificationType) match.notificationType = input.search.notificationType;
 		if (input.search?.notificationGroup) match.notificationGroup = input.search.notificationGroup;
 
-		const sort: T = { [input.sort ?? 'createdAt']: input.direction ?? Direction.DESC, _id: Direction.DESC };
+		const sort: T = {
+			[input.sort ?? 'createdAt']: input.direction ?? Direction.DESC,
+			_id: Direction.DESC,
+		};
 		const result = await this.notificationModel
 			.aggregate([
 				{ $match: match },
@@ -85,15 +101,27 @@ export class NotificationService {
 							{ $limit: input.limit },
 							{
 								$lookup: {
-									from: 'members', localField: 'authorId', foreignField: '_id', as: 'authorData',
+									from: 'members',
+									localField: 'authorId',
+									foreignField: '_id',
+									as: 'authorData',
 								},
 							},
 							{ $unwind: { path: '$authorData', preserveNullAndEmptyArrays: true } },
 							{
 								$project: {
-									'authorData.memberNick': 1, 'authorData.memberFullName': 1, 'authorData.memberImage': 1,
-									receiverId: 1, authorId: 1, notificationType: 1, notificationStatus: 1,
-									notificationGroup: 1, notificationRefId: 1, notificationTitle: 1, notificationDesc: 1, createdAt: 1,
+									'authorData.memberNick': 1,
+									'authorData.memberFullName': 1,
+									'authorData.memberImage': 1,
+									receiverId: 1,
+									authorId: 1,
+									notificationType: 1,
+									notificationStatus: 1,
+									notificationGroup: 1,
+									notificationRefId: 1,
+									notificationTitle: 1,
+									notificationDesc: 1,
+									createdAt: 1,
 								},
 							},
 						],
@@ -106,10 +134,15 @@ export class NotificationService {
 	}
 
 	public async getUnreadNotificationCount(memberId: Types.ObjectId): Promise<number> {
-		return await this.notificationModel.countDocuments({ receiverId: memberId, notificationStatus: NotificationStatus.WAIT }).exec();
+		return await this.notificationModel
+			.countDocuments({ receiverId: memberId, notificationStatus: NotificationStatus.WAIT })
+			.exec();
 	}
 
-	public async markNotificationAsRead(memberId: Types.ObjectId, notificationId: Types.ObjectId): Promise<Notification> {
+	public async markNotificationAsRead(
+		memberId: Types.ObjectId,
+		notificationId: Types.ObjectId,
+	): Promise<Notification> {
 		const result = await this.notificationModel
 			.findOneAndUpdate(
 				{ _id: notificationId, receiverId: memberId },
@@ -135,13 +168,27 @@ export class NotificationService {
 		input: Omit<CreateNotificationInput, 'receiverId'>,
 		excludedReceiverIds: Types.ObjectId[] = [],
 	): Promise<void> {
-		const admins = await this.memberModel.find({ memberType: 'ADMIN', memberStatus: MemberStatus.ACTIVE, deletedAt: null }).select('_id').lean().exec();
-		const excludedReceiverIdSet = new Set(excludedReceiverIds.map((receiverId) => receiverId.toString()));
-		await Promise.all((admins as any[]).filter((admin) => !excludedReceiverIdSet.has(admin._id.toString())).map((admin) => this.createNotification({
-			...input,
-			receiverId: admin._id as Types.ObjectId,
-			notificationEventKey: input.notificationEventKey ? `${input.notificationEventKey}:${admin._id}` : undefined,
-		})));
+		const admins = await this.memberModel
+			.find({ memberType: 'ADMIN', memberStatus: MemberStatus.ACTIVE, deletedAt: null })
+			.select('_id')
+			.lean()
+			.exec();
+		const excludedReceiverIdSet = new Set(
+			excludedReceiverIds.map((receiverId) => receiverId.toString()),
+		);
+		await Promise.all(
+			(admins as any[])
+				.filter((admin) => !excludedReceiverIdSet.has(admin._id.toString()))
+				.map((admin) =>
+					this.createNotification({
+						...input,
+						receiverId: admin._id as Types.ObjectId,
+						notificationEventKey: input.notificationEventKey
+							? `${input.notificationEventKey}:${admin._id}`
+							: undefined,
+					}),
+				),
+		);
 	}
 
 	public async notifyActiveMembers(
@@ -158,14 +205,22 @@ export class NotificationService {
 				.select('_id')
 				.lean()
 				.exec();
-			const excludedReceiverIdSet = new Set(excludedReceiverIds.map((receiverId) => receiverId.toString()));
-			await Promise.all((members as any[])
-				.filter((member) => !excludedReceiverIdSet.has(member._id.toString()))
-				.map((member) => this.createNotification({
-					...input,
-					receiverId: member._id as Types.ObjectId,
-					notificationEventKey: input.notificationEventKey ? `${input.notificationEventKey}:${member._id}` : undefined,
-				})));
+			const excludedReceiverIdSet = new Set(
+				excludedReceiverIds.map((receiverId) => receiverId.toString()),
+			);
+			await Promise.all(
+				(members as any[])
+					.filter((member) => !excludedReceiverIdSet.has(member._id.toString()))
+					.map((member) =>
+						this.createNotification({
+							...input,
+							receiverId: member._id as Types.ObjectId,
+							notificationEventKey: input.notificationEventKey
+								? `${input.notificationEventKey}:${member._id}`
+								: undefined,
+						}),
+					),
+			);
 		} catch (err) {
 			console.error('Active member notification broadcast failed:', err);
 		}

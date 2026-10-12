@@ -2,7 +2,6 @@ import { ObjectId } from 'bson';
 import { BadRequestException } from '@nestjs/common';
 import { Messages } from './enums/common.enum';
 
-
 export const HOLD_DURATION_MS = 15 * 60 * 1000;
 export const USD = 'USD';
 export const availableAgentSorts = ['createdAt', 'updatedAt', 'agentType', 'verificationStatus'];
@@ -21,6 +20,10 @@ export const availableMemberSorts = [
 	'memberTours',
 	'memberArticles',
 ];
+/** A nickname is a handle: plain letters, digits, dot and underscore keep look-alike and invisible characters out **/
+export const memberNickRegex = /^[A-Za-z0-9._]+$/;
+/** Digits with an optional leading +, so one number is stored in one form under the unique index **/
+export const memberPhoneRegex = /^\+?[0-9]{7,15}$/;
 export const availablePropertySorts = [
 	'createdAt',
 	'updatedAt',
@@ -47,7 +50,12 @@ export const availableDestinationSorts = [
 	'destinationProperties',
 	'destinationTours',
 ];
-export const availableBoardArticleSorts = ['createdAt', 'updatedAt', 'articleLikes', 'articleViews'];
+export const availableBoardArticleSorts = [
+	'createdAt',
+	'updatedAt',
+	'articleLikes',
+	'articleViews',
+];
 export const availableCommentSorts = ['createdAt', 'updatedAt'];
 export const availableChatSorts = ['createdAt', 'updatedAt', 'lastMessageAt'];
 // IMAGE CONFIGURATION ()
@@ -56,17 +64,34 @@ import { T } from './types/common';
 
 export const validMimeTypes = ['image/png', 'image/jpg', 'image/jpeg'];
 /** Upload sub-folders under ./uploads; the client-supplied target must be one of these (blocks path traversal) **/
-export const validUploadTargets = ['member', 'article', 'board', 'property', 'tour', 'destination', 'support'];
+export const validUploadTargets = [
+	'member',
+	'article',
+	'board',
+	'property',
+	'tour',
+	'destination',
+	'support',
+];
 export const isValidUploadTarget = (target: unknown): target is string =>
 	typeof target === 'string' && validUploadTargets.includes(target);
+/** A stored image is an http(s) URL or a relative path; any other scheme (javascript:, data:) is refused **/
+export const imageSourceRegex = /^(?:https?:\/\/\S+|(?![a-z][a-z0-9+.-]*:)\S*)$/i;
 
 /** Extension comes from the validated mimetype, never from the client filename (blocks .html/.js uploads) **/
-const imageExtensions: Record<string, string> = { 'image/png': '.png', 'image/jpg': '.jpg', 'image/jpeg': '.jpg' };
+const imageExtensions: Record<string, string> = {
+	'image/png': '.png',
+	'image/jpg': '.jpg',
+	'image/jpeg': '.jpg',
+};
 export const getSerialForImage = (mimetype: string) => {
 	return randomUUID() + (imageExtensions[mimetype] ?? '.jpg');
 };
 /** Escapes user search text before building a RegExp (prevents invalid-pattern 500s and ReDoS) **/
 export const escapeRegExp = (text: string): string => text.replace(/[.*+?^${}()|[\]\\]/g, '\\$&');
+/** Trims string input before validation, so length rules apply to the value that gets stored **/
+export const trimString = ({ value }: { value: unknown }): unknown =>
+	typeof value === 'string' ? value.trim() : value;
 
 export const shapeIntoMongoObjectId = (target: any): any => {
 	if (target instanceof ObjectId) return target;
@@ -89,7 +114,10 @@ export const lookUpAuthMemberLiked = (memberId: T, targetRefid: string = '$_id')
 				{
 					$match: {
 						$expr: {
-							$and: [{ $eq: ['$likeRefId', '$$localLikeRefId'] }, { $eq: ['$memberId', '$$localMemberId'] }],
+							$and: [
+								{ $eq: ['$likeRefId', '$$localLikeRefId'] },
+								{ $eq: ['$memberId', '$$localMemberId'] },
+							],
 						},
 					},
 				},
@@ -124,7 +152,10 @@ export const lookUpAuthMemberFollowData = (input: LookUpAuthMemberFollowData) =>
 				{
 					$match: {
 						$expr: {
-							$and: [{ $eq: ['$followerId', '$$localfollowerId'] }, { $eq: ['$followingId', '$$localFollowingId'] }],
+							$and: [
+								{ $eq: ['$followerId', '$$localfollowerId'] },
+								{ $eq: ['$followingId', '$$localFollowingId'] },
+							],
 						},
 					},
 				},

@@ -17,48 +17,14 @@ import { Member } from '../../libs/dto/member/member';
 import { T } from '../../libs/types/common';
 import { Messages } from '../../libs/enums/common.enum';
 import { MemberStatus } from '../../libs/enums/member.enum';
-
-export interface GoogleIdentity {
-	subject: string;
-	email: string;
-	name?: string;
-	image?: string;
-}
-
-export interface KakaoIdentity {
-	subject: string;
-	email?: string;
-	name?: string;
-	image?: string;
-}
-
-export interface TelegramIdentity {
-	subject: string;
-	preferredUsername?: string;
-	name?: string;
-	image?: string;
-}
-
-interface KakaoTokenResponse {
-	access_token?: string;
-	id_token?: string;
-}
-
-interface KakaoProfileResponse {
-	id?: string | number;
-	kakao_account?: {
-		profile?: {
-			nickname?: string;
-			profile_image_url?: string;
-		};
-	};
-}
-
-interface TelegramTokenResponse {
-	id_token?: string;
-	/** Telegram answers OAuth errors with HTTP 200 and an `error` field (e.g. `invalid_grant`) */
-	error?: string;
-}
+import {
+	GoogleIdentity,
+	KakaoIdentity,
+	KakaoProfileResponse,
+	KakaoTokenResponse,
+	TelegramIdentity,
+	TelegramTokenResponse,
+} from '../../libs/types/social.identity';
 
 const KAKAO_TOKEN_ENDPOINT = 'https://kauth.kakao.com/oauth/token';
 const KAKAO_USER_INFO_ENDPOINT = 'https://kapi.kakao.com/v2/user/me';
@@ -66,7 +32,9 @@ const KAKAO_ISSUER = 'https://kauth.kakao.com';
 const kakaoJwks = createRemoteJWKSet(new URL('https://kauth.kakao.com/.well-known/jwks.json'));
 const TELEGRAM_TOKEN_ENDPOINT = 'https://oauth.telegram.org/token';
 const TELEGRAM_ISSUER = 'https://oauth.telegram.org';
-const telegramJwks = createRemoteJWKSet(new URL('https://oauth.telegram.org/.well-known/jwks.json'));
+const telegramJwks = createRemoteJWKSet(
+	new URL('https://oauth.telegram.org/.well-known/jwks.json'),
+);
 
 @Injectable()
 export class AuthService {
@@ -74,7 +42,7 @@ export class AuthService {
 		private jwtService: JwtService,
 		private httpService: HttpService,
 		@InjectModel('Member') private readonly memberModel: Model<Member>,
-	) { }
+	) {}
 	public async hashPassword(memberPassword: string): Promise<string> {
 		const salt = await bcrypt.genSalt();
 		return await bcrypt.hash(memberPassword, salt);
@@ -143,6 +111,7 @@ export class AuthService {
 				subject: payload.sub,
 				email: payload.email.toLowerCase(),
 				name: payload.name,
+				image: payload.picture,
 			};
 		} catch (error) {
 			if (error instanceof UnauthorizedException) throw error;
@@ -150,10 +119,14 @@ export class AuthService {
 		}
 	}
 
-	public async verifyKakaoAuthorizationCode(code: string, redirectUri: string): Promise<KakaoIdentity> {
+	public async verifyKakaoAuthorizationCode(
+		code: string,
+		redirectUri: string,
+	): Promise<KakaoIdentity> {
 		const clientId = process.env.KAKAO_REST_API_KEY;
 		const clientSecret = process.env.KAKAO_CLIENT_SECRET;
-		if (!clientId || !clientSecret) throw new ServiceUnavailableException(Messages.KAKAO_AUTH_NOT_CONFIGURED);
+		if (!clientId || !clientSecret)
+			throw new ServiceUnavailableException(Messages.KAKAO_AUTH_NOT_CONFIGURED);
 
 		const form = new URLSearchParams({
 			grant_type: 'authorization_code',
@@ -171,7 +144,8 @@ export class AuthService {
 				}),
 			);
 			token = response.data;
-		} catch (error) { //@ts-ignore
+		} catch (error) {
+			//@ts-ignore
 			const status = error?.response?.status;
 			if (status >= 400 && status < 500) {
 				throw new BadRequestException(Messages.INVALID_KAKAO_AUTHORIZATION_CODE);
@@ -184,7 +158,10 @@ export class AuthService {
 		return await this.retrieveKakaoProfile(identity, token.access_token);
 	}
 
-	private async verifyKakaoIdentityToken(idToken: string, clientId: string): Promise<KakaoIdentity> {
+	private async verifyKakaoIdentityToken(
+		idToken: string,
+		clientId: string,
+	): Promise<KakaoIdentity> {
 		try {
 			const { payload } = await jwtVerify(idToken, kakaoJwks, {
 				issuer: KAKAO_ISSUER,
@@ -197,8 +174,12 @@ export class AuthService {
 
 			return {
 				subject: payload.sub,
-				email: typeof payload.email === 'string' && payload.email ? payload.email.toLowerCase() : undefined,
-				name: typeof payload.nickname === 'string' && payload.nickname ? payload.nickname : undefined,
+				email:
+					typeof payload.email === 'string' && payload.email
+						? payload.email.toLowerCase()
+						: undefined,
+				name:
+					typeof payload.nickname === 'string' && payload.nickname ? payload.nickname : undefined,
 				image: typeof payload.picture === 'string' && payload.picture ? payload.picture : undefined,
 			};
 		} catch (error) {
@@ -207,7 +188,10 @@ export class AuthService {
 		}
 	}
 
-	private async retrieveKakaoProfile(identity: KakaoIdentity, accessToken?: string): Promise<KakaoIdentity> {
+	private async retrieveKakaoProfile(
+		identity: KakaoIdentity,
+		accessToken?: string,
+	): Promise<KakaoIdentity> {
 		if (!accessToken) return identity;
 
 		try {
@@ -227,7 +211,10 @@ export class AuthService {
 
 			return {
 				...identity,
-				name: typeof profile?.nickname === 'string' && profile.nickname ? profile.nickname : identity.name,
+				name:
+					typeof profile?.nickname === 'string' && profile.nickname
+						? profile.nickname
+						: identity.name,
 				image:
 					typeof profile?.profile_image_url === 'string' && profile.profile_image_url
 						? profile.profile_image_url
@@ -289,7 +276,10 @@ export class AuthService {
 		return await this.verifyTelegramIdentityToken(token.id_token, clientId);
 	}
 
-	private async verifyTelegramIdentityToken(idToken: string, clientId: string): Promise<TelegramIdentity> {
+	private async verifyTelegramIdentityToken(
+		idToken: string,
+		clientId: string,
+	): Promise<TelegramIdentity> {
 		try {
 			const { payload } = await jwtVerify(idToken, telegramJwks, {
 				issuer: TELEGRAM_ISSUER,

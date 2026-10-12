@@ -1,5 +1,9 @@
 import { Schema } from 'mongoose';
-import { NotificationType, NotificationStatus, NotificationGroup } from '../libs/enums/notification.enum';
+import {
+	NotificationType,
+	NotificationStatus,
+	NotificationGroup,
+} from '../libs/enums/notification.enum';
 
 const NotificationSchema = new Schema(
 	{
@@ -52,11 +56,21 @@ const NotificationSchema = new Schema(
 	{ timestamps: { createdAt: true, updatedAt: false }, collection: 'notifications' },
 );
 
-NotificationSchema.index({ receiverId: 1, notificationStatus: 1, createdAt: 1 }, { name: 'notifications_inbox_idx' });
-NotificationSchema.index({ notificationGroup: 1, notificationRefId: 1, createdAt: 1 }, { name: 'notifications_target_idx' });
+NotificationSchema.index(
+	{ receiverId: 1, notificationStatus: 1, createdAt: 1 },
+	{ name: 'notifications_inbox_idx' },
+);
+NotificationSchema.index(
+	{ notificationGroup: 1, notificationRefId: 1, createdAt: 1 },
+	{ name: 'notifications_target_idx' },
+);
 NotificationSchema.index(
 	{ receiverId: 1, notificationEventKey: 1 },
-	{ unique: true, partialFilterExpression: { notificationEventKey: { $type: 'string' } }, name: 'notifications_receiver_event_uq' },
+	{
+		unique: true,
+		partialFilterExpression: { notificationEventKey: { $type: 'string' } },
+		name: 'notifications_receiver_event_uq',
+	},
 );
 
 export default NotificationSchema;

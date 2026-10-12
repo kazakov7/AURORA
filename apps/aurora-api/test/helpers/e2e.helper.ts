@@ -32,7 +32,9 @@ export function getTestUrl(app: INestApplication): string {
 
 export async function clearDatabase(app: INestApplication): Promise<void> {
 	const connection = app.get<Connection>(getConnectionToken());
-	await Promise.all(Object.values(connection.collections).map((collection) => collection.deleteMany({})));
+	await Promise.all(
+		Object.values(connection.collections).map((collection) => collection.deleteMany({})),
+	);
 }
 
 export async function graphQL(
