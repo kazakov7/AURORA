@@ -1,4 +1,5 @@
 import { Field, InputType, Int } from '@nestjs/graphql';
+import { Transform } from 'class-transformer';
 import {
 	IsEnum,
 	IsIn,
@@ -6,33 +7,41 @@ import {
 	IsNotEmpty,
 	IsOptional,
 	IsString,
+	Matches,
 	Max,
 	MaxLength,
 	Min,
 } from 'class-validator';
-import { availableAgentSorts } from '../../config';
+import { availableAgentSorts, trimString } from '../../config';
 import { Direction } from '../../enums/common.enum';
 import { AgentType, AgentVerificationStatus } from '../../enums/agent.enum';
 
 @InputType()
 export class AgentInput {
 	@Field(() => AgentType)
-	@IsNotEmpty()
+	@IsEnum(AgentType)
 	agentType: AgentType;
 
 	@Field(() => String)
+	@Transform(trimString)
 	@IsString()
 	@IsNotEmpty()
+	@MaxLength(200)
 	companyName: string;
 
+	// Needs at least one letter or digit, since separators are not part of the business key
 	@Field(() => String)
+	@Transform(trimString)
 	@IsString()
-	@IsNotEmpty()
+	@MaxLength(50)
+	@Matches(/[\p{L}\p{N}]/u)
 	businessNumber: string;
 
 	@Field(() => String)
+	@Transform(trimString)
 	@IsString()
 	@IsNotEmpty()
+	@MaxLength(300)
 	companyAddress: string;
 
 	@Field({ nullable: true })

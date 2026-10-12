@@ -13,6 +13,8 @@ export enum AgentVerificationStatus {
 	PENDING = 'PENDING',
 	APPROVED = 'APPROVED',
 	REJECTED = 'REJECTED',
+	/** Taken back from an approved agent, or from any live application of a deleted member **/
+	REVOKED = 'REVOKED',
 }
 
 registerEnumType(AgentVerificationStatus, {

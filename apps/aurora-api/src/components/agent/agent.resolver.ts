@@ -4,7 +4,7 @@ import { Types } from 'mongoose';
 import { shapeIntoMongoObjectId } from '../../libs/config';
 import { Agents, Agent } from '../../libs/dto/agent/agent';
 import { AgentApplicationsInquiry, AgentInput } from '../../libs/dto/agent/agent.input';
-import { RejectAgentApplicationInput } from '../../libs/dto/agent/agent.update';
+import { RejectAgentApplicationInput, RevokeAgentInput } from '../../libs/dto/agent/agent.update';
 import { MemberType } from '../../libs/enums/member.enum';
 import { AuthMember } from '../auth/decorators/authMember.decorator';
 import { Roles } from '../auth/decorators/roles.decorator';
@@ -67,5 +67,16 @@ export class AgentResolver {
 	): Promise<Agent> {
 		input._id = shapeIntoMongoObjectId(input._id) as unknown as string;
 		return this.agentService.rejectAgentApplication(input, adminId);
+	}
+
+	@Roles(MemberType.ADMIN)
+	@UseGuards(RolesGuard)
+	@Mutation(() => Agent)
+	public async revokeAgentByAdmin(
+		@Args('input') input: RevokeAgentInput,
+		@AuthMember('_id') adminId: Types.ObjectId,
+	): Promise<Agent> {
+		input._id = shapeIntoMongoObjectId(input._id) as unknown as string;
+		return this.agentService.revokeAgentByAdmin(input, adminId);
 	}
 }

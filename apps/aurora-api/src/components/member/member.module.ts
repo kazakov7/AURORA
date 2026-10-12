@@ -8,6 +8,7 @@ import { ViewModule } from '../view/view.module';
 import FollowSchema from '../../schemas/Follow.model';
 import PropertySchema from '../../schemas/Property.model';
 import TourSchema from '../../schemas/Tour.model';
+import AgentSchema from '../../schemas/Agent.model';
 import DestinationSchema from '../../schemas/Destination.model';
 import { ChatModule } from '../chat/chat.module';
 
@@ -17,6 +18,7 @@ import { ChatModule } from '../chat/chat.module';
 		MongooseModule.forFeature([{ name: 'Follow', schema: FollowSchema }]),
 		MongooseModule.forFeature([{ name: 'Property', schema: PropertySchema }]),
 		MongooseModule.forFeature([{ name: 'Tour', schema: TourSchema }]),
+		MongooseModule.forFeature([{ name: 'Agent', schema: AgentSchema }]),
 		MongooseModule.forFeature([{ name: 'Destination', schema: DestinationSchema }]),
 		AuthModule,
 		ViewModule,

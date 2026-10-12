@@ -23,6 +23,10 @@ const AgentSchema = new Schema(
 			required: true,
 			trim: true,
 		},
+		/** businessNumber without case and separators, so one business cannot apply twice in another spelling **/
+		businessNumberKey: {
+			type: String,
+		},
 		companyAddress: {
 			type: String,
 			required: true,
@@ -61,16 +65,18 @@ AgentSchema.index(
 		name: 'agents_member_active_uq',
 	},
 );
+// Records written before businessNumberKey existed stay out until the backfill script fills them in
 AgentSchema.index(
-	{ businessNumber: 1 },
+	{ businessNumberKey: 1 },
 	{
 		unique: true,
 		partialFilterExpression: {
 			verificationStatus: {
 				$in: [AgentVerificationStatus.PENDING, AgentVerificationStatus.APPROVED],
 			},
+			businessNumberKey: { $exists: true },
 		},
-		name: 'agents_business_active_uq',
+		name: 'agents_business_key_active_uq',
 	},
 );
 AgentSchema.index(

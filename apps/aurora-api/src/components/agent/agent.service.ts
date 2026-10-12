@@ -8,13 +8,14 @@ import { InjectConnection, InjectModel } from '@nestjs/mongoose';
 import { Connection, Model, Types } from 'mongoose';
 import { Agents, Agent } from '../../libs/dto/agent/agent';
 import { AgentApplicationsInquiry, AgentInput } from '../../libs/dto/agent/agent.input';
-import { RejectAgentApplicationInput } from '../../libs/dto/agent/agent.update';
+import { RejectAgentApplicationInput, RevokeAgentInput } from '../../libs/dto/agent/agent.update';
 import { Direction, Messages } from '../../libs/enums/common.enum';
 import { AgentType, AgentVerificationStatus } from '../../libs/enums/agent.enum';
 import { MemberStatus, MemberType } from '../../libs/enums/member.enum';
 import { T } from '../../libs/types/common';
-import { lookupMember, shapeIntoMongoObjectId } from '../../libs/config';
+import { lookupMember, shapeIntoBusinessKey, shapeIntoMongoObjectId } from '../../libs/config';
 import { NotificationService } from '../notification/notification.service';
+import { MemberService } from '../member/member.service';
 import { NotificationGroup, NotificationType } from '../../libs/enums/notification.enum';
 
 @Injectable()
@@ -24,6 +25,7 @@ export class AgentService {
 		@InjectModel('Member') private readonly memberModel: Model<any>,
 		@InjectConnection() private readonly connection: Connection,
 		private readonly notificationService: NotificationService,
+		private readonly memberService: MemberService,
 	) {}
 
 	public async submitAgentApplication(memberId: Types.ObjectId, input: AgentInput): Promise<Agent> {
@@ -42,24 +44,43 @@ export class AgentService {
 			.exec();
 		if (existingActiveApplication) throw new BadRequestException(Messages.AGENT_APPLICATION_EXISTS);
 
+		const businessNumberKey = shapeIntoBusinessKey(input.businessNumber);
+		const businessTaken = await this.agentModel
+			.exists({
+				businessNumberKey,
+				verificationStatus: {
+					$in: [AgentVerificationStatus.PENDING, AgentVerificationStatus.APPROVED],
+				},
+			})
+			.exec();
+		if (businessTaken) throw new BadRequestException(Messages.AGENT_BUSINESS_EXISTS);
+
+		let result: Agent;
 		try {
-			const result = await this.agentModel.create({ ...input, memberId });
-			await this.notificationService.notifyActiveAdmins({
+			result = await this.agentModel.create({ ...input, businessNumberKey, memberId });
+		} catch (error) {
+			// Two submissions at once meet the unique indexes: tell which rule they broke
+			const { code, keyPattern } = error as { code?: number; keyPattern?: T };
+			if (code === 11000 && keyPattern?.businessNumberKey) {
+				throw new BadRequestException(Messages.AGENT_BUSINESS_EXISTS);
+			}
+			if (code === 11000) throw new BadRequestException(Messages.AGENT_APPLICATION_EXISTS);
+			throw new BadRequestException(Messages.CREATE_FAILED);
+		}
+
+		// The application is saved; a failed admin notification must not report it as failed
+		await this.notificationService
+			.notifyActiveAdmins({
 				authorId: memberId,
 				notificationType: NotificationType.SYSTEM,
 				notificationGroup: NotificationGroup.SYSTEM,
-				notificationRefId: result._id,
+				notificationRefId: result._id as unknown as Types.ObjectId,
 				notificationTitle: 'New agent application',
 				notificationDesc: 'A member submitted an agent verification application.',
 				notificationEventKey: `agent-application:${result._id}`,
-			});
-			return result as unknown as Agent;
-		} catch (error) {
-			if ((error as { code?: number }).code === 11000) {
-				throw new BadRequestException(Messages.AGENT_APPLICATION_EXISTS);
-			}
-			throw new BadRequestException(Messages.CREATE_FAILED);
-		}
+			})
+			.catch((error) => console.error('Agent application notification failed:', error));
+		return result;
 	}
 
 	public async getMemberAgent(memberId: string): Promise<Agent> {
@@ -173,6 +194,34 @@ export class AgentService {
 			notificationDesc: 'Your agent application was not approved.',
 			notificationEventKey: `agent-rejected:${result._id}`,
 		});
+		return result as unknown as Agent;
+	}
+
+	public async revokeAgentByAdmin(
+		input: RevokeAgentInput,
+		adminId?: Types.ObjectId,
+	): Promise<Agent> {
+		const targetAgent = await this.agentModel
+			.findOne({ _id: input._id, verificationStatus: AgentVerificationStatus.APPROVED })
+			.lean<Agent>()
+			.exec();
+		if (!targetAgent) throw new BadRequestException(Messages.AGENT_NOT_FOUND);
+
+		const memberId = targetAgent.memberId as unknown as Types.ObjectId;
+		await this.memberService.revokeAgentRole(memberId, input.revokeReason);
+		await this.notificationService.createNotification({
+			receiverId: memberId,
+			authorId: adminId,
+			notificationType: NotificationType.SYSTEM,
+			notificationGroup: NotificationGroup.SYSTEM,
+			notificationRefId: targetAgent._id as unknown as Types.ObjectId,
+			notificationTitle: 'Agent status revoked',
+			notificationDesc: 'Your agent status has been revoked.',
+			notificationEventKey: `agent-revoked:${targetAgent._id}`,
+		});
+
+		const result = await this.agentModel.findById(input._id).exec();
+		if (!result) throw new InternalServerErrorException(Messages.UPDATE_FAILED);
 		return result as unknown as Agent;
 	}
 

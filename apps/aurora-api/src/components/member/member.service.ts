@@ -21,6 +21,7 @@ import {
 import { Direction, Messages } from '../../libs/enums/common.enum';
 import { MemberAuthType, MemberStatus, MemberType } from '../../libs/enums/member.enum';
 import { PropertyStatus } from '../../libs/enums/property.enum';
+import { AgentVerificationStatus } from '../../libs/enums/agent.enum';
 import { StatisticModifier, T } from '../../libs/types/common';
 import { ViewGroup } from '../../libs/enums/view.enum';
 import { ViewService } from '../view/view.service';
@@ -41,6 +42,7 @@ export class MemberService {
 		@InjectModel('Follow') private readonly followModel: Model<Follower | Following>,
 		@InjectModel('Property') private readonly propertyModel: Model<any>,
 		@InjectModel('Tour') private readonly tourModel: Model<any>,
+		@InjectModel('Agent') private readonly agentModel: Model<any>,
 		@InjectModel('Destination') private readonly destinationModel: Model<any>,
 		private authService: AuthService,
 		private viewService: ViewService,
@@ -498,11 +500,37 @@ export class MemberService {
 			.catch((err) => this.throwUpdateError(err));
 
 		if (!result) throw new NotFoundException(Messages.MEMBER_NOT_FOUND);
+		const memberId = result._id as unknown as Types.ObjectId;
+		if (result.memberStatus === MemberStatus.DELETED) {
+			this.chatGateway.disconnectMember(memberId);
+			// A deleted account gives up its agent role, so its business number is free for a new account
+			await this.revokeAgentRole(memberId, 'The account was deleted.');
+			return (await this.memberModel.findById(memberId).exec()) ?? result;
+		}
 		if (result.memberStatus !== MemberStatus.ACTIVE || result.deletedAt) {
-			this.chatGateway.disconnectMember(result._id as unknown as Types.ObjectId);
-			await this.deactivateListings({ memberId: result._id as unknown as Types.ObjectId });
+			this.chatGateway.disconnectMember(memberId);
+			await this.deactivateListings({ memberId });
 		}
 		return result;
+	}
+
+	/** Takes the agent role away: the live application is revoked, the member is a USER again and the listings leave the catalog **/
+	public async revokeAgentRole(memberId: Types.ObjectId, reason: string): Promise<void> {
+		await this.agentModel
+			.updateMany(
+				{
+					memberId,
+					verificationStatus: {
+						$in: [AgentVerificationStatus.PENDING, AgentVerificationStatus.APPROVED],
+					},
+				},
+				{ verificationStatus: AgentVerificationStatus.REVOKED, rejectionReason: reason },
+			)
+			.exec();
+		await this.memberModel
+			.updateOne({ _id: memberId, memberType: MemberType.AGENT }, { memberType: MemberType.USER })
+			.exec();
+		await this.deactivateListings({ memberId });
 	}
 
 	/**

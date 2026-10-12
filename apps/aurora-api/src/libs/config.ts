@@ -94,6 +94,12 @@ export const trimString = ({ value }: { value: unknown }): unknown =>
 	typeof value === 'string' ? value.trim() : value;
 /** For @ValidateIf: an omitted field is skipped, while an explicit null still reaches the validators **/
 export const isProvided = (_: unknown, value: unknown): boolean => value !== undefined;
+/** "123-45 67890" and "1234567890" are one business: case and every separator are dropped **/
+export const shapeIntoBusinessKey = (text: string): string =>
+	text
+		.normalize('NFKC')
+		.toUpperCase()
+		.replace(/[^\p{L}\p{N}]/gu, '');
 /** "Côte d'Ivoire" -> "cote-d-ivoire": accents dropped, letters of any script kept, everything else becomes one dash **/
 export const shapeIntoSlug = (text: string): string =>
 	text
