@@ -21,7 +21,7 @@ AURORA is a NestJS GraphQL monorepo migrated from the existing Nestar backend in
 - Agent types are `HOTEL` and `TOUR`.
 - `HOTEL` agents manage Property/Hotel listings.
 - `TOUR` agents manage Tour listings.
-- Destination represents countries only.
+- Destination represents a city; `destinationCountry` holds the country it belongs to.
 - Authorization and ownership must always be validated server-side.
 - Do not trust client-provided roles, ownership, verification state, prices, counters or payment state.
 - Current AURORA requirements provided in the task override old Nestar business/domain logic.
