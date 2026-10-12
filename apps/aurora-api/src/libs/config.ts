@@ -94,6 +94,14 @@ export const trimString = ({ value }: { value: unknown }): unknown =>
 	typeof value === 'string' ? value.trim() : value;
 /** For @ValidateIf: an omitted field is skipped, while an explicit null still reaches the validators **/
 export const isProvided = (_: unknown, value: unknown): boolean => value !== undefined;
+/** "Côte d'Ivoire" -> "cote-d-ivoire": accents dropped, letters of any script kept, everything else becomes one dash **/
+export const shapeIntoSlug = (text: string): string =>
+	text
+		.normalize('NFKD')
+		.replace(/\p{M}/gu, '')
+		.toLowerCase()
+		.replace(/[^\p{L}\p{N}]+/gu, '-')
+		.replace(/^-+|-+$/g, '');
 
 export const shapeIntoMongoObjectId = (target: any): any => {
 	if (target instanceof ObjectId) return target;

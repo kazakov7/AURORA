@@ -75,6 +75,7 @@ export enum Messages {
 
 	DESTINATION_NOT_FOUND = 'Destination not found!',
 	DESTINATION_ALREADY_EXISTS = 'Destination already exists!',
+	DESTINATION_HAS_LISTINGS = 'This destination still has hotels or tours!',
 
 	// =========================
 	// PROPERTY / HOTEL

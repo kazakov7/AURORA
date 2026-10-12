@@ -95,7 +95,10 @@ describe('Catalog and social domains (e2e)', () => {
 			admin.accessToken,
 		);
 		expect(removed.body.errors).toBeUndefined();
-		expect(await model(app, 'Destination').findById(destinationId)).toBeNull();
+		// Removal is a soft delete that frees the slug for a new city of the same name
+		const stored = await model(app, 'Destination').findById(destinationId).lean();
+		expect(stored.deletedAt).toBeInstanceOf(Date);
+		expect(stored.destinationSlug).not.toBe('korea');
 	});
 
 	it('enforces HOTEL agent type and property ownership', async () => {

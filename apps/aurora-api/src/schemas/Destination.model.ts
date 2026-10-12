@@ -42,7 +42,6 @@ const DestinationSchema = new Schema(
 		destinationDesc: {
 			type: String,
 			maxlength: 2000,
-			minLength: 5,
 		},
 
 		destinationViews: {

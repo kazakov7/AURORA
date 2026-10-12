@@ -3,6 +3,7 @@ import { UseGuards } from '@nestjs/common';
 import { Types } from 'mongoose';
 import { Destination, Destinations } from '../../libs/dto/destination/destination';
 import {
+	AdminDestinationsInquiry,
 	DestinationInput,
 	DestinationsInquiry,
 } from '../../libs/dto/destination/destination.input';
@@ -32,8 +33,13 @@ export class DestinationResolver {
 	public async getDestination(
 		@Args('destinationId') destinationId: string,
 		@AuthMember('_id') memberId: Types.ObjectId,
+		@AuthMember('memberType') memberType: MemberType,
 	): Promise<Destination> {
-		return this.destinationService.getDestination(memberId, shapeIntoMongoObjectId(destinationId));
+		return this.destinationService.getDestination(
+			memberId,
+			shapeIntoMongoObjectId(destinationId),
+			memberType,
+		);
 	}
 
 	@UseGuards(WithoutGuard)
@@ -55,6 +61,15 @@ export class DestinationResolver {
 			memberId,
 			shapeIntoMongoObjectId(destinationId),
 		);
+	}
+
+	@Roles(MemberType.ADMIN)
+	@UseGuards(RolesGuard)
+	@Query(() => Destinations)
+	public async getAllDestinationsByAdmin(
+		@Args('input') input: AdminDestinationsInquiry,
+	): Promise<Destinations> {
+		return this.destinationService.getAllDestinationsByAdmin(input);
 	}
 
 	@Roles(MemberType.ADMIN)
