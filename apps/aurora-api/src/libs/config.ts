@@ -92,6 +92,8 @@ export const escapeRegExp = (text: string): string => text.replace(/[.*+?^${}()|
 /** Trims string input before validation, so length rules apply to the value that gets stored **/
 export const trimString = ({ value }: { value: unknown }): unknown =>
 	typeof value === 'string' ? value.trim() : value;
+/** For @ValidateIf: an omitted field is skipped, while an explicit null still reaches the validators **/
+export const isProvided = (_: unknown, value: unknown): boolean => value !== undefined;
 
 export const shapeIntoMongoObjectId = (target: any): any => {
 	if (target instanceof ObjectId) return target;

@@ -6,12 +6,16 @@ import MemberSchema from '../../schemas/Member.model';
 import { AuthModule } from '../auth/auth.module';
 import { ViewModule } from '../view/view.module';
 import FollowSchema from '../../schemas/Follow.model';
+import PropertySchema from '../../schemas/Property.model';
+import DestinationSchema from '../../schemas/Destination.model';
 import { ChatModule } from '../chat/chat.module';
 
 @Module({
 	imports: [
 		MongooseModule.forFeature([{ name: 'Member', schema: MemberSchema }]),
 		MongooseModule.forFeature([{ name: 'Follow', schema: FollowSchema }]),
+		MongooseModule.forFeature([{ name: 'Property', schema: PropertySchema }]),
+		MongooseModule.forFeature([{ name: 'Destination', schema: DestinationSchema }]),
 		AuthModule,
 		ViewModule,
 		ChatModule,

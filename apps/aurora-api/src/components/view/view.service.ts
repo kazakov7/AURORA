@@ -6,6 +6,7 @@ import { ViewInput } from '../../libs/dto/view/view.input';
 import { T } from '../../libs/types/common';
 import { Properties } from '../../libs/dto/property/property';
 import { ViewGroup } from '../../libs/enums/view.enum';
+import { PropertyStatus } from '../../libs/enums/property.enum';
 import { OrdinaryInquery } from '../../libs/dto/property/property.input';
 import { lookupVisited } from '../../libs/config';
 import { lookupVisitedTour } from '../../libs/config';
@@ -88,6 +89,12 @@ export class ViewService implements OnModuleInit {
 					},
 				},
 				{ $unwind: '$visitedProperty' },
+				{
+					$match: {
+						'visitedProperty.propertyStatus': PropertyStatus.ACTIVE,
+						'visitedProperty.deletedAt': null,
+					},
+				},
 				{
 					$facet: {
 						list: [

@@ -139,7 +139,7 @@ describe('Catalog and social domains (e2e)', () => {
 		expect(created.body.data.createProperty.propertyStatus).toBe('PENDING');
 		expect(
 			(await model(app, 'Destination').findById(destination._id).lean()).destinationProperties,
-		).toBe(1);
+		).toBe(0);
 		const propertyId = created.body.data.createProperty._id;
 
 		const ownershipViolation = await graphQL(

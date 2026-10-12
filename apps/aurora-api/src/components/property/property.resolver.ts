@@ -42,9 +42,10 @@ export class PropertyResolver {
 	public async getProperty(
 		@Args('propertyId') input: string,
 		@AuthMember('_id') memberId: Types.ObjectId,
+		@AuthMember('memberType') memberType: MemberType,
 	): Promise<Property> {
 		const propertyId = shapeIntoMongoObjectId(input);
-		return this.propertyService.getProperty(memberId, propertyId);
+		return this.propertyService.getProperty(memberId, propertyId, memberType);
 	}
 	@Roles(MemberType.AGENT)
 	@UseGuards(RolesGuard)
@@ -84,15 +85,6 @@ export class PropertyResolver {
 		return this.propertyService.getVisited(memberId, input);
 	}
 
-	@Roles(MemberType.AGENT)
-	@UseGuards(RolesGuard)
-	@Query(() => Properties)
-	public async getAgentProperties(
-		@Args('input') input: AgentPropertiesInquiry,
-		@AuthMember('_id') memberId: Types.ObjectId,
-	): Promise<Properties> {
-		return this.propertyService.getAgentProperties(memberId, input);
-	}
 	@UseGuards(AuthGuard)
 	@Mutation(() => Property)
 	public async likeTargetProperty(
@@ -102,6 +94,17 @@ export class PropertyResolver {
 		const likeRefId = shapeIntoMongoObjectId(input);
 		return this.propertyService.likeTargetProperty(memberId, likeRefId);
 	}
+
+	@Roles(MemberType.AGENT)
+	@UseGuards(RolesGuard)
+	@Query(() => Properties)
+	public async getAgentProperties(
+		@Args('input') input: AgentPropertiesInquiry,
+		@AuthMember('_id') memberId: Types.ObjectId,
+	): Promise<Properties> {
+		return this.propertyService.getAgentProperties(memberId, input);
+	}
+
 	// ADMIN
 
 	@Roles(MemberType.ADMIN)

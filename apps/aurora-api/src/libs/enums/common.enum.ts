@@ -84,6 +84,7 @@ export enum Messages {
 	PROPERTY_NOT_AVAILABLE = 'Property is not available!',
 	PROPERTY_NOT_OWNED = 'You are not the owner of this property!',
 	PROPERTY_CANNOT_BE_BOOKED = 'This property cannot be booked!',
+	PROPERTY_HAS_BOOKINGS = 'This property has upcoming bookings!',
 
 	// =========================
 	// ROOM

@@ -20,6 +20,7 @@ import {
 } from '../../libs/dto/member/member.input';
 import { Direction, Messages } from '../../libs/enums/common.enum';
 import { MemberAuthType, MemberStatus, MemberType } from '../../libs/enums/member.enum';
+import { PropertyStatus } from '../../libs/enums/property.enum';
 import { StatisticModifier, T } from '../../libs/types/common';
 import { ViewGroup } from '../../libs/enums/view.enum';
 import { ViewService } from '../view/view.service';
@@ -38,6 +39,8 @@ export class MemberService {
 		@InjectModel('Member')
 		private readonly memberModel: Model<Member>,
 		@InjectModel('Follow') private readonly followModel: Model<Follower | Following>,
+		@InjectModel('Property') private readonly propertyModel: Model<any>,
+		@InjectModel('Destination') private readonly destinationModel: Model<any>,
 		private authService: AuthService,
 		private viewService: ViewService,
 		private readonly chatGateway: ChatGateway,
@@ -496,7 +499,34 @@ export class MemberService {
 		if (!result) throw new NotFoundException(Messages.MEMBER_NOT_FOUND);
 		if (result.memberStatus !== MemberStatus.ACTIVE || result.deletedAt) {
 			this.chatGateway.disconnectMember(result._id as unknown as Types.ObjectId);
+			await this.deactivateMemberProperties(result._id as unknown as Types.ObjectId);
 		}
 		return result;
+	}
+
+	/** A blocked or deleted agent's hotels leave the catalog; an admin turns them back on once the account is restored **/
+	private async deactivateMemberProperties(memberId: Types.ObjectId): Promise<void> {
+		const activeProperties: T = {
+			memberId,
+			propertyStatus: PropertyStatus.ACTIVE,
+			deletedAt: null,
+		};
+		const destinationIds = await this.propertyModel.distinct('destinationId', activeProperties);
+		if (!destinationIds.length) return;
+
+		await this.propertyModel
+			.updateMany(activeProperties, { propertyStatus: PropertyStatus.INACTIVE })
+			.exec();
+
+		// Both counters count ACTIVE hotels only: the owner has none left, each destination is recounted
+		await this.memberModel.updateOne({ _id: memberId }, { memberProperties: 0 }).exec();
+		for (const destinationId of destinationIds) {
+			const destinationProperties = await this.propertyModel
+				.countDocuments({ destinationId, propertyStatus: PropertyStatus.ACTIVE, deletedAt: null })
+				.exec();
+			await this.destinationModel
+				.updateOne({ _id: destinationId }, { destinationProperties })
+				.exec();
+		}
 	}
 }

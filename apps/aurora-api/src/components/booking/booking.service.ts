@@ -30,6 +30,25 @@ export class BookingService {
 		return propertyIds as Types.ObjectId[];
 	}
 
+	/** True while a confirmed stay or a live payment hold of the hotel has not checked out yet **/
+	public async hasUpcomingPropertyBooking(propertyId: Types.ObjectId): Promise<boolean> {
+		const now = new Date();
+		const booking = await this.bookingModel
+			.exists({
+				bookingCategory: BookingCategory.PROPERTY,
+				bookingRefId: propertyId,
+				checkOut: { $gt: now },
+				$or: [
+					{ bookingStatus: BookingStatus.CONFIRMED },
+					{ bookingStatus: BookingStatus.PENDING, expiresAt: null },
+					{ bookingStatus: BookingStatus.PENDING, expiresAt: { $gt: now } },
+				],
+			})
+			.exec();
+
+		return Boolean(booking);
+	}
+
 	/**
 	 * Calendar availability uses half-open intervals: [checkIn, checkOut).
 	 * Therefore a guest can check in on the same date a previous guest checks out.

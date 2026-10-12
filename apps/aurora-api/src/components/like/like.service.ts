@@ -9,6 +9,7 @@ import { T } from '../../libs/types/common';
 import { OrdinaryInquery } from '../../libs/dto/property/property.input';
 import { Properties } from '../../libs/dto/property/property';
 import { LikeGroup } from '../../libs/enums/like.enum';
+import { PropertyStatus } from '../../libs/enums/property.enum';
 import { lookupFavorite } from '../../libs/config';
 import { lookupFavoriteTour } from '../../libs/config';
 import { Tours } from '../../libs/dto/tour/tour';
@@ -126,6 +127,12 @@ export class LikeService {
 					},
 				},
 				{ $unwind: '$favoriteProperty' },
+				{
+					$match: {
+						'favoriteProperty.propertyStatus': PropertyStatus.ACTIVE,
+						'favoriteProperty.deletedAt': null,
+					},
+				},
 				{
 					$facet: {
 						list: [

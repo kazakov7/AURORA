@@ -1,5 +1,7 @@
 import { Field, Float, InputType, Int } from '@nestjs/graphql';
+import { Transform, Type } from 'class-transformer';
 import {
+	ArrayMaxSize,
 	IsArray,
 	IsEnum,
 	IsIn,
@@ -8,14 +10,17 @@ import {
 	IsNumber,
 	IsOptional,
 	IsString,
+	Matches,
 	Max,
 	MaxLength,
 	Min,
+	ValidateIf,
+	ValidateNested,
 } from 'class-validator';
 import { Types } from 'mongoose';
 import { PropertyStatus, PropertyType } from '../../enums/property.enum';
 import { Direction } from '../../enums/common.enum';
-import { availablePropertySorts } from '../../config';
+import { availablePropertySorts, imageSourceRegex, isProvided, trimString } from '../../config';
 
 @InputType()
 export class CreatePropertyInput {
@@ -30,6 +35,7 @@ export class CreatePropertyInput {
 	propertyType: PropertyType;
 
 	@Field(() => String)
+	@Transform(trimString)
 	@IsString()
 	@IsNotEmpty()
 	@MaxLength(200)
@@ -44,15 +50,18 @@ export class CreatePropertyInput {
 	@Field({ nullable: true })
 	@IsOptional()
 	@IsString()
+	@MaxLength(100)
 	propertyCity?: string;
 
 	@Field(() => String)
+	@Transform(trimString)
 	@IsNotEmpty()
 	@IsString()
+	@MaxLength(200)
 	propertyAddress: string;
 
 	@Field(() => Float)
-	@IsNumber()
+	@IsNumber({ maxDecimalPlaces: 2 })
 	@Min(0.01)
 	@IsNotEmpty()
 	pricePerNight: number;
@@ -69,34 +78,40 @@ export class CreatePropertyInput {
 	@IsNotEmpty()
 	maxGuests: number;
 
+	// Optional, but never null: the counts and lists below are non-nullable in the schema
 	@Field(() => Int, { nullable: true })
-	@IsOptional()
+	@ValidateIf(isProvided)
 	@IsInt()
 	@Min(0)
 	bedrooms?: number;
 
 	@Field(() => Int, { nullable: true })
-	@IsOptional()
+	@ValidateIf(isProvided)
 	@IsInt()
 	@Min(0)
 	beds?: number;
 
 	@Field(() => Int, { nullable: true })
-	@IsOptional()
+	@ValidateIf(isProvided)
 	@IsInt()
 	@Min(0)
 	bathrooms?: number;
 
 	@Field(() => [String], { nullable: true })
-	@IsOptional()
+	@ValidateIf(isProvided)
 	@IsArray()
+	@ArrayMaxSize(50)
 	@IsString({ each: true })
+	@MaxLength(50, { each: true })
 	amenities?: string[];
 
 	@Field(() => [String], { nullable: true })
-	@IsOptional()
+	@ValidateIf(isProvided)
 	@IsArray()
+	@ArrayMaxSize(10)
 	@IsString({ each: true })
+	@MaxLength(1000, { each: true })
+	@Matches(imageSourceRegex, { each: true })
 	propertyImages?: string[];
 
 	/** Resolverdagi authenticated agentdan qo'yiladi. */
@@ -159,6 +174,8 @@ export class PISearch {
 	amenities?: string[];
 
 	@IsOptional()
+	@ValidateNested()
+	@Type(() => PricePerNightRange)
 	@Field(() => PricePerNightRange, { nullable: true })
 	pricePerNightRange?: PricePerNightRange;
 
@@ -172,6 +189,8 @@ export class PISearch {
 
 	@IsOptional()
 	@Field(() => String, { nullable: true })
+	@IsString()
+	@MaxLength(100)
 	text?: string;
 }
 
@@ -200,6 +219,8 @@ export class PropertiesInquiry {
 	direction?: Direction;
 
 	@IsNotEmpty()
+	@ValidateNested()
+	@Type(() => PISearch)
 	@Field(() => PISearch)
 	search!: PISearch;
 }
@@ -251,6 +272,8 @@ export class AgentPropertiesInquiry {
 	direction?: Direction;
 
 	@IsNotEmpty()
+	@ValidateNested()
+	@Type(() => APISearch)
 	@Field(() => APISearch)
 	search!: APISearch;
 }
@@ -294,6 +317,8 @@ export class AllPropertiesInquiry {
 	direction?: Direction;
 
 	@IsNotEmpty()
+	@ValidateNested()
+	@Type(() => ALPISearch)
 	@Field(() => ALPISearch)
 	search!: ALPISearch;
 }

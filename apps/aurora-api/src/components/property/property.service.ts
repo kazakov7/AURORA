@@ -1,4 +1,9 @@
-import { BadRequestException, Injectable, InternalServerErrorException } from '@nestjs/common';
+import {
+	BadRequestException,
+	Injectable,
+	InternalServerErrorException,
+	NotFoundException,
+} from '@nestjs/common';
 import { InjectModel } from '@nestjs/mongoose';
 import { Model, Types } from 'mongoose';
 import { Properties, Property } from '../../libs/dto/property/property';
@@ -30,6 +35,7 @@ import { MemberService } from '../member/member.service';
 import { ViewService } from '../view/view.service';
 import { AgentService } from '../agent/agent.service';
 import { AgentType } from '../../libs/enums/agent.enum';
+import { MemberStatus, MemberType } from '../../libs/enums/member.enum';
 import { DestinationService } from '../destination/destination.service';
 import { NotificationService } from '../notification/notification.service';
 import { NotificationGroup, NotificationType } from '../../libs/enums/notification.enum';
@@ -55,16 +61,6 @@ export class PropertyService {
 
 		try {
 			const result = await this.propertyModel.create({ ...input, destinationId });
-			await this.memberService.memberStatusEditor({
-				_id: result.memberId as Types.ObjectId,
-				targetKey: 'memberProperties',
-				modifier: 1,
-			});
-			await this.destinationService.destinationStatsEditor({
-				_id: destinationId,
-				targetKey: 'destinationProperties',
-				modifier: 1,
-			});
 			return result as unknown as Property;
 		} catch (error) {
 			console.error('Property creation failed:', error);
@@ -75,15 +71,20 @@ export class PropertyService {
 	public async getProperty(
 		memberId: Types.ObjectId,
 		propertyId: Types.ObjectId,
+		memberType?: MemberType,
 	): Promise<Property> {
 		const targetProperty = await this.propertyModel
-			.findOne({ _id: propertyId, propertyStatus: PropertyStatus.ACTIVE, deletedAt: null })
+			.findOne({ _id: propertyId, deletedAt: null })
 			.lean<Property>()
 			.exec();
 
-		if (!targetProperty) throw new InternalServerErrorException(Messages.PROPERTY_NOT_FOUND);
+		if (!targetProperty) throw new NotFoundException(Messages.PROPERTY_NOT_FOUND);
 
-		if (memberId) {
+		const isActive = targetProperty.propertyStatus === PropertyStatus.ACTIVE;
+		const canPreview = memberType === MemberType.ADMIN || targetProperty.memberId.equals(memberId);
+		if (!isActive && !canPreview) throw new NotFoundException(Messages.PROPERTY_NOT_FOUND);
+
+		if (memberId && isActive) {
 			const newView = await this.viewService.recordView({
 				memberId,
 				viewRefId: propertyId,
@@ -98,7 +99,9 @@ export class PropertyService {
 				});
 				targetProperty.propertyViews += 1;
 			}
+		}
 
+		if (memberId) {
 			targetProperty.meLiked = await this.likeService.checkLikeExistence({
 				memberId,
 				likeRefId: propertyId,
@@ -106,11 +109,13 @@ export class PropertyService {
 			});
 		}
 
-		targetProperty.memberData = await this.memberService.getMember(
-			memberId,
-			targetProperty.memberId as unknown as Types.ObjectId,
-			false,
-		);
+		// A missing owner account must not break the page: the hotel is returned without the host
+		targetProperty.memberData = await this.memberService
+			.getMember(memberId, targetProperty.memberId as unknown as Types.ObjectId, false)
+			.catch((err) => {
+				if (err instanceof NotFoundException) return null;
+				throw err;
+			});
 
 		return targetProperty;
 	}
@@ -140,19 +145,24 @@ export class PropertyService {
 		input: UpdatePropertyInput,
 	): Promise<Property> {
 		await this.agentService.assertApprovedAgent(memberId, AgentType.HOTEL);
-		const result = await this.propertyModel
-			.findOneAndUpdate(
-				{
-					_id: input._id,
-					memberId,
-					propertyStatus: { $ne: PropertyStatus.INACTIVE },
-					deletedAt: null,
-				},
-				input,
-				{ new: true },
-			)
-			.exec();
+		const search: T = {
+			_id: input._id,
+			memberId,
+			propertyStatus: { $ne: PropertyStatus.INACTIVE },
+			deletedAt: null,
+		};
+		const existingProperty = await this.propertyModel.findOne(search).lean<Property>().exec();
 
+		if (!existingProperty) throw new InternalServerErrorException(Messages.UPDATE_FAILED);
+
+		// An edited REJECTED hotel returns to the admin queue; every other status is kept as it is
+		const update: T = { ...input };
+		if (existingProperty.propertyStatus === PropertyStatus.REJECTED) {
+			update.propertyStatus = PropertyStatus.PENDING;
+		}
+
+		search.propertyStatus = existingProperty.propertyStatus;
+		const result = await this.propertyModel.findOneAndUpdate(search, update, { new: true }).exec();
 		if (!result) throw new InternalServerErrorException(Messages.UPDATE_FAILED);
 		return result as unknown as Property;
 	}
@@ -173,11 +183,10 @@ export class PropertyService {
 			if (unavailablePropertyIds.length) match._id = { $nin: unavailablePropertyIds };
 		}
 
-		const sort: T = { [input.sort ?? 'createdAt']: input.direction ?? Direction.DESC };
 		const result = await this.propertyModel
 			.aggregate([
 				{ $match: match },
-				{ $sort: sort },
+				{ $sort: this.shapeSort(input) },
 				{
 					$facet: {
 						list: [
@@ -185,7 +194,7 @@ export class PropertyService {
 							{ $limit: input.limit },
 							lookUpAuthMemberLiked(memberId),
 							lookupMember,
-							{ $unwind: '$memberData' },
+							{ $unwind: { path: '$memberData', preserveNullAndEmptyArrays: true } },
 						],
 						metaCounter: [{ $count: 'total' }],
 					},
@@ -225,8 +234,8 @@ export class PropertyService {
 		if (propertyCityList?.length) match.propertyCity = { $in: propertyCityList };
 		if (propertyTypeList?.length) match.propertyType = { $in: propertyTypeList };
 		if (minGuests) match.maxGuests = { $gte: minGuests };
-		if (bedrooms !== undefined) match.bedrooms = { $gte: bedrooms };
-		if (beds !== undefined) match.beds = { $gte: beds };
+		if (typeof bedrooms === 'number') match.bedrooms = { $gte: bedrooms };
+		if (typeof beds === 'number') match.beds = { $gte: beds };
 		if (amenities?.length) match.amenities = { $all: amenities };
 
 		if (pricePerNightRange) {
@@ -236,10 +245,17 @@ export class PropertyService {
 			match.pricePerNight = { $gte: pricePerNightRange.start, $lte: pricePerNightRange.end };
 		}
 
-		if (text) {
-			const regex = new RegExp(escapeRegExp(text), 'i');
+		const normalizedText = text?.trim();
+		if (normalizedText) {
+			const regex = new RegExp(escapeRegExp(normalizedText), 'i');
 			match.$or = [{ propertyName: regex }, { propertyDesc: regex }, { propertyCity: regex }];
 		}
+	}
+
+	/** The _id tie-breaker keeps pages stable when many hotels share the same sort value **/
+	private shapeSort(input: Pick<PropertiesInquiry, 'sort' | 'direction'>): T {
+		const direction = input.direction ?? Direction.DESC;
+		return { [input.sort ?? 'createdAt']: direction, _id: direction };
 	}
 
 	public async getFavorites(memberId: Types.ObjectId, input: OrdinaryInquery): Promise<Properties> {
@@ -259,7 +275,7 @@ export class PropertyService {
 			propertyStatus: PropertyStatus.ACTIVE,
 			deletedAt: null,
 		});
-		if (!target) throw new InternalServerErrorException(Messages.PROPERTY_NOT_FOUND);
+		if (!target) throw new NotFoundException(Messages.PROPERTY_NOT_FOUND);
 
 		const modifier = await this.likeService.toggleLike({
 			memberId,
@@ -268,7 +284,7 @@ export class PropertyService {
 		});
 		if (modifier === 1)
 			await this.notificationService.createNotification({
-				receiverId: target.memberId as Types.ObjectId,
+				receiverId: target.memberId,
 				authorId: memberId,
 				notificationType: NotificationType.LIKE,
 				notificationGroup: NotificationGroup.PROPERTY,
@@ -286,16 +302,13 @@ export class PropertyService {
 		memberId: Types.ObjectId,
 		input: AgentPropertiesInquiry,
 	): Promise<Properties> {
-		const match: T = {
-			memberId,
-			propertyStatus: input.search.propertyStatus ?? { $ne: PropertyStatus.INACTIVE },
-			deletedAt: null,
-		};
-		const sort: T = { [input.sort ?? 'createdAt']: input.direction ?? Direction.DESC };
+		// The owner sees every status, so a hotel an admin turned off does not vanish from the list
+		const match: T = { memberId, deletedAt: null };
+		if (input.search.propertyStatus) match.propertyStatus = input.search.propertyStatus;
 
 		const result = await this.propertyModel.aggregate([
 			{ $match: match },
-			{ $sort: sort },
+			{ $sort: this.shapeSort(input) },
 			{
 				$facet: {
 					list: [
@@ -320,17 +333,16 @@ export class PropertyService {
 			match.destinationId = { $in: destinationIdList.map(shapeIntoMongoObjectId) };
 		if (propertyCityList?.length) match.propertyCity = { $in: propertyCityList };
 
-		const sort: T = { [input.sort ?? 'createdAt']: input.direction ?? Direction.DESC };
 		const result = await this.propertyModel.aggregate([
 			{ $match: match },
-			{ $sort: sort },
+			{ $sort: this.shapeSort(input) },
 			{
 				$facet: {
 					list: [
 						{ $skip: (input.page - 1) * input.limit },
 						{ $limit: input.limit },
 						lookupMember,
-						{ $unwind: '$memberData' },
+						{ $unwind: { path: '$memberData', preserveNullAndEmptyArrays: true } },
 					],
 					metaCounter: [{ $count: 'total' }],
 				},
@@ -344,15 +356,31 @@ export class PropertyService {
 		input: UpdatePropertyStatusInput,
 		adminId?: Types.ObjectId,
 	): Promise<Property> {
+		const existingProperty = await this.propertyModel
+			.findOne({ _id: input._id, deletedAt: null })
+			.lean<Property>()
+			.exec();
+
+		if (!existingProperty) throw new NotFoundException(Messages.PROPERTY_NOT_FOUND);
+		if (existingProperty.propertyStatus === input.propertyStatus) return existingProperty;
+		if (input.propertyStatus === PropertyStatus.ACTIVE)
+			await this.assertCanActivate(existingProperty);
+
+		// Matching the status that was just read applies each change, and its counters, exactly once
 		const result = await this.propertyModel
 			.findOneAndUpdate(
-				{ _id: input._id, deletedAt: null },
+				{ _id: input._id, propertyStatus: existingProperty.propertyStatus, deletedAt: null },
 				{ propertyStatus: input.propertyStatus },
 				{ new: true },
 			)
 			.exec();
 
 		if (!result) throw new InternalServerErrorException(Messages.UPDATE_FAILED);
+
+		const wasActive = existingProperty.propertyStatus === PropertyStatus.ACTIVE;
+		const isActive = result.propertyStatus === PropertyStatus.ACTIVE;
+		if (wasActive !== isActive) await this.activeCountersEditor(result, isActive ? 1 : -1);
+
 		await this.notificationService.createNotification({
 			receiverId: result.memberId as Types.ObjectId,
 			authorId: adminId,
@@ -361,12 +389,18 @@ export class PropertyService {
 			notificationRefId: result._id as Types.ObjectId,
 			notificationTitle: 'Hotel listing status updated',
 			notificationDesc: `Your hotel listing status is now ${result.propertyStatus}.`,
-			notificationEventKey: `property-status:${result._id}:${result.propertyStatus}`,
+			// The update time makes each change its own event, so a status set again is announced again
+			notificationEventKey: `property-status:${result._id}:${result.updatedAt.getTime()}`,
 		});
 		return result as unknown as Property;
 	}
 
 	public async removePropertyByAdmin(propertyId: Types.ObjectId): Promise<Property> {
+		// Guests with a stay still ahead keep their booking, so such a hotel cannot be removed yet
+		if (await this.bookingService.hasUpcomingPropertyBooking(propertyId)) {
+			throw new BadRequestException(Messages.PROPERTY_HAS_BOOKINGS);
+		}
+
 		const result = await this.propertyModel
 			.findOneAndUpdate(
 				{ _id: propertyId, propertyStatus: PropertyStatus.INACTIVE, deletedAt: null },
@@ -376,13 +410,29 @@ export class PropertyService {
 			.exec();
 
 		if (!result) throw new InternalServerErrorException(Messages.REMOVE_FAILED);
-
-		await this.memberService.memberStatusEditor({
-			_id: result.memberId as Types.ObjectId,
-			targetKey: 'memberProperties',
-			modifier: -1,
-		});
-
 		return result as unknown as Property;
+	}
+
+	/** A hotel goes live only in an active destination and under an owner whose account is active **/
+	private async assertCanActivate(property: Property): Promise<void> {
+		await this.destinationService.getActiveDestination(property.destinationId);
+		const owner = await this.memberService.getMember(null, property.memberId, false);
+		if (owner.memberStatus !== MemberStatus.ACTIVE) {
+			throw new BadRequestException(Messages.MEMBER_BLOCKED);
+		}
+	}
+
+	/** memberProperties and destinationProperties count ACTIVE hotels, so they move when one enters or leaves ACTIVE **/
+	private async activeCountersEditor(property: Property, modifier: number): Promise<void> {
+		await this.memberService.memberStatusEditor({
+			_id: property.memberId,
+			targetKey: 'memberProperties',
+			modifier,
+		});
+		await this.destinationService.destinationStatsEditor({
+			_id: property.destinationId,
+			targetKey: 'destinationProperties',
+			modifier,
+		});
 	}
 }

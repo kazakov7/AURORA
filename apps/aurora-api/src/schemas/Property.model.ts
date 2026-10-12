@@ -37,7 +37,6 @@ const PropertySchema = new Schema(
 		propertyDesc: {
 			type: String,
 			maxlength: 3000,
-			minLength: 5,
 		},
 
 		propertyCity: {
@@ -48,6 +47,7 @@ const PropertySchema = new Schema(
 		propertyAddress: {
 			type: String,
 			required: true,
+			trim: true,
 		},
 		propertyImages: [
 			{
