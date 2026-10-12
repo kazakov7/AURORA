@@ -1,4 +1,9 @@
-import { BadRequestException, Injectable, InternalServerErrorException } from '@nestjs/common';
+import {
+	BadRequestException,
+	Injectable,
+	InternalServerErrorException,
+	NotFoundException,
+} from '@nestjs/common';
 import { InjectModel } from '@nestjs/mongoose';
 import { Model, type ObjectId, Types } from 'mongoose';
 
@@ -9,7 +14,7 @@ import { CommentGroup, CommentStatus } from '../../libs/enums/comment.enum';
 
 import { MemberService } from '../member/member.service';
 import { CommentUpdate } from '../../libs/dto/comment/comment.update';
-import { lookupMember } from '../../libs/config';
+import { lookupMember, shapeIntoMongoObjectId } from '../../libs/config';
 import { T } from '../../libs/types/common';
 import { BoardArticleService } from '../article/board-article.service';
 import { Direction, Messages } from '../../libs/enums/common.enum';
@@ -17,6 +22,9 @@ import { TourService } from '../tour/tour.service';
 import { DestinationService } from '../destination/destination.service';
 import { NotificationService } from '../notification/notification.service';
 import { NotificationGroup, NotificationType } from '../../libs/enums/notification.enum';
+import { PropertyStatus } from '../../libs/enums/property.enum';
+import { TourStatus } from '../../libs/enums/tour.enum';
+import { BoardArticleStatus } from '../../libs/enums/board-article.enum';
 
 @Injectable()
 export class CommentService {
@@ -36,6 +44,7 @@ export class CommentService {
 
 	public async createComment(memberId: Types.ObjectId, input: CommentInput): Promise<Comment> {
 		input.memberId = memberId;
+		await this.assertCommentTarget(input);
 
 		let result: Comment | null;
 		try {
@@ -85,6 +94,38 @@ export class CommentService {
 		await this.notifyContentOwner(memberId, result as Comment);
 
 		return result as unknown as Comment;
+	}
+
+	/** A comment counts toward its target, so the target must exist and be live **/
+	private async assertCommentTarget(input: CommentInput): Promise<void> {
+		const commentRefId = shapeIntoMongoObjectId(input.commentRefId);
+		if (input.commentGroup === CommentGroup.DESTINATION) {
+			await this.destinationService.getActiveDestination(commentRefId);
+			return;
+		}
+
+		const targets: Record<string, { model: Model<any>; live: T; message: Messages }> = {
+			[CommentGroup.PROPERTY]: {
+				model: this.propertyModel,
+				live: { propertyStatus: PropertyStatus.ACTIVE },
+				message: Messages.PROPERTY_NOT_FOUND,
+			},
+			[CommentGroup.TOUR]: {
+				model: this.tourModel,
+				live: { tourStatus: TourStatus.ACTIVE },
+				message: Messages.TOUR_NOT_FOUND,
+			},
+			[CommentGroup.ARTICLE]: {
+				model: this.articleModel,
+				live: { articleStatus: BoardArticleStatus.PUBLISHED },
+				message: Messages.ARTICLE_NOT_FOUND,
+			},
+		};
+		const target = targets[input.commentGroup];
+		const isLive = await target.model
+			.exists({ _id: commentRefId, ...target.live, deletedAt: null })
+			.exec();
+		if (!isLive) throw new NotFoundException(target.message);
 	}
 
 	private async notifyContentOwner(authorId: Types.ObjectId, comment: Comment): Promise<void> {
