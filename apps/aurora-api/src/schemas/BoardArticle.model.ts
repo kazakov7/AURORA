@@ -18,11 +18,13 @@ const BoardArticleSchema = new Schema(
 		articleTitle: {
 			type: String,
 			required: true,
+			trim: true,
 		},
 
 		articleContent: {
 			type: String,
 			required: true,
+			trim: true,
 		},
 
 		articleImage: {

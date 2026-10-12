@@ -1,34 +1,57 @@
 import { Field, InputType } from '@nestjs/graphql';
-import { IsNotEmpty, IsOptional, Length } from 'class-validator';
+import { Transform } from 'class-transformer';
+import {
+	IsEnum,
+	IsMongoId,
+	IsNotEmpty,
+	IsOptional,
+	IsString,
+	Length,
+	Matches,
+	MaxLength,
+	ValidateIf,
+} from 'class-validator';
 
-import { ObjectId, Types } from 'mongoose';
+import { Types } from 'mongoose';
 import { BoardArticleStatus, BoardArticleCategory } from '../../enums/board-article.enum';
+import { imageSourceRegex, isProvided, trimString } from '../../config';
 
+/** Every field may be omitted, but only articleImage may be null: the rest are non-nullable in the schema **/
 @InputType()
 export class BoardArticleUpdate {
-	@IsOptional()
+	@ValidateIf(isProvided)
+	@IsEnum(BoardArticleCategory)
 	@Field(() => BoardArticleCategory, { nullable: true })
 	articleCategory?: BoardArticleCategory;
 
 	@IsNotEmpty()
+	@IsMongoId()
 	@Field(() => String)
 	_id!: Types.ObjectId;
 
-	@IsOptional()
-	@Length(3, 50)
+	@ValidateIf(isProvided)
+	@Transform(trimString)
+	@IsString()
+	@Length(3, 100)
 	@Field(() => String, { nullable: true })
 	articleTitle?: string;
 
-	@IsOptional()
-	@Length(3, 250)
+	@ValidateIf(isProvided)
+	@Transform(trimString)
+	@IsString()
+	@Length(3, 2000)
 	@Field(() => String, { nullable: true })
 	articleContent?: string;
 
 	@IsOptional()
+	@IsString()
+	@MaxLength(1000)
+	@Matches(imageSourceRegex)
 	@Field(() => String, { nullable: true })
 	articleImage?: string;
 
-	@IsOptional()
+	@ValidateIf(isProvided)
+	@IsEnum(BoardArticleStatus)
 	@Field(() => BoardArticleStatus, { nullable: true })
 	articleStatus?: BoardArticleStatus;
 }

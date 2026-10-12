@@ -1,6 +1,11 @@
-import { BadRequestException, Injectable, InternalServerErrorException } from '@nestjs/common';
-import { InjectModel } from '@nestjs/mongoose';
-import { Model, ObjectId, Types } from 'mongoose';
+import {
+	BadRequestException,
+	Injectable,
+	InternalServerErrorException,
+	NotFoundException,
+} from '@nestjs/common';
+import { InjectConnection, InjectModel } from '@nestjs/mongoose';
+import { Connection, Model, ObjectId, Types } from 'mongoose';
 import { MemberService } from '../member/member.service';
 import { ViewService } from '../view/view.service';
 import { BoardArticle, BoardArticles } from '../../libs/dto/board-article/board-article';
@@ -27,12 +32,18 @@ import { LikeService } from '../like/like.service';
 import { Direction, Messages } from '../../libs/enums/common.enum';
 import { NotificationService } from '../notification/notification.service';
 import { NotificationGroup, NotificationType } from '../../libs/enums/notification.enum';
+import { CommentGroup } from '../../libs/enums/comment.enum';
 
 @Injectable()
 export class BoardArticleService {
 	constructor(
 		@InjectModel('BoardArticle')
 		private readonly boardArticleModel: Model<BoardArticle>,
+		@InjectModel('Comment') private readonly commentModel: Model<any>,
+		@InjectModel('Like') private readonly likeModel: Model<any>,
+		@InjectModel('View') private readonly viewModel: Model<any>,
+		@InjectModel('Notification') private readonly notificationModel: Model<any>,
+		@InjectConnection() private readonly connection: Connection,
 		private memberService: MemberService,
 		private likeService: LikeService,
 		private viewService: ViewService,
@@ -44,20 +55,24 @@ export class BoardArticleService {
 		input: BoardArticleInput,
 	): Promise<BoardArticle> {
 		input.memberId = memberId;
+		let result: BoardArticle;
 		try {
-			const result = await this.boardArticleModel.create(input);
-			await this.memberService.memberStatusEditor({
-				//@ts-ignore
-				_id: memberId,
-				targetKey: 'memberArticles',
-				modifier: 1,
-			});
-
-			return result;
+			result = (await this.boardArticleModel.create(input)) as unknown as BoardArticle;
 		} catch (err) {
 			console.log('Error, Service.model:', err);
 			throw new BadRequestException(Messages.CREATE_FAILED);
 		}
+
+		// The article is saved; a failed counter update must not report it as failed and invite a duplicate
+		await this.memberService
+			.memberStatusEditor({
+				//@ts-ignore
+				_id: memberId,
+				targetKey: 'memberArticles',
+				modifier: 1,
+			})
+			.catch((err) => console.error('memberArticles update failed:', err));
+		return result;
 	}
 
 	public async getBoardArticle(
@@ -74,7 +89,7 @@ export class BoardArticleService {
 			.lean()
 			.exec()) as BoardArticle | null;
 
-		if (!targetBoardArticle) throw new InternalServerErrorException(Messages.NO_DATA_FOUND);
+		if (!targetBoardArticle) throw new NotFoundException(Messages.ARTICLE_NOT_FOUND);
 
 		if (memberId) {
 			const viewInput = {
@@ -103,10 +118,13 @@ export class BoardArticleService {
 			targetBoardArticle.meLiked = await this.likeService.checkLikeExistence(likeInput);
 		}
 
-		targetBoardArticle.memberData = await this.memberService.getMember(
-			null, //@ts-ignore
-			targetBoardArticle.memberId,
-		);
+		// A deleted author must not break the story: it is returned without the author
+		targetBoardArticle.memberData = await this.memberService
+			.getMember(null, targetBoardArticle.memberId as unknown as Types.ObjectId)
+			.catch((err) => {
+				if (err instanceof NotFoundException) return undefined;
+				throw err;
+			});
 
 		return targetBoardArticle;
 	}
@@ -173,7 +191,7 @@ export class BoardArticleService {
 			_id: likeRefId,
 			articleStatus: BoardArticleStatus.PUBLISHED,
 		});
-		if (!target) throw new InternalServerErrorException(Messages.NO_DATA_FOUND);
+		if (!target) throw new NotFoundException(Messages.ARTICLE_NOT_FOUND);
 
 		const input = {
 			memberId: memberId,
@@ -210,24 +228,20 @@ export class BoardArticleService {
 			articleStatus: BoardArticleStatus.PUBLISHED,
 		};
 
-		const sort: T = {
-			[input?.sort ?? 'createdAt']: input?.direction ?? Direction.DESC,
-		};
-
 		if (articleCategory) match.articleCategory = articleCategory;
 
-		if (text) match.articleTitle = { $regex: new RegExp(escapeRegExp(text), 'i') };
+		const normalizedText = text?.trim();
+		if (normalizedText)
+			match.articleTitle = { $regex: new RegExp(escapeRegExp(normalizedText), 'i') };
 
 		if (input.search?.memberId) {
 			match.memberId = shapeIntoMongoObjectId(input.search.memberId);
 		}
 
-		console.log('match:', match);
-
 		const result = await this.boardArticleModel
 			.aggregate([
 				{ $match: match },
-				{ $sort: sort },
+				{ $sort: this.shapeSort(input) },
 				{
 					$facet: {
 						list: [
@@ -235,7 +249,7 @@ export class BoardArticleService {
 							{ $limit: input.limit },
 							lookUpAuthMemberLiked(memberId),
 							lookupMember,
-							{ $unwind: '$memberData' },
+							{ $unwind: { path: '$memberData', preserveNullAndEmptyArrays: true } },
 						],
 						metaCounter: [{ $count: 'total' }],
 					},
@@ -252,22 +266,20 @@ export class BoardArticleService {
 		const { articleStatus, articleCategory } = input.search;
 		const match: T = {};
 
-		const sort: T = { [input?.sort ?? 'createdAt']: input?.direction ?? Direction.DESC };
-
 		if (articleStatus) match.articleStatus = articleStatus;
 		if (articleCategory) match.articleCategory = articleCategory;
 
 		const result = await this.boardArticleModel
 			.aggregate([
 				{ $match: match },
-				{ $sort: sort },
+				{ $sort: this.shapeSort(input) },
 				{
 					$facet: {
 						list: [
 							{ $skip: (input.page - 1) * input.limit },
 							{ $limit: input.limit },
 							lookupMember,
-							{ $unwind: '$memberData' },
+							{ $unwind: { path: '$memberData', preserveNullAndEmptyArrays: true } },
 						],
 						metaCounter: [{ $count: 'total' }],
 					},
@@ -309,10 +321,43 @@ export class BoardArticleService {
 			articleStatus: BoardArticleStatus.DELETED,
 		};
 
-		const result = await this.boardArticleModel.findOneAndDelete(search).exec();
+		// A purged article takes its comments, likes, views and notifications with it, all or nothing
+		const session = await this.connection.startSession();
+		try {
+			let result: BoardArticle | null = null;
+			await session.withTransaction(async () => {
+				result = (await this.boardArticleModel
+					.findOneAndDelete(search, { session })
+					.exec()) as unknown as BoardArticle | null;
+				if (!result) throw new InternalServerErrorException(Messages.REMOVE_FAILED);
 
-		if (!result) throw new InternalServerErrorException(Messages.REMOVE_FAILED);
+				await this.commentModel
+					.deleteMany({ commentGroup: CommentGroup.ARTICLE, commentRefId: articleId }, { session })
+					.exec();
+				await this.likeModel
+					.deleteMany({ likeGroup: LikeGroup.ARTICLE, likeRefId: articleId }, { session })
+					.exec();
+				await this.viewModel
+					.deleteMany({ viewGroup: ViewGroup.ARTICLE, viewRefId: articleId }, { session })
+					.exec();
+				await this.notificationModel
+					.deleteMany(
+						{ notificationGroup: NotificationGroup.ARTICLE, notificationRefId: articleId },
+						{ session },
+					)
+					.exec();
+			});
 
-		return result;
+			if (!result) throw new InternalServerErrorException(Messages.REMOVE_FAILED);
+			return result;
+		} finally {
+			await session.endSession();
+		}
+	}
+
+	/** The _id tie-breaker keeps pages stable when many articles share the same sort value **/
+	private shapeSort(input: Pick<BoardArticlesInquiry, 'sort' | 'direction'>): T {
+		const direction = input.direction ?? Direction.DESC;
+		return { [input.sort ?? 'createdAt']: direction, _id: direction };
 	}
 }
