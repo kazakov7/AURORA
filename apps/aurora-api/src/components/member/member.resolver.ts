@@ -1,4 +1,4 @@
-import { Args, Mutation, Resolver, Query } from '@nestjs/graphql';
+import { Args, Mutation, Parent, Resolver, ResolveField, Query } from '@nestjs/graphql';
 import { MemberService } from './member.service';
 import { Member, Members } from '../../libs/dto/member/member';
 import {
@@ -21,7 +21,7 @@ import { shapeIntoMongoObjectId } from '../../libs/config';
 import { MemberType } from '../../libs/enums/member.enum';
 import { Roles } from '../auth/decorators/roles.decorator';
 import { RolesGuard } from '../auth/guards/roles.guard';
-@Resolver()
+@Resolver(() => Member)
 export class MemberResolver {
 	constructor(private readonly memberService: MemberService) {}
 
@@ -118,5 +118,35 @@ export class MemberResolver {
 		console.log('Mutation: updateMemberByAdmin');
 
 		return await this.memberService.updateMemberByAdmin(input, adminId);
+	}
+
+	/**
+	 * Contact details are private wherever a Member appears: lists, details, chats, rankings.
+	 * They reach the member, the admins, the member's own auth response, and a host reading
+	 * the guests of their own bookings (marked contactShared by the booking query).
+	 */
+	@ResolveField(() => String, { nullable: true })
+	public memberEmail(
+		@Parent() member: Member & { contactShared?: boolean },
+		@AuthMember() viewer: Member | null,
+	): string | null {
+		return this.canSeeContact(member, viewer) ? (member.memberEmail ?? null) : null;
+	}
+
+	@ResolveField(() => String, { nullable: true })
+	public memberPhone(
+		@Parent() member: Member & { contactShared?: boolean },
+		@AuthMember() viewer: Member | null,
+	): string | null {
+		return this.canSeeContact(member, viewer) ? (member.memberPhone ?? null) : null;
+	}
+
+	private canSeeContact(
+		member: Member & { contactShared?: boolean },
+		viewer: Member | null,
+	): boolean {
+		if (member.contactShared || member.accessToken) return true;
+		if (!viewer) return false;
+		return viewer.memberType === MemberType.ADMIN || String(viewer._id) === String(member._id);
 	}
 }

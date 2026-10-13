@@ -380,4 +380,48 @@ describe('Booking lifecycle (e2e)', () => {
 		);
 		expect(await told(ahead._id)).toBe(2);
 	});
+
+	it('keeps contact details private outside the member, the admins and the hosts', async () => {
+		const owner = await seedMember(app, 'privOwner', MemberType.AGENT);
+		const viewer = await seedMember(app, 'privViewer');
+		const admin = await seedMember(app, 'privAdmin', MemberType.ADMIN);
+		await model(app, 'Member').updateOne(
+			{ _id: owner._id },
+			{ memberEmail: 'owner@aurora.test', memberPhone: '01099998888' },
+		);
+		const destination = await seedDestination();
+		const property = await seedProperty(owner._id, destination._id);
+		const contact = '{ memberEmail memberPhone }';
+		const MEMBER = `query M($id: String!) { getMember(input: $id) ${contact} }`;
+		const hidden = { memberEmail: null, memberPhone: null };
+		const shown = { memberEmail: 'owner@aurora.test', memberPhone: '01099998888' };
+
+		const list = await graphQL(
+			app,
+			`query P($input: PropertiesInquiry!) {
+			getProperties(input: $input) { list { memberData ${contact} } }
+		}`,
+			{ input: { page: 1, limit: 10, search: {} } },
+			viewer.accessToken,
+		);
+		expect(list.body.data.getProperties.list).toEqual([{ memberData: hidden }]);
+		const detail = await graphQL(
+			app,
+			`query D($id: String!) {
+			getProperty(propertyId: $id) { memberData ${contact} }
+		}`,
+			{ id: property._id.toString() },
+		);
+		expect(detail.body.data.getProperty.memberData).toEqual(hidden);
+
+		for (const [token, expected] of [
+			[undefined, hidden],
+			[viewer.accessToken, hidden],
+			[owner.accessToken, shown],
+			[admin.accessToken, shown],
+		] as const) {
+			const member = await graphQL(app, MEMBER, { id: owner._id }, token);
+			expect(member.body.data.getMember).toEqual(expected);
+		}
+	});
 });
