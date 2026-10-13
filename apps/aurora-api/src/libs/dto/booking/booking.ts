@@ -49,6 +49,16 @@ export class Booking {
 	@Field(() => Date, { nullable: true })
 	cancelledAt?: Date;
 
+	@Field(() => String, { nullable: true })
+	cancelReason?: string;
+
+	/** When the stay or the tour starts and ends: checkIn/checkOut for hotels, the booked tour dates for tours **/
+	@Field(() => Date, { nullable: true })
+	bookingStartDate?: Date;
+
+	@Field(() => Date, { nullable: true })
+	bookingEndDate?: Date;
+
 	@Field(() => Date, { nullable: true })
 	expiresAt?: Date;
 

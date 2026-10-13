@@ -11,6 +11,7 @@ import TourSchema from '../../schemas/Tour.model';
 import AgentSchema from '../../schemas/Agent.model';
 import DestinationSchema from '../../schemas/Destination.model';
 import { ChatModule } from '../chat/chat.module';
+import { BookingModule } from '../booking/booking.module';
 
 @Module({
 	imports: [
@@ -23,6 +24,7 @@ import { ChatModule } from '../chat/chat.module';
 		AuthModule,
 		ViewModule,
 		ChatModule,
+		BookingModule,
 	],
 	providers: [MemberResolver, MemberService],
 	exports: [MemberService],

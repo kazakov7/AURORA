@@ -31,9 +31,11 @@ import { MemberService } from '../member/member.service';
 import { ViewService } from '../view/view.service';
 import { AgentService } from '../agent/agent.service';
 import { AgentType } from '../../libs/enums/agent.enum';
+import { BookingCategory } from '../../libs/enums/booking.enum';
 import { MemberStatus, MemberType } from '../../libs/enums/member.enum';
 import { DestinationService } from '../destination/destination.service';
 import { NotificationService } from '../notification/notification.service';
+import { BookingService } from '../booking/booking.service';
 import { NotificationGroup, NotificationType } from '../../libs/enums/notification.enum';
 
 @Injectable()
@@ -46,6 +48,7 @@ export class TourService {
 		private readonly agentService: AgentService,
 		private readonly destinationService: DestinationService,
 		private readonly notificationService: NotificationService,
+		private readonly bookingService: BookingService,
 	) {}
 
 	public async createTour(input: TourInput): Promise<Tour> {
@@ -356,6 +359,9 @@ export class TourService {
 		const wasActive = existingTour.tourStatus === TourStatus.ACTIVE;
 		const isActive = result.tourStatus === TourStatus.ACTIVE;
 		if (wasActive !== isActive) await this.activeCountersEditor(result, isActive ? 1 : -1);
+		if (wasActive && !isActive) {
+			await this.bookingService.notifyInactiveListingGuests(BookingCategory.TOUR, [result._id]);
+		}
 
 		await this.notificationService.createNotification({
 			receiverId: result.memberId as Types.ObjectId,

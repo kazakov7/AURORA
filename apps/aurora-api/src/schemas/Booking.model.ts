@@ -76,6 +76,12 @@ const BookingSchema = new Schema(
 			type: Date,
 			default: null,
 		},
+
+		/** Why an admin cancelled the booking; shown to the guest **/
+		cancelReason: {
+			type: String,
+			trim: true,
+		},
 	},
 	{
 		timestamps: true,

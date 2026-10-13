@@ -2,7 +2,11 @@ import { Args, Mutation, Query, Resolver } from '@nestjs/graphql';
 import { UseGuards } from '@nestjs/common';
 import { Types } from 'mongoose';
 import { Booking, Bookings, PropertyAvailabilityRange } from '../../libs/dto/booking/booking';
-import { BookingsInquiry, PropertyAvailabilityInquiry } from '../../libs/dto/booking/booking.input';
+import {
+	BookingsInquiry,
+	CancelBookingByAdminInput,
+	PropertyAvailabilityInquiry,
+} from '../../libs/dto/booking/booking.input';
 import { shapeIntoMongoObjectId } from '../../libs/config';
 import { BookingCategory } from '../../libs/enums/booking.enum';
 import { MemberType } from '../../libs/enums/member.enum';
@@ -33,7 +37,7 @@ export class BookingResolver {
 		@Args('bookingId') bookingId: string,
 		@AuthMember('_id') memberId: Types.ObjectId,
 	): Promise<Booking> {
-		return this.paymentService.cancelPendingBooking(
+		return this.paymentService.cancelBooking(
 			memberId,
 			shapeIntoMongoObjectId(bookingId),
 			BookingCategory.PROPERTY,
@@ -46,7 +50,7 @@ export class BookingResolver {
 		@Args('bookingId') bookingId: string,
 		@AuthMember('_id') memberId: Types.ObjectId,
 	): Promise<Booking> {
-		return this.paymentService.cancelPendingBooking(
+		return this.paymentService.cancelBooking(
 			memberId,
 			shapeIntoMongoObjectId(bookingId),
 			BookingCategory.TOUR,
@@ -62,8 +66,8 @@ export class BookingResolver {
 		return this.bookingService.getMyBookings(memberId, input);
 	}
 
-	@Roles(MemberType.AGENT)
-	@UseGuards(RolesGuard)
+	// Scoped to the caller's own listings, so a revoked agent still sees the guests ahead
+	@UseGuards(AuthGuard)
 	@Query(() => Bookings)
 	public async getAgentPropertyBookings(
 		@Args('input') input: BookingsInquiry,
@@ -81,14 +85,25 @@ export class BookingResolver {
 		return this.bookingService.getMyTourBookings(memberId, input);
 	}
 
-	@Roles(MemberType.AGENT)
-	@UseGuards(RolesGuard)
+	// Scoped to the caller's own listings, so a revoked agent still sees the guests ahead
+	@UseGuards(AuthGuard)
 	@Query(() => Bookings)
 	public async getAgentTourBookings(
 		@Args('input') input: BookingsInquiry,
 		@AuthMember('_id') memberId: Types.ObjectId,
 	): Promise<Bookings> {
 		return this.bookingService.getAgentTourBookings(memberId, input);
+	}
+
+	@Roles(MemberType.ADMIN)
+	@UseGuards(RolesGuard)
+	@Mutation(() => Booking)
+	public async cancelBookingByAdmin(
+		@Args('input') input: CancelBookingByAdminInput,
+		@AuthMember('_id') adminId: Types.ObjectId,
+	): Promise<Booking> {
+		input._id = shapeIntoMongoObjectId(input._id);
+		return this.paymentService.cancelBookingByAdmin(input, adminId);
 	}
 
 	@Roles(MemberType.ADMIN)

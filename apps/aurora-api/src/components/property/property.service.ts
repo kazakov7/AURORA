@@ -35,6 +35,7 @@ import { MemberService } from '../member/member.service';
 import { ViewService } from '../view/view.service';
 import { AgentService } from '../agent/agent.service';
 import { AgentType } from '../../libs/enums/agent.enum';
+import { BookingCategory } from '../../libs/enums/booking.enum';
 import { MemberStatus, MemberType } from '../../libs/enums/member.enum';
 import { DestinationService } from '../destination/destination.service';
 import { NotificationService } from '../notification/notification.service';
@@ -380,6 +381,9 @@ export class PropertyService {
 		const wasActive = existingProperty.propertyStatus === PropertyStatus.ACTIVE;
 		const isActive = result.propertyStatus === PropertyStatus.ACTIVE;
 		if (wasActive !== isActive) await this.activeCountersEditor(result, isActive ? 1 : -1);
+		if (wasActive && !isActive) {
+			await this.bookingService.notifyInactiveListingGuests(BookingCategory.PROPERTY, [result._id]);
+		}
 
 		await this.notificationService.createNotification({
 			receiverId: result.memberId as Types.ObjectId,

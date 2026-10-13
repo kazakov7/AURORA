@@ -3,6 +3,8 @@ import { BadRequestException } from '@nestjs/common';
 import { Messages } from './enums/common.enum';
 
 export const HOLD_DURATION_MS = 15 * 60 * 1000;
+/** A guest cancels a paid booking with a full refund until this long before it starts **/
+export const GUEST_CANCEL_WINDOW_MS = 48 * 60 * 60 * 1000;
 export const USD = 'USD';
 export const availableAgentSorts = ['createdAt', 'updatedAt', 'agentType', 'verificationStatus'];
 export const availableMemberSorts = [
@@ -194,6 +196,16 @@ export const lookupMember = {
 		from: 'members',
 		localField: 'memberId',
 		foreignField: '_id',
+		as: 'memberData',
+	},
+};
+/** For hosts reading their own bookings: the marker lets the guest's contact details through to them **/
+export const lookupMemberWithContact = {
+	$lookup: {
+		from: 'members',
+		localField: 'memberId',
+		foreignField: '_id',
+		pipeline: [{ $addFields: { contactShared: true } }],
 		as: 'memberData',
 	},
 };

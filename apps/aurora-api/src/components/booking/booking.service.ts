@@ -1,16 +1,42 @@
 import { BadRequestException, Injectable } from '@nestjs/common';
 import { InjectModel } from '@nestjs/mongoose';
-import { Model, Types } from 'mongoose';
-import { Booking, Bookings, PropertyAvailabilityRange } from '../../libs/dto/booking/booking';
+import { Model, PipelineStage, Types } from 'mongoose';
+import { Bookings, PropertyAvailabilityRange } from '../../libs/dto/booking/booking';
 import { BookingsInquiry, PropertyAvailabilityInquiry } from '../../libs/dto/booking/booking.input';
 import { BookingCategory, BookingStatus } from '../../libs/enums/booking.enum';
 import { Messages } from '../../libs/enums/common.enum';
+import { NotificationGroup, NotificationType } from '../../libs/enums/notification.enum';
 import { T } from '../../libs/types/common';
-import { lookupMember } from '../../libs/config';
+import { lookupMember, lookupMemberWithContact } from '../../libs/config';
+import { NotificationService } from '../notification/notification.service';
+
+const lookupPropertyData = {
+	$lookup: {
+		from: 'properties',
+		localField: 'bookingRefId',
+		foreignField: '_id',
+		as: 'propertyData',
+	},
+};
+const lookupTourData = {
+	$lookup: { from: 'tours', localField: 'bookingRefId', foreignField: '_id', as: 'tourData' },
+};
+/** One pair of dates for every booking: checkIn/checkOut of a stay, the booked dates of a tour **/
+const addBookingDates = {
+	$addFields: {
+		bookingStartDate: { $ifNull: ['$checkIn', '$priceSnapshot.tourStartDate'] },
+		bookingEndDate: { $ifNull: ['$checkOut', '$priceSnapshot.tourEndDate'] },
+	},
+};
 
 @Injectable()
 export class BookingService {
-	constructor(@InjectModel('Booking') private readonly bookingModel: Model<any>) {}
+	constructor(
+		@InjectModel('Booking') private readonly bookingModel: Model<any>,
+		@InjectModel('Property') private readonly propertyModel: Model<any>,
+		@InjectModel('Tour') private readonly tourModel: Model<any>,
+		private readonly notificationService: NotificationService,
+	) {}
 
 	public async getUnavailablePropertyIds(checkIn: Date, checkOut: Date): Promise<Types.ObjectId[]> {
 		const now = new Date();
@@ -47,6 +73,57 @@ export class BookingService {
 			.exec();
 
 		return Boolean(booking);
+	}
+
+	/**
+	 * Guests keep a booking whose hotel or tour left the catalog: they are told so, and the admins
+	 * learn which listings still have guests to look after.
+	 */
+	public async notifyInactiveListingGuests(
+		bookingCategory: BookingCategory,
+		listingIds: Types.ObjectId[],
+	): Promise<void> {
+		if (!listingIds.length) return;
+		const now = new Date();
+		const upcoming: T = {
+			bookingCategory,
+			bookingRefId: { $in: listingIds },
+			bookingStatus: BookingStatus.CONFIRMED,
+			...(bookingCategory === BookingCategory.PROPERTY
+				? { checkOut: { $gt: now } }
+				: { 'priceSnapshot.tourEndDate': { $gt: now } }),
+		};
+		const bookings = await this.bookingModel
+			.find(upcoming)
+			.select('_id memberId bookingRefId')
+			.lean<{ _id: Types.ObjectId; memberId: Types.ObjectId; bookingRefId: Types.ObjectId }[]>()
+			.exec();
+		if (!bookings.length) return;
+
+		const input = {
+			notificationType: NotificationType.BOOKING,
+			notificationGroup: NotificationGroup.BOOKING,
+		};
+		for (const booking of bookings) {
+			await this.notificationService.createNotification({
+				...input,
+				receiverId: booking.memberId,
+				notificationRefId: booking._id,
+				notificationTitle: 'Your booked listing is unavailable',
+				notificationDesc:
+					'The hotel or tour you booked is no longer listed. Your booking stays valid; contact support if you need help.',
+				notificationEventKey: `booking-listing-inactive:${booking._id}:${now.getTime()}`,
+			});
+		}
+		for (const listingId of new Set(bookings.map((booking) => String(booking.bookingRefId)))) {
+			await this.notificationService.notifyActiveAdmins({
+				...input,
+				notificationRefId: new Types.ObjectId(listingId),
+				notificationTitle: 'Booked listing deactivated',
+				notificationDesc: 'A listing with upcoming confirmed bookings left the catalog.',
+				notificationEventKey: `booking-listing-inactive:${listingId}:${now.getTime()}`,
+			});
+		}
 	}
 
 	/**
@@ -93,206 +170,86 @@ export class BookingService {
 	}
 
 	public async getMyBookings(memberId: Types.ObjectId, input: BookingsInquiry): Promise<Bookings> {
-		const match: T = { memberId };
-		if (input.search?.bookingStatusList?.length) {
-			match.bookingStatus = { $in: input.search.bookingStatusList };
-		}
-		return this.getBookings(match, input);
+		const match: T = { memberId, ...this.shapeSearch(input) };
+		return this.getBookingList(match, input, [lookupPropertyData, lookupTourData]);
 	}
 
+	/** The host's own listings are read first, so the bookings of other hosts are never scanned **/
 	public async getAgentPropertyBookings(
 		memberId: Types.ObjectId,
 		input: BookingsInquiry,
 	): Promise<Bookings> {
-		const match: T = { bookingCategory: BookingCategory.PROPERTY };
-		if (input.search?.bookingStatusList?.length) {
-			match.bookingStatus = { $in: input.search.bookingStatusList };
-		}
-
-		const result = await this.bookingModel
-			.aggregate([
-				{ $match: match },
-				{
-					$lookup: {
-						from: 'properties',
-						localField: 'bookingRefId',
-						foreignField: '_id',
-						as: 'propertyData',
-					},
-				},
-				{ $unwind: '$propertyData' },
-				{ $match: { 'propertyData.memberId': memberId } },
-				{ $sort: { createdAt: -1 } },
-				{
-					$facet: {
-						list: [
-							{ $skip: (input.page - 1) * input.limit },
-							{ $limit: input.limit },
-							lookupMember,
-							{ $unwind: { path: '$memberData', preserveNullAndEmptyArrays: true } },
-						],
-						metaCounter: [{ $count: 'total' }],
-					},
-				},
-			])
-			.exec();
-
-		return result[0] as Bookings;
+		const propertyIds = await this.propertyModel.distinct('_id', { memberId }).exec();
+		const match: T = {
+			...this.shapeSearch(input),
+			bookingCategory: BookingCategory.PROPERTY,
+			bookingRefId: { $in: propertyIds },
+		};
+		return this.getBookingList(match, input, [lookupPropertyData, lookupMemberWithContact]);
 	}
 
 	public async getMyTourBookings(
 		memberId: Types.ObjectId,
 		input: BookingsInquiry,
 	): Promise<Bookings> {
-		const match: T = { memberId, bookingCategory: BookingCategory.TOUR };
-		if (input.search?.bookingStatusList?.length) {
-			match.bookingStatus = { $in: input.search.bookingStatusList };
-		}
-		return this.getTourBookings(match, input);
+		const match: T = {
+			memberId,
+			...this.shapeSearch(input),
+			bookingCategory: BookingCategory.TOUR,
+		};
+		return this.getBookingList(match, input, [lookupTourData]);
 	}
 
 	public async getAgentTourBookings(
 		memberId: Types.ObjectId,
 		input: BookingsInquiry,
 	): Promise<Bookings> {
-		const match: T = { bookingCategory: BookingCategory.TOUR };
-		if (input.search?.bookingStatusList?.length) {
-			match.bookingStatus = { $in: input.search.bookingStatusList };
-		}
-
-		const result = await this.bookingModel
-			.aggregate([
-				{ $match: match },
-				{
-					$lookup: {
-						from: 'tours',
-						localField: 'bookingRefId',
-						foreignField: '_id',
-						as: 'tourData',
-					},
-				},
-				{ $unwind: '$tourData' },
-				{ $match: { 'tourData.memberId': memberId } },
-				{ $sort: { createdAt: -1 } },
-				{
-					$facet: {
-						list: [
-							{ $skip: (input.page - 1) * input.limit },
-							{ $limit: input.limit },
-							lookupMember,
-							{ $unwind: { path: '$memberData', preserveNullAndEmptyArrays: true } },
-						],
-						metaCounter: [{ $count: 'total' }],
-					},
-				},
-			])
-			.exec();
-
-		return result[0] as Bookings;
+		const tourIds = await this.tourModel.distinct('_id', { memberId }).exec();
+		const match: T = {
+			...this.shapeSearch(input),
+			bookingCategory: BookingCategory.TOUR,
+			bookingRefId: { $in: tourIds },
+		};
+		return this.getBookingList(match, input, [lookupTourData, lookupMemberWithContact]);
 	}
 
 	public async getAllBookingsByAdmin(input: BookingsInquiry): Promise<Bookings> {
+		return this.getBookingList(this.shapeSearch(input), input, [
+			lookupMember,
+			lookupPropertyData,
+			lookupTourData,
+		]);
+	}
+
+	private shapeSearch(input: BookingsInquiry): T {
 		const match: T = {};
 		if (input.search?.bookingStatusList?.length) {
 			match.bookingStatus = { $in: input.search.bookingStatusList };
 		}
-
-		const result = await this.bookingModel
-			.aggregate([
-				{ $match: match },
-				{ $sort: { createdAt: -1 } },
-				{
-					$facet: {
-						list: [
-							{ $skip: (input.page - 1) * input.limit },
-							{ $limit: input.limit },
-							lookupMember,
-							{ $unwind: { path: '$memberData', preserveNullAndEmptyArrays: true } },
-							{
-								$lookup: {
-									from: 'properties',
-									localField: 'bookingRefId',
-									foreignField: '_id',
-									as: 'propertyData',
-								},
-							},
-							{ $unwind: { path: '$propertyData', preserveNullAndEmptyArrays: true } },
-							{
-								$lookup: {
-									from: 'tours',
-									localField: 'bookingRefId',
-									foreignField: '_id',
-									as: 'tourData',
-								},
-							},
-							{ $unwind: { path: '$tourData', preserveNullAndEmptyArrays: true } },
-						],
-						metaCounter: [{ $count: 'total' }],
-					},
-				},
-			])
-			.exec();
-
-		return result[0] as Bookings;
+		if (input.search?.bookingCategory) match.bookingCategory = input.search.bookingCategory;
+		return match;
 	}
 
-	private async getBookings(match: T, input: BookingsInquiry): Promise<Bookings> {
+	/** The _id tie-breaker keeps pages stable when many bookings share the same creation time **/
+	private async getBookingList(
+		match: T,
+		input: BookingsInquiry,
+		lookups: PipelineStage.FacetPipelineStage[],
+	): Promise<Bookings> {
+		const unwinds = lookups.map((lookup) => ({
+			$unwind: { path: `$${(lookup as T).$lookup.as}`, preserveNullAndEmptyArrays: true },
+		}));
 		const result = await this.bookingModel
 			.aggregate([
 				{ $match: match },
-				{ $sort: { createdAt: -1 } },
+				{ $sort: { createdAt: -1, _id: -1 } },
 				{
 					$facet: {
 						list: [
 							{ $skip: (input.page - 1) * input.limit },
 							{ $limit: input.limit },
-							{
-								$lookup: {
-									from: 'properties',
-									localField: 'bookingRefId',
-									foreignField: '_id',
-									as: 'propertyData',
-								},
-							},
-							{ $unwind: { path: '$propertyData', preserveNullAndEmptyArrays: true } },
-							{
-								$lookup: {
-									from: 'tours',
-									localField: 'bookingRefId',
-									foreignField: '_id',
-									as: 'tourData',
-								},
-							},
-							{ $unwind: { path: '$tourData', preserveNullAndEmptyArrays: true } },
-						],
-						metaCounter: [{ $count: 'total' }],
-					},
-				},
-			])
-			.exec();
-
-		return result[0] as Bookings;
-	}
-
-	private async getTourBookings(match: T, input: BookingsInquiry): Promise<Bookings> {
-		const result = await this.bookingModel
-			.aggregate([
-				{ $match: match },
-				{ $sort: { createdAt: -1 } },
-				{
-					$facet: {
-						list: [
-							{ $skip: (input.page - 1) * input.limit },
-							{ $limit: input.limit },
-							{
-								$lookup: {
-									from: 'tours',
-									localField: 'bookingRefId',
-									foreignField: '_id',
-									as: 'tourData',
-								},
-							},
-							{ $unwind: { path: '$tourData', preserveNullAndEmptyArrays: true } },
+							addBookingDates,
+							...lookups.flatMap((lookup, index) => [lookup, unwinds[index]]),
 						],
 						metaCounter: [{ $count: 'total' }],
 					},

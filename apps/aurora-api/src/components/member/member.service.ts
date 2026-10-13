@@ -22,6 +22,8 @@ import { Direction, Messages } from '../../libs/enums/common.enum';
 import { MemberAuthType, MemberStatus, MemberType } from '../../libs/enums/member.enum';
 import { PropertyStatus } from '../../libs/enums/property.enum';
 import { AgentVerificationStatus } from '../../libs/enums/agent.enum';
+import { BookingCategory } from '../../libs/enums/booking.enum';
+import { BookingService } from '../booking/booking.service';
 import { StatisticModifier, T } from '../../libs/types/common';
 import { ViewGroup } from '../../libs/enums/view.enum';
 import { ViewService } from '../view/view.service';
@@ -47,6 +49,7 @@ export class MemberService {
 		private authService: AuthService,
 		private viewService: ViewService,
 		private readonly chatGateway: ChatGateway,
+		private readonly bookingService: BookingService,
 	) {}
 
 	public async signup(input: MemberInput): Promise<Member> {
@@ -541,11 +544,13 @@ export class MemberService {
 		scope: { memberId: Types.ObjectId } | { destinationId: Types.ObjectId },
 	): Promise<void> {
 		await this.deactivateListingsOf(scope, this.propertyModel, {
+			bookingCategory: BookingCategory.PROPERTY,
 			statusKey: 'propertyStatus',
 			memberKey: 'memberProperties',
 			destinationKey: 'destinationProperties',
 		});
 		await this.deactivateListingsOf(scope, this.tourModel, {
+			bookingCategory: BookingCategory.TOUR,
 			statusKey: 'tourStatus',
 			memberKey: 'memberTours',
 			destinationKey: 'destinationTours',
@@ -555,7 +560,12 @@ export class MemberService {
 	private async deactivateListingsOf(
 		scope: T,
 		listingModel: Model<any>,
-		keys: { statusKey: string; memberKey: string; destinationKey: string },
+		keys: {
+			bookingCategory: BookingCategory;
+			statusKey: string;
+			memberKey: string;
+			destinationKey: string;
+		},
 	): Promise<void> {
 		// PropertyStatus and TourStatus share the ACTIVE and INACTIVE values
 		const activeListings: T = {
@@ -563,13 +573,15 @@ export class MemberService {
 			[keys.statusKey]: PropertyStatus.ACTIVE,
 			deletedAt: null,
 		};
+		const listingIds = await listingModel.distinct('_id', activeListings);
+		if (!listingIds.length) return;
 		const memberIds = await listingModel.distinct('memberId', activeListings);
-		if (!memberIds.length) return;
 		const destinationIds = await listingModel.distinct('destinationId', activeListings);
 
 		await listingModel
 			.updateMany(activeListings, { [keys.statusKey]: PropertyStatus.INACTIVE })
 			.exec();
+		await this.bookingService.notifyInactiveListingGuests(keys.bookingCategory, listingIds);
 
 		// Both counters count ACTIVE listings only, so every owner and city that lost one is recounted
 		const countActive = (filter: T) =>

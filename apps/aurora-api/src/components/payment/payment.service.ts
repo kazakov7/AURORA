@@ -13,12 +13,13 @@ import {
 	StartPropertyPaymentInput,
 	StartTourPaymentInput,
 } from '../../libs/dto/payment/payment.input';
+import { CancelBookingByAdminInput } from '../../libs/dto/booking/booking.input';
 import { BookingCategory, BookingStatus } from '../../libs/enums/booking.enum';
 import { Messages } from '../../libs/enums/common.enum';
 import { PaymentProvider, PaymentStatus } from '../../libs/enums/payment.enum';
 import { PropertyStatus } from '../../libs/enums/property.enum';
 import { TourStatus } from '../../libs/enums/tour.enum';
-import { HOLD_DURATION_MS, USD } from '../../libs/config';
+import { GUEST_CANCEL_WINDOW_MS, HOLD_DURATION_MS, USD } from '../../libs/config';
 import { NotificationService } from '../notification/notification.service';
 import { NotificationGroup, NotificationType } from '../../libs/enums/notification.enum';
 
@@ -116,6 +117,57 @@ export class PaymentService implements OnModuleInit, OnModuleDestroy {
 		);
 		await this.notifyBookingTransition(booking, BookingStatus.CANCELLED, memberId);
 		return booking;
+	}
+
+	/** The guest cancels a payment hold any time, and a paid booking until 48 hours before it starts **/
+	public async cancelBooking(
+		memberId: Types.ObjectId,
+		bookingId: Types.ObjectId,
+		bookingCategory: BookingCategory,
+	): Promise<any> {
+		const booking = await this.bookingModel
+			.findOne({ _id: bookingId, memberId, bookingCategory })
+			.lean<any>()
+			.exec();
+		if (booking?.bookingStatus === BookingStatus.PENDING) {
+			return this.cancelPendingBooking(memberId, bookingId, bookingCategory);
+		}
+		if (booking?.bookingStatus !== BookingStatus.CONFIRMED) {
+			throw new BadRequestException(Messages.BOOKING_CANNOT_CANCEL);
+		}
+
+		const startsAt = await this.getBookingStart(booking);
+		if (!startsAt || startsAt.getTime() - Date.now() < GUEST_CANCEL_WINDOW_MS) {
+			throw new BadRequestException(Messages.BOOKING_CANCEL_WINDOW_PASSED);
+		}
+		return this.cancelConfirmedBooking(booking, memberId);
+	}
+
+	/** An admin cancels a payment hold or a paid booking at any time; a paid one is refunded in full **/
+	public async cancelBookingByAdmin(
+		input: CancelBookingByAdminInput,
+		adminId: Types.ObjectId,
+	): Promise<any> {
+		const bookingId = input._id as unknown as Types.ObjectId;
+		const booking = await this.bookingModel.findById(bookingId).lean<any>().exec();
+
+		if (booking?.bookingStatus === BookingStatus.PENDING) {
+			const cancelled = await this.cancelPendingBookingAtomically({
+				_id: bookingId,
+				bookingStatus: BookingStatus.PENDING,
+			});
+			if (!cancelled) throw new BadRequestException(Messages.BOOKING_CANNOT_CANCEL);
+			await this.bookingModel
+				.updateOne({ _id: bookingId }, { cancelReason: input.cancelReason })
+				.exec();
+			await this.cancelPendingPaymentIntents(bookingId, 'Booking cancelled by admin');
+			await this.notifyBookingTransition(cancelled, BookingStatus.CANCELLED, adminId);
+			return { ...cancelled.toObject(), cancelReason: input.cancelReason };
+		}
+		if (booking?.bookingStatus !== BookingStatus.CONFIRMED) {
+			throw new BadRequestException(Messages.BOOKING_CANNOT_CANCEL);
+		}
+		return this.cancelConfirmedBooking(booking, adminId, input.cancelReason);
 	}
 
 	public async handleStripeWebhook(rawBody: Buffer, signature?: string): Promise<void> {
@@ -453,6 +505,79 @@ export class PaymentService implements OnModuleInit, OnModuleDestroy {
 				{ paymentStatus: PaymentStatus.FAILED, failureReason },
 			)
 			.exec();
+	}
+
+	/**
+	 * The money goes back first: if the refund fails the booking stays CONFIRMED, so a booking is
+	 * never cancelled without its refund. The refund is idempotent, so a retry cannot pay out twice.
+	 */
+	private async cancelConfirmedBooking(
+		booking: any,
+		actorId: Types.ObjectId,
+		cancelReason?: string,
+	): Promise<any> {
+		const payment = await this.paymentModel.findById(booking.confirmedPaymentId).lean<any>().exec();
+		if (!payment?.providerPaymentId)
+			throw new InternalServerErrorException(Messages.PAYMENT_REFUND_FAILED);
+		await this.refundPayment(payment.providerPaymentId);
+
+		const session = await this.connection.startSession();
+		let cancelled: any | null = null;
+		try {
+			await session.withTransaction(async () => {
+				cancelled = await this.bookingModel
+					.findOneAndUpdate(
+						{ _id: booking._id, bookingStatus: BookingStatus.CONFIRMED },
+						{
+							bookingStatus: BookingStatus.CANCELLED,
+							cancelledAt: new Date(),
+							...(cancelReason && { cancelReason }),
+						},
+						{ new: true, session },
+					)
+					.exec();
+				if (!cancelled) return;
+
+				// The seats of a tour and the booking count of a hotel were taken when it was paid
+				if (cancelled.bookingCategory === BookingCategory.TOUR) {
+					await this.releaseTourSeats(cancelled, session);
+				} else {
+					await this.propertyModel
+						.updateOne(
+							{ _id: cancelled.bookingRefId },
+							[
+								{
+									$set: {
+										propertyBookings: {
+											$max: [0, { $subtract: [{ $ifNull: ['$propertyBookings', 0] }, 1] }],
+										},
+									},
+								},
+							] as any,
+							{ session },
+						)
+						.exec();
+				}
+			});
+		} finally {
+			await session.endSession();
+		}
+
+		if (!cancelled) throw new BadRequestException(Messages.BOOKING_CANNOT_CANCEL);
+		await this.notifyBookingTransition(cancelled, BookingStatus.CANCELLED, actorId);
+		return cancelled;
+	}
+
+	/** A stay starts at check-in, a tour at the start date that was booked **/
+	private async getBookingStart(booking: any): Promise<Date | null> {
+		if (booking.checkIn) return new Date(booking.checkIn);
+		if (booking.priceSnapshot?.tourStartDate) return new Date(booking.priceSnapshot.tourStartDate);
+		const tour: any = await this.tourModel
+			.findById(booking.bookingRefId)
+			.select('tourStartDate')
+			.lean()
+			.exec();
+		return tour?.tourStartDate ?? null;
 	}
 
 	private async refundPayment(providerPaymentId: string): Promise<void> {

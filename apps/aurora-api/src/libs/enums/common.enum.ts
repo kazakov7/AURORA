@@ -124,6 +124,7 @@ export enum Messages {
 	BOOKING_NOT_AVAILABLE = 'Booking is not available!',
 	BOOKING_ALREADY_CANCELLED = 'Booking is already cancelled!',
 	BOOKING_CANNOT_CANCEL = 'This booking cannot be cancelled!',
+	BOOKING_CANCEL_WINDOW_PASSED = 'Free cancellation closes 48 hours before the start!',
 	BOOKING_CANNOT_UPDATE = 'This booking cannot be updated!',
 	BOOKING_EXPIRED = 'This booking has expired!',
 

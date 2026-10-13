@@ -10,6 +10,7 @@ import { TourService } from './tour.service';
 import { AgentModule } from '../agent/agent.module';
 import { DestinationModule } from '../destination/destination.module';
 import { NotificationModule } from '../notification/notification.module';
+import { BookingModule } from '../booking/booking.module';
 
 @Module({
 	imports: [
@@ -21,6 +22,7 @@ import { NotificationModule } from '../notification/notification.module';
 		AgentModule,
 		DestinationModule,
 		NotificationModule,
+		BookingModule,
 	],
 	providers: [TourResolver, TourService],
 	exports: [TourService],
