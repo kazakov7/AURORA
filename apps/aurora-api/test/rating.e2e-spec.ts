@@ -1,4 +1,5 @@
 import { INestApplication } from '@nestjs/common';
+import { Messages } from '../src/libs/enums/common.enum';
 import { clearDatabase, createTestApp, graphQL, model, seedMember } from './helpers/e2e.helper';
 
 describe('One-time ratings (e2e)', () => {
@@ -15,6 +16,20 @@ describe('One-time ratings (e2e)', () => {
 	afterAll(async () => {
 		await app.close();
 	});
+
+	/** Hotels and tours are rated only after a completed stay or tour **/
+	async function completedStay(memberId: string, bookingCategory: string, bookingRefId: unknown) {
+		await model(app, 'Booking').create({
+			memberId,
+			bookingCategory,
+			bookingStatus: 'COMPLETED',
+			bookingRefId,
+			bookingGuests: 1,
+			bookingTotalPrice: 100,
+			bookingCurrency: 'USD',
+			priceSnapshot: {},
+		});
+	}
 
 	it('accepts one rating per user and target while comments remain unlimited', async () => {
 		const user = await seedMember(app, 'ratinguser');
@@ -43,6 +58,10 @@ describe('One-time ratings (e2e)', () => {
 		const variables = {
 			input: { reviewGroup: 'PROPERTY', reviewRefId: property._id.toString(), reviewRating: 4 },
 		};
+		const withoutStay = await graphQL(app, submitRating, variables, user.accessToken);
+		expect(withoutStay.body.errors?.[0].message).toBe(Messages.RATING_REQUIRES_STAY);
+
+		await completedStay(user._id, 'PROPERTY', property._id);
 		const first = await graphQL(app, submitRating, variables, user.accessToken);
 		expect(first.body.errors).toBeUndefined();
 		expect(first.body.data.submitRating.reviewRating).toBe(4);
@@ -123,6 +142,7 @@ describe('One-time ratings (e2e)', () => {
 							articleContent: 'A detailed travel article.',
 						});
 
+			if (group === 'TOUR') await completedStay(user._id, 'TOUR', target._id);
 			const result = await graphQL(
 				app,
 				`mutation SubmitRating($input: RatingInput!) { submitRating(input: $input) { reviewRating } }`,

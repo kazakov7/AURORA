@@ -19,6 +19,7 @@ import { BoardArticle } from '../../libs/dto/board-article/board-article';
 import { PropertyStatus } from '../../libs/enums/property.enum';
 import { TourStatus } from '../../libs/enums/tour.enum';
 import { BoardArticleStatus } from '../../libs/enums/board-article.enum';
+import { BookingCategory, BookingStatus } from '../../libs/enums/booking.enum';
 import { NotificationService } from '../notification/notification.service';
 import { NotificationGroup, NotificationType } from '../../libs/enums/notification.enum';
 
@@ -29,6 +30,7 @@ export class ReviewService {
 		@InjectModel('Property') private readonly propertyModel: Model<Property>,
 		@InjectModel('Tour') private readonly tourModel: Model<Tour>,
 		@InjectModel('BoardArticle') private readonly articleModel: Model<BoardArticle>,
+		@InjectModel('Booking') private readonly bookingModel: Model<any>,
 		private readonly destinationService: DestinationService,
 		private readonly notificationService: NotificationService,
 	) {}
@@ -36,6 +38,7 @@ export class ReviewService {
 	public async submitRating(memberId: Types.ObjectId, input: RatingInput): Promise<Review> {
 		const reviewRefId = input.reviewRefId as unknown as Types.ObjectId;
 		await this.assertRatingTarget(input.reviewGroup, reviewRefId);
+		await this.assertCompletedStay(memberId, input.reviewGroup, reviewRefId);
 		const existingRating = await this.reviewModel
 			.exists({
 				memberId,
@@ -232,6 +235,31 @@ export class ReviewService {
 			stats?.count ?? 0,
 			stats?.rating ?? 0,
 		);
+	}
+
+	/** A hotel or a tour is rated only by travelers who completed a stay or the tour there **/
+	private async assertCompletedStay(
+		memberId: Types.ObjectId,
+		reviewGroup: ReviewGroup,
+		reviewRefId: Types.ObjectId,
+	): Promise<void> {
+		const bookingCategory =
+			reviewGroup === ReviewGroup.PROPERTY
+				? BookingCategory.PROPERTY
+				: reviewGroup === ReviewGroup.TOUR
+					? BookingCategory.TOUR
+					: null;
+		if (!bookingCategory) return;
+
+		const hasStayed = await this.bookingModel
+			.exists({
+				memberId,
+				bookingCategory,
+				bookingRefId: reviewRefId,
+				bookingStatus: BookingStatus.COMPLETED,
+			})
+			.exec();
+		if (!hasStayed) throw new BadRequestException(Messages.RATING_REQUIRES_STAY);
 	}
 
 	private async assertRatingTarget(

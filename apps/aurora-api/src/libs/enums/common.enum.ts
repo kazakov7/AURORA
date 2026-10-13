@@ -145,6 +145,7 @@ export enum Messages {
 	REVIEW_NOT_ALLOWED = 'You are not allowed to review this!',
 	REVIEW_CANNOT_UPDATE = 'You cannot update this review!',
 	RATING_ALREADY_EXISTS = 'You have already rated this item!',
+	RATING_REQUIRES_STAY = 'Only a traveler who completed this stay or tour can rate it!',
 	RATING_TARGET_NOT_FOUND = 'The item you are trying to rate is not available!',
 
 	// =========================

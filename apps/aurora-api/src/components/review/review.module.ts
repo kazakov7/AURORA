@@ -1,4 +1,5 @@
 import { Module } from '@nestjs/common';
+import BookingSchema from '../../schemas/Booking.model';
 import { MongooseModule } from '@nestjs/mongoose';
 import ReviewSchema from '../../schemas/Review.model';
 import { AuthModule } from '../auth/auth.module';
@@ -17,6 +18,7 @@ import { NotificationModule } from '../notification/notification.module';
 			{ name: 'Property', schema: PropertySchema },
 			{ name: 'Tour', schema: TourSchema },
 			{ name: 'BoardArticle', schema: BoardArticleSchema },
+			{ name: 'Booking', schema: BookingSchema },
 		]),
 		AuthModule,
 		DestinationModule,
