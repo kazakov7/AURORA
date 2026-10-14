@@ -39,7 +39,7 @@
 		"class-validator": "^0.15.1",
 		"cloudinary": "^2.11.0",
 		"google-auth-library": "^10.9.1",
-		"graphql-upload": "^13.0.0",
+		"graphql-upload": "^15.0.2",
 		"jose": "^5.10.0",
 		"moment": "^2.31.0",
 		"mongoose": "^8.24.5",
@@ -100,5 +100,10 @@
 		"roots": [
 			"<rootDir>/apps/"
 		]
+	},
+	"overrides": {
+		"graphql-upload": {
+			"@types/express": "$@types/express"
+		}
 	}
 }

@@ -1,7 +1,8 @@
 import { BadRequestException, UseGuards } from '@nestjs/common';
 import { Args, Mutation, Resolver } from '@nestjs/graphql';
 import { v2 as cloudinary } from 'cloudinary';
-import { GraphQLUpload, FileUpload } from 'graphql-upload';
+import GraphQLUpload from 'graphql-upload/GraphQLUpload.js';
+import type { FileUpload } from 'graphql-upload/processRequest.js';
 
 import { validMimeTypes, isValidUploadTarget } from '../../libs/config';
 import { Messages } from '../../libs/enums/common.enum';

@@ -38,7 +38,6 @@ function getErrorCode(formattedError: GraphQLFormattedError): unknown {
 		GraphQLModule.forRoot({
 			driver: ApolloDriver,
 			playground: true,
-			uploads: false,
 			autoSchemaFile: true,
 			formatError: (formattedError: GraphQLFormattedError, originalError: unknown) => {
 				const graphQlFormattedError = {

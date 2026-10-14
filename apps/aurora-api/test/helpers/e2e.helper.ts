@@ -5,9 +5,11 @@ import { getConnectionToken, getModelToken } from '@nestjs/mongoose';
 import request from 'supertest';
 import { AddressInfo } from 'net';
 import { AppModule } from '../../src/app.module';
+import { AuthService } from '../../src/components/auth/auth.service';
 import { MemberService } from '../../src/components/member/member.service';
 import { MemberType } from '../../src/libs/enums/member.enum';
 import { createCorsOptions } from '../../src/libs/cors';
+import { graphqlUploadMiddleware } from '../../src/libs/upload-guard';
 
 export interface TestMember {
 	_id: string;
@@ -19,6 +21,7 @@ export interface TestMember {
 export async function createTestApp(): Promise<INestApplication> {
 	const moduleRef = await Test.createTestingModule({ imports: [AppModule] }).compile();
 	const app = moduleRef.createNestApplication({ rawBody: true });
+	app.use('/graphql', graphqlUploadMiddleware(app.get(AuthService)));
 	app.useGlobalPipes(new ValidationPipe());
 	app.enableCors(createCorsOptions());
 	await app.listen(0, '127.0.0.1');
