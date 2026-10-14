@@ -1,9 +1,10 @@
-import { BadRequestException, Injectable, InternalServerErrorException } from '@nestjs/common';
+import { BadRequestException, Injectable, NotFoundException } from '@nestjs/common';
 import { InjectModel } from '@nestjs/mongoose';
 import { Model, Types } from 'mongoose';
-import { lookupMember } from '../../libs/config';
+import { escapeRegExp, lookupMember } from '../../libs/config';
 import { Reviews, Review } from '../../libs/dto/review/review';
 import {
+	AllDestinationReviewsInquiry,
 	DestinationReviewInput,
 	DestinationReviewsInquiry,
 	RatingInput,
@@ -37,7 +38,7 @@ export class ReviewService {
 
 	public async submitRating(memberId: Types.ObjectId, input: RatingInput): Promise<Review> {
 		const reviewRefId = input.reviewRefId as unknown as Types.ObjectId;
-		await this.assertRatingTarget(input.reviewGroup, reviewRefId);
+		await this.assertRatingTarget(memberId, input.reviewGroup, reviewRefId);
 		await this.assertCompletedStay(memberId, input.reviewGroup, reviewRefId);
 		const existingRating = await this.reviewModel
 			.exists({
@@ -149,7 +150,7 @@ export class ReviewService {
 			)
 			.exec();
 
-		if (!result) throw new InternalServerErrorException(Messages.REVIEW_CANNOT_UPDATE);
+		if (!result) throw new BadRequestException(Messages.REVIEW_CANNOT_UPDATE);
 		await this.refreshDestinationReviewStats(result.reviewRefId as unknown as Types.ObjectId);
 		return result as unknown as Review;
 	}
@@ -197,6 +198,37 @@ export class ReviewService {
 		return result[0] as Reviews;
 	}
 
+	/** Every city review, removed ones too, newest first, for moderation **/
+	public async getAllDestinationReviewsByAdmin(
+		input: AllDestinationReviewsInquiry,
+	): Promise<Reviews> {
+		const match: T = { reviewGroup: ReviewGroup.DESTINATION };
+		if (input.search?.reviewStatus) match.reviewStatus = input.search.reviewStatus;
+		if (input.search?.text) {
+			match.reviewContent = { $regex: new RegExp(escapeRegExp(input.search.text), 'i') };
+		}
+
+		const result = await this.reviewModel
+			.aggregate([
+				{ $match: match },
+				{ $sort: { createdAt: -1, _id: -1 } },
+				{
+					$facet: {
+						list: [
+							{ $skip: (input.page - 1) * input.limit },
+							{ $limit: input.limit },
+							lookupMember,
+							{ $unwind: { path: '$memberData', preserveNullAndEmptyArrays: true } },
+						],
+						metaCounter: [{ $count: 'total' }],
+					},
+				},
+			])
+			.exec();
+
+		return result[0] as Reviews;
+	}
+
 	private async softRemoveDestinationReview(match: T): Promise<Review> {
 		const result = await this.reviewModel
 			.findOneAndUpdate(
@@ -210,7 +242,7 @@ export class ReviewService {
 			)
 			.exec();
 
-		if (!result) throw new InternalServerErrorException(Messages.REVIEW_NOT_FOUND);
+		if (!result) throw new NotFoundException(Messages.REVIEW_NOT_FOUND);
 		await this.refreshDestinationReviewStats(result.reviewRefId as unknown as Types.ObjectId);
 		return result as unknown as Review;
 	}
@@ -263,29 +295,33 @@ export class ReviewService {
 	}
 
 	private async assertRatingTarget(
+		memberId: Types.ObjectId,
 		reviewGroup: ReviewGroup,
 		reviewRefId: Types.ObjectId,
 	): Promise<void> {
 		let exists = false;
+		let ownerId: Types.ObjectId | undefined;
 		switch (reviewGroup) {
-			case ReviewGroup.PROPERTY:
-				exists = Boolean(
-					await this.propertyModel.exists({
-						_id: reviewRefId,
-						propertyStatus: PropertyStatus.ACTIVE,
-						deletedAt: null,
-					}),
-				);
+			case ReviewGroup.PROPERTY: {
+				const property = await this.propertyModel
+					.findOne({ _id: reviewRefId, propertyStatus: PropertyStatus.ACTIVE, deletedAt: null })
+					.select('memberId')
+					.lean<Property>()
+					.exec();
+				exists = Boolean(property);
+				ownerId = property?.memberId;
 				break;
-			case ReviewGroup.TOUR:
-				exists = Boolean(
-					await this.tourModel.exists({
-						_id: reviewRefId,
-						tourStatus: TourStatus.ACTIVE,
-						deletedAt: null,
-					}),
-				);
+			}
+			case ReviewGroup.TOUR: {
+				const tour = await this.tourModel
+					.findOne({ _id: reviewRefId, tourStatus: TourStatus.ACTIVE, deletedAt: null })
+					.select('memberId')
+					.lean<Tour>()
+					.exec();
+				exists = Boolean(tour);
+				ownerId = tour?.memberId;
 				break;
+			}
 			case ReviewGroup.ARTICLE:
 				exists = Boolean(
 					await this.articleModel.exists({
@@ -302,6 +338,8 @@ export class ReviewService {
 		}
 
 		if (!exists) throw new BadRequestException(Messages.RATING_TARGET_NOT_FOUND);
+		// A host never rates their own hotel or tour, even with a stay booked before this rule
+		if (ownerId?.equals(memberId)) throw new BadRequestException(Messages.REVIEW_NOT_ALLOWED);
 	}
 
 	private async refreshRatingStats(

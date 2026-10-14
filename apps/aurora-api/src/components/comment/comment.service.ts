@@ -9,12 +9,16 @@ import { Model, type ObjectId, Types } from 'mongoose';
 
 import { PropertyService } from '../property/property.service';
 import { Comment, Comments } from '../../libs/dto/comment/comment';
-import { CommentInput, CommentsInquiry } from '../../libs/dto/comment/comment.input';
+import {
+	AllCommentsInquiry,
+	CommentInput,
+	CommentsInquiry,
+} from '../../libs/dto/comment/comment.input';
 import { CommentGroup, CommentStatus } from '../../libs/enums/comment.enum';
 
 import { MemberService } from '../member/member.service';
 import { CommentUpdate } from '../../libs/dto/comment/comment.update';
-import { lookupMember, shapeIntoMongoObjectId } from '../../libs/config';
+import { escapeRegExp, lookupMember, shapeIntoMongoObjectId } from '../../libs/config';
 import { T } from '../../libs/types/common';
 import { BoardArticleService } from '../article/board-article.service';
 import { Direction, Messages } from '../../libs/enums/common.enum';
@@ -91,6 +95,7 @@ export class CommentService {
 		}
 
 		if (!result) throw new InternalServerErrorException(Messages.CREATE_FAILED);
+		await this.memberService.syncMemberCommentCounter(memberId);
 		await this.notifyContentOwner(memberId, result as Comment);
 
 		return result as unknown as Comment;
@@ -171,7 +176,7 @@ export class CommentService {
 			)
 			.exec();
 
-		if (!result) throw new InternalServerErrorException(Messages.UPDATE_FAILED);
+		if (!result) throw new BadRequestException(Messages.UPDATE_FAILED);
 
 		return result;
 	}
@@ -215,17 +220,51 @@ export class CommentService {
 		return result[0];
 	}
 
+	/** Every live comment on the site, newest first, for moderation **/
+	public async getAllCommentsByAdmin(input: AllCommentsInquiry): Promise<Comments> {
+		const match: T = { commentStatus: CommentStatus.ACTIVE };
+		if (input.search?.commentGroup) match.commentGroup = input.search.commentGroup;
+		if (input.search?.text) {
+			match.commentContent = { $regex: new RegExp(escapeRegExp(input.search.text), 'i') };
+		}
+
+		const sort: T = {
+			[input.sort ?? 'createdAt']: input.direction ?? Direction.DESC,
+			_id: Direction.DESC,
+		};
+		const result: Comments[] = await this.commentModel
+			.aggregate([
+				{ $match: match },
+				{ $sort: sort },
+				{
+					$facet: {
+						list: [
+							{ $skip: (input.page - 1) * input.limit },
+							{ $limit: input.limit },
+							lookupMember,
+							{ $unwind: { path: '$memberData', preserveNullAndEmptyArrays: true } },
+						],
+						metaCounter: [{ $count: 'total' }],
+					},
+				},
+			])
+			.exec();
+
+		return result[0];
+	}
+
 	public async removeCommentByAdmin(input: ObjectId): Promise<Comment> {
 		const result = await this.commentModel.findByIdAndDelete(input).exec();
 
 		if (!result) {
-			throw new InternalServerErrorException(Messages.REMOVE_FAILED);
+			throw new BadRequestException(Messages.REMOVE_FAILED);
 		}
 
 		await this.decrementTargetCommentCounter(
 			result.commentGroup,
 			result.commentRefId as unknown as Types.ObjectId,
 		);
+		await this.memberService.syncMemberCommentCounter(result.memberId);
 
 		return result;
 	}

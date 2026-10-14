@@ -1,4 +1,4 @@
-import { BadRequestException, Injectable, InternalServerErrorException } from '@nestjs/common';
+import { BadRequestException, Injectable, NotFoundException } from '@nestjs/common';
 import { InjectModel } from '@nestjs/mongoose';
 import { Model, Types } from 'mongoose';
 import { Notice, Notices } from '../../libs/dto/notice/notice';
@@ -49,7 +49,7 @@ export class NoticeService {
 			throw new BadRequestException(Messages.BAD_REQUEST);
 
 		const result = await this.noticeModel.findByIdAndUpdate(_id, update, { new: true }).exec();
-		if (!result) throw new InternalServerErrorException(Messages.NO_DATA_FOUND);
+		if (!result) throw new NotFoundException(Messages.NO_DATA_FOUND);
 		return result;
 	}
 
@@ -61,7 +61,7 @@ export class NoticeService {
 				{ new: true },
 			)
 			.exec();
-		if (!result) throw new InternalServerErrorException(Messages.REMOVE_FAILED);
+		if (!result) throw new BadRequestException(Messages.REMOVE_FAILED);
 		return 'Notice successfully deleted';
 	}
 

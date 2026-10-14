@@ -1,5 +1,17 @@
 import { Field, InputType, Int } from '@nestjs/graphql';
-import { IsIn, IsInt, IsNotEmpty, IsOptional, Length, Max, Min } from 'class-validator';
+import { Type } from 'class-transformer';
+import {
+	IsIn,
+	IsInt,
+	IsNotEmpty,
+	IsOptional,
+	IsString,
+	Length,
+	Max,
+	MaxLength,
+	Min,
+	ValidateNested,
+} from 'class-validator';
 import { ObjectId, Types } from 'mongoose';
 import { availableCommentSorts } from '../../config';
 import { CommentGroup } from '../../enums/comment.enum';
@@ -61,4 +73,50 @@ export class CommentsInquiry {
 	@IsNotEmpty()
 	@Field(() => CommentSearch)
 	search!: CommentSearch;
+}
+
+/** ADMIN **/
+
+@InputType()
+class AllCommentsSearch {
+	@IsOptional()
+	@Field(() => CommentGroup, { nullable: true })
+	commentGroup?: CommentGroup;
+
+	@IsOptional()
+	@IsString()
+	@MaxLength(100)
+	@Field(() => String, { nullable: true })
+	text?: string;
+}
+
+@InputType()
+export class AllCommentsInquiry {
+	@IsNotEmpty()
+	@IsInt()
+	@Min(1)
+	@Field(() => Int)
+	page!: number;
+
+	@IsNotEmpty()
+	@IsInt()
+	@Min(1)
+	@Max(100)
+	@Field(() => Int)
+	limit!: number;
+
+	@IsOptional()
+	@IsIn(availableCommentSorts)
+	@Field(() => String, { nullable: true })
+	sort?: string;
+
+	@IsOptional()
+	@Field(() => Direction, { nullable: true })
+	direction?: Direction;
+
+	@IsOptional()
+	@ValidateNested()
+	@Type(() => AllCommentsSearch)
+	@Field(() => AllCommentsSearch, { nullable: true })
+	search?: AllCommentsSearch;
 }

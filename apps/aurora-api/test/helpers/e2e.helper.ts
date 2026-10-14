@@ -9,6 +9,7 @@ import { AuthService } from '../../src/components/auth/auth.service';
 import { MemberService } from '../../src/components/member/member.service';
 import { MemberType } from '../../src/libs/enums/member.enum';
 import { createCorsOptions } from '../../src/libs/cors';
+import { securityHeaders } from '../../src/libs/security-headers';
 import { graphqlUploadMiddleware } from '../../src/libs/upload-guard';
 
 export interface TestMember {
@@ -21,6 +22,7 @@ export interface TestMember {
 export async function createTestApp(): Promise<INestApplication> {
 	const moduleRef = await Test.createTestingModule({ imports: [AppModule] }).compile();
 	const app = moduleRef.createNestApplication({ rawBody: true });
+	app.use(securityHeaders);
 	app.use('/graphql', graphqlUploadMiddleware(app.get(AuthService)));
 	app.useGlobalPipes(new ValidationPipe());
 	app.enableCors(createCorsOptions());

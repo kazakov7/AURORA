@@ -1,4 +1,10 @@
-import { BadRequestException, Injectable, InternalServerErrorException } from '@nestjs/common';
+import {
+	BadRequestException,
+	ForbiddenException,
+	Injectable,
+	InternalServerErrorException,
+	NotFoundException,
+} from '@nestjs/common';
 import { InjectModel } from '@nestjs/mongoose';
 import { Model, Types } from 'mongoose';
 import { Message, Messages } from '../../libs/dto/message/message';
@@ -7,6 +13,7 @@ import { ChatType } from '../../libs/enums/chat.enum';
 import { Messages as ErrorMessages } from '../../libs/enums/common.enum';
 import { MessageType } from '../../libs/enums/message.enum';
 import { T } from '../../libs/types/common';
+import { shapeIntoMongoObjectId } from '../../libs/config';
 
 @Injectable()
 export class MessageService {
@@ -19,7 +26,7 @@ export class MessageService {
 
 	public async createMessage(memberId: Types.ObjectId, input: MessageInput): Promise<Message> {
 		await this.assertMemberCanMessage(memberId);
-		const chatId = new Types.ObjectId(input.chatId.toString());
+		const chatId: Types.ObjectId = shapeIntoMongoObjectId(input?.chatId);
 		const chat = await this.assertChatAccess(memberId, chatId);
 		const messageContent = input.messageContent?.trim();
 		if (!messageContent || messageContent.length > 1000)
@@ -79,16 +86,22 @@ export class MessageService {
 		input: MessagesCursorInquiry,
 	): Promise<Messages> {
 		await this.assertMemberCanMessage(memberId);
-		const chatId = new Types.ObjectId(input.chatId.toString());
+		const chatId: Types.ObjectId = shapeIntoMongoObjectId(input?.chatId);
 		await this.assertChatAccess(memberId, chatId);
 
 		const chatReadState: any = await this.chatReadModel.findOne({ chatId, memberId }).lean().exec();
 		const createdAt: T = {};
-		if (input.before) createdAt.$lt = input.before;
+		if (input.before && !input.beforeId) createdAt.$lt = input.before;
 		if (chatReadState?.clearedAt) createdAt.$gt = chatReadState.clearedAt;
 
 		const match: T = { chatId };
 		if (Object.keys(createdAt).length) match.createdAt = createdAt;
+		if (input.before && input.beforeId) {
+			match.$or = [
+				{ createdAt: { $lt: input.before } },
+				{ createdAt: input.before, _id: { $lt: shapeIntoMongoObjectId(input.beforeId) } },
+			];
+		}
 
 		const messages = await this.messageModel
 			.find(match)
@@ -96,7 +109,9 @@ export class MessageService {
 			.limit(input.limit)
 			.lean()
 			.exec();
+		// reverse() turns the page oldest-first in place; the cursor is the oldest message, where the next page ends
 		const list = messages.reverse();
+		const oldest = messages.length === input.limit ? list[0] : undefined;
 		const senderIds = [...new Set(list.map((message) => message.senderId.toString()))].map(
 			(member) => new Types.ObjectId(member),
 		);
@@ -112,8 +127,8 @@ export class MessageService {
 				senderData: memberMap.get(message.senderId.toString()),
 			})) as unknown as Message[],
 			metaCounter: [],
-			nextCursor:
-				messages.length === input.limit ? messages[messages.length - 1]?.createdAt : undefined,
+			nextCursor: oldest?.createdAt,
+			nextCursorId: oldest && String(oldest._id),
 		};
 	}
 
@@ -126,19 +141,30 @@ export class MessageService {
 	}
 
 	private async withSenderData(message: T): Promise<Message> {
-		const senderData = await this.memberModel.findById(message.senderId).lean().exec();
+		const senderData = await this.memberModel
+			.findById(message.senderId)
+			.select('-memberEmail -memberPhone -googleSubject -kakaoSubject -telegramSubject')
+			.lean()
+			.exec();
 		return { ...message.toObject(), senderData } as Message;
 	}
 
 	private async assertChatAccess(memberId: Types.ObjectId, chatId: Types.ObjectId): Promise<T> {
 		const chat = await this.chatModel.findById(chatId).exec();
-		if (!chat) throw new InternalServerErrorException(ErrorMessages.CONVERSATION_NOT_FOUND);
-		if (chat.chatType === ChatType.GLOBAL) return chat;
 
-		const isParticipant = [chat.memberOneId, chat.memberTwoId]
-			.filter(Boolean)
-			.some((participantId) => participantId.toString() === memberId.toString());
-		if (!isParticipant) throw new InternalServerErrorException(ErrorMessages.MESSAGE_NOT_ALLOWED);
+		if (!chat) {
+			throw new NotFoundException(ErrorMessages.CONVERSATION_NOT_FOUND);
+		}
+
+		if (chat.chatType === ChatType.GLOBAL) {
+			return chat;
+		}
+
+		const isParticipant = chat.memberOneId?.equals(memberId) || chat.memberTwoId?.equals(memberId);
+
+		if (!isParticipant) {
+			throw new ForbiddenException(ErrorMessages.MESSAGE_NOT_ALLOWED);
+		}
 
 		return chat;
 	}

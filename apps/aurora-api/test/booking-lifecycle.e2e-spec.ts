@@ -18,7 +18,7 @@ import { Types } from 'mongoose';
 import { PaymentService } from '../src/components/payment/payment.service';
 import { BookingCategory, BookingStatus } from '../src/libs/enums/booking.enum';
 import { Messages } from '../src/libs/enums/common.enum';
-import { MemberType } from '../src/libs/enums/member.enum';
+import { MemberStatus, MemberType } from '../src/libs/enums/member.enum';
 import { PaymentStatus } from '../src/libs/enums/payment.enum';
 import { clearDatabase, createTestApp, graphQL, model, seedMember } from './helpers/e2e.helper';
 
@@ -253,6 +253,39 @@ describe('Booking lifecycle (e2e)', () => {
 			(await adminCancel({ _id: hold._id.toString(), cancelReason: 'Again' })).body.errors?.[0]
 				.message,
 		).toBe(Messages.BOOKING_CANNOT_CANCEL);
+	});
+
+	it('tells the host when an admin cancels the booking of a guest who is no longer active', async () => {
+		const host = await seedMember(app, 'blockHost', MemberType.AGENT);
+		const guest = await seedMember(app, 'blockGuest');
+		const admin = await seedMember(app, 'blockAdmin', MemberType.ADMIN);
+		const destination = await seedDestination();
+		const property = await seedProperty(host._id, destination._id);
+		const paid = await paidBooking(
+			guest._id,
+			property,
+			BookingCategory.PROPERTY,
+			Date.now() + 5 * DAY,
+		);
+		await model(app, 'Member')
+			.updateOne({ _id: guest._id }, { memberStatus: MemberStatus.BLOCKED })
+			.exec();
+
+		const cancelled = await graphQL(
+			app,
+			ADMIN_CANCEL,
+			{ input: { _id: paid.booking._id.toString(), cancelReason: 'Fraud' } },
+			admin.accessToken,
+		);
+
+		expect(cancelled.body.errors).toBeUndefined();
+		const hostNotice = await model(app, 'Notification')
+			.findOne({
+				receiverId: new Types.ObjectId(host._id),
+				notificationTitle: 'Reservation cancelled',
+			})
+			.lean();
+		expect(hostNotice?.authorId.toString()).toBe(guest._id);
 	});
 
 	it('keeps a paid booking confirmed when the refund fails', async () => {

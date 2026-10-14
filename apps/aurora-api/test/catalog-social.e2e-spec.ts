@@ -1,4 +1,5 @@
 import { INestApplication } from '@nestjs/common';
+import request from 'supertest';
 import { AgentType, AgentVerificationStatus } from '../src/libs/enums/agent.enum';
 import { DestinationStatus } from '../src/libs/enums/destination';
 import { MemberType } from '../src/libs/enums/member.enum';
@@ -456,5 +457,213 @@ describe('Catalog and social domains (e2e)', () => {
 			{ _id: property._id.toString(), destinationId: destination._id.toString() },
 		]);
 		expect(result.body.data.getTopProperties.metaCounter).toEqual([{ total: 1 }]);
+	});
+
+	it('counts the comments a member writes again from the comments themselves', async () => {
+		const user = await seedMember(app, 'commenter');
+		const other = await seedMember(app, 'othercomment');
+		const admin = await seedMember(app, 'commentadmin', MemberType.ADMIN);
+		const destination = await model(app, 'Destination').create({
+			destinationName: 'Laos',
+			destinationSlug: 'laos',
+			destinationCountry: 'LA',
+			destinationStatus: DestinationStatus.ACTIVE,
+		});
+		const write = async (commentContent: string, token = user.accessToken) =>
+			await graphQL(
+				app,
+				`mutation Comment($input: CommentInput!) { createComment(input: $input) { _id } }`,
+				{
+					input: {
+						commentGroup: 'DESTINATION',
+						commentContent,
+						commentRefId: destination._id.toString(),
+					},
+				},
+				token,
+			);
+		const counter = async () =>
+			(await model(app, 'Member').findById(user._id).lean()).memberComments;
+
+		// A comment written before the counter was kept is picked up by the next recount
+		await model(app, 'Comment').create({
+			commentGroup: 'DESTINATION',
+			commentContent: 'Older',
+			commentRefId: destination._id,
+			memberId: user._id,
+		});
+		expect(await counter()).toBe(0);
+
+		const latest = await write('Latest');
+		await write('Not mine', other.accessToken);
+		expect(await counter()).toBe(2);
+
+		const removed = await graphQL(
+			app,
+			`mutation Remove($id: String!) { removeCommentByAdmin(commentId: $id) { _id } }`,
+			{ id: latest.body.data.createComment._id },
+			admin.accessToken,
+		);
+		expect(removed.body.errors).toBeUndefined();
+		expect(await counter()).toBe(1);
+	});
+
+	it('lists every live comment for admin moderation, filtered by target and plain text', async () => {
+		const user = await seedMember(app, 'moderated');
+		const admin = await seedMember(app, 'moderator', MemberType.ADMIN);
+		const destination = await model(app, 'Destination').create({
+			destinationName: 'Bhutan',
+			destinationSlug: 'bhutan',
+			destinationCountry: 'BT',
+			destinationStatus: DestinationStatus.ACTIVE,
+		});
+		const property = await model(app, 'Property').create({
+			memberId: admin._id,
+			destinationId: destination._id,
+			propertyType: 'HOTEL',
+			propertyStatus: PropertyStatus.ACTIVE,
+			propertyName: 'Moderated Hotel',
+			propertyAddress: 'Thimphu',
+			pricePerNight: 100,
+			currency: 'USD',
+			maxGuests: 2,
+		});
+		const write = async (commentGroup: string, commentRefId: unknown, commentContent: string) =>
+			(
+				await graphQL(
+					app,
+					`mutation Comment($input: CommentInput!) { createComment(input: $input) { _id } }`,
+					{ input: { commentGroup, commentContent, commentRefId: String(commentRefId) } },
+					user.accessToken,
+				)
+			).body.data.createComment._id;
+		const list = async (input: object, token = admin.accessToken) =>
+			await graphQL(
+				app,
+				`query All($input: AllCommentsInquiry!) {
+					getAllCommentsByAdmin(input: $input) {
+						list { _id commentGroup commentContent memberData { memberNick } }
+						metaCounter { total }
+					}
+				}`,
+				{ input: { page: 1, limit: 10, ...input } },
+				token,
+			);
+		await write('DESTINATION', destination._id, 'Quiet valleys (and prayer flags)');
+		const hotelComment = await write('PROPERTY', property._id, 'Sunset view from the room');
+		await write('DESTINATION', destination._id, 'Cold nights');
+
+		const all = (await list({})).body.data.getAllCommentsByAdmin;
+		expect(all.metaCounter).toEqual([{ total: 3 }]);
+		expect(all.list.map((comment: any) => comment.commentContent)).toEqual([
+			'Cold nights',
+			'Sunset view from the room',
+			'Quiet valleys (and prayer flags)',
+		]);
+		expect(all.list[0].memberData.memberNick).toBe('moderated');
+
+		const ids = async (search: object) =>
+			(await list({ search })).body.data.getAllCommentsByAdmin.list.map(
+				(comment: any) => comment._id,
+			);
+		expect(await ids({ commentGroup: 'PROPERTY' })).toEqual([hotelComment]);
+		expect(await ids({ text: 'SUNSET' })).toEqual([hotelComment]);
+		// The text is searched as written, not as a pattern
+		expect(await ids({ text: '(and' })).toHaveLength(1);
+		expect((await list({}, user.accessToken)).body.errors).toBeDefined();
+
+		await graphQL(
+			app,
+			`mutation Remove($id: String!) { removeCommentByAdmin(commentId: $id) { _id } }`,
+			{ id: hotelComment },
+			admin.accessToken,
+		);
+		expect((await list({})).body.data.getAllCommentsByAdmin.metaCounter).toEqual([{ total: 2 }]);
+	});
+
+	it('never trusts an authMember sent in the request body', async () => {
+		const agent = await approvedAgent('rankagent', AgentType.HOTEL);
+		await model(app, 'Member')
+			.updateOne(
+				{ _id: agent._id },
+				{ memberEmail: 'agent@aurora.test', memberPhone: '01011112222' },
+			)
+			.exec();
+		const agentApplication = await model(app, 'Agent').findOne({ memberId: agent._id }).lean();
+		const publication = await model(app, 'RankingPublication').create({
+			isActive: true,
+			publishedAt: new Date(),
+			calculatedAt: new Date(),
+			snapshotCount: 1,
+		});
+		await model(app, 'RankingSnapshot').create({
+			publicationId: publication._id,
+			rankingType: 'TOP_HOTEL_AGENTS',
+			scope: 'GLOBAL',
+			periodDays: 30,
+			calculatedAt: new Date(),
+			entries: [{ entityId: agentApplication._id, score: 1 }],
+		});
+
+		const forged = await request(app.getHttpServer())
+			.post('/graphql')
+			.send({
+				query: `query Top($input: TopAgentsInquiry!) {
+					getTopAgents(input: $input) { list { memberData { memberEmail memberPhone } } }
+				}`,
+				variables: { input: { agentType: 'HOTEL' } },
+				authMember: { _id: agent._id, memberType: MemberType.ADMIN },
+			});
+
+		expect(forged.body.errors).toBeUndefined();
+		expect(forged.body.data.getTopAgents.list).toEqual([
+			{ memberData: { memberEmail: null, memberPhone: null } },
+		]);
+	});
+
+	it('leaves a tour that has started out of the home ranking', async () => {
+		const agent = await approvedAgent('rankedtours', AgentType.TOUR);
+		const destination = await model(app, 'Destination').create({
+			destinationName: 'Nepal',
+			destinationSlug: 'nepal',
+			destinationCountry: 'NP',
+			destinationStatus: DestinationStatus.ACTIVE,
+		});
+		const tour = async (tourName: string, startsInDays: number) =>
+			await model(app, 'Tour').create({
+				memberId: agent._id,
+				destinationId: destination._id,
+				tourStatus: 'ACTIVE',
+				tourName,
+				tourPrice: 100,
+				tourCurrency: 'USD',
+				tourStartDate: new Date(Date.now() + startsInDays * 86_400_000),
+				tourEndDate: new Date(Date.now() + (startsInDays + 3) * 86_400_000),
+				tourCapacity: 10,
+			});
+		const started = await tour('Started Trek', -2);
+		const upcoming = await tour('Upcoming Trek', 2);
+		const publication = await model(app, 'RankingPublication').create({
+			isActive: true,
+			publishedAt: new Date(),
+			calculatedAt: new Date(),
+			snapshotCount: 1,
+		});
+		await model(app, 'RankingSnapshot').create({
+			publicationId: publication._id,
+			rankingType: 'TOP_TOURS',
+			scope: 'GLOBAL',
+			periodDays: 7,
+			calculatedAt: new Date(),
+			entries: [
+				{ entityId: started._id, score: 2 },
+				{ entityId: upcoming._id, score: 1 },
+			],
+		});
+
+		const ranked = await graphQL(app, `query { getTopTours { list { _id } } }`);
+
+		expect(ranked.body.errors).toBeUndefined();
+		expect(ranked.body.data.getTopTours.list).toEqual([{ _id: upcoming._id.toString() }]);
 	});
 });

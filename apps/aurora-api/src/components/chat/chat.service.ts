@@ -1,7 +1,12 @@
-import { BadRequestException, Injectable, InternalServerErrorException } from '@nestjs/common';
+import {
+	BadRequestException,
+	ForbiddenException,
+	Injectable,
+	NotFoundException,
+} from '@nestjs/common';
 import { InjectModel } from '@nestjs/mongoose';
 import { Model, Types } from 'mongoose';
-import { availableChatSorts } from '../../libs/config';
+import { availableChatSorts, escapeRegExp } from '../../libs/config';
 import { Chat, Chats } from '../../libs/dto/chat/chat';
 import { ChatsInquiry } from '../../libs/dto/chat/chat.input';
 import { ChatType } from '../../libs/enums/chat.enum';
@@ -30,7 +35,7 @@ export class ChatService {
 		const targetMember = await this.memberModel
 			.findOne({ _id: memberTwoId, memberStatus: MemberStatus.ACTIVE, deletedAt: null })
 			.exec();
-		if (!targetMember) throw new InternalServerErrorException(Messages.MEMBER_NOT_FOUND);
+		if (!targetMember) throw new NotFoundException(Messages.MEMBER_NOT_FOUND);
 
 		const [firstId, secondId] = [memberOneId.toString(), memberTwoId.toString()].sort();
 		const directKey = `${firstId}:${secondId}`;
@@ -94,7 +99,7 @@ export class ChatService {
 				{ $or: [{ memberOneId: search.memberId }, { memberTwoId: search.memberId }] },
 			];
 		}
-		if (search?.text) match.lastMessage = { $regex: search.text, $options: 'i' };
+		if (search?.text) match.lastMessage = { $regex: escapeRegExp(search.text), $options: 'i' };
 
 		const sort =
 			input.sort && availableChatSorts.includes(input.sort) ? input.sort : 'lastMessageAt';
@@ -222,7 +227,7 @@ export class ChatService {
 		const isParticipant = [chat.memberOneId, chat.memberTwoId]
 			.filter(Boolean)
 			.some((participantId) => participantId!.toString() === memberId.toString());
-		if (!isParticipant) throw new InternalServerErrorException(Messages.MESSAGE_NOT_ALLOWED);
+		if (!isParticipant) throw new ForbiddenException(Messages.MESSAGE_NOT_ALLOWED);
 
 		return chat;
 	}
@@ -235,7 +240,7 @@ export class ChatService {
 		const isParticipant = [chat.memberOneId, chat.memberTwoId]
 			.filter(Boolean)
 			.some((participantId) => participantId!.toString() === memberId.toString());
-		if (!isParticipant) throw new InternalServerErrorException(Messages.MESSAGE_NOT_ALLOWED);
+		if (!isParticipant) throw new ForbiddenException(Messages.MESSAGE_NOT_ALLOWED);
 
 		let currentState: any = await this.chatReadModel.findOne({ chatId, memberId }).lean().exec();
 		const alreadyClearedAt = currentState?.clearedAt ? new Date(currentState.clearedAt) : undefined;
@@ -278,7 +283,7 @@ export class ChatService {
 
 	public async assertChatExists(chatId: Types.ObjectId): Promise<Chat> {
 		const chat = await this.chatModel.findById(chatId).exec();
-		if (!chat) throw new InternalServerErrorException(Messages.CONVERSATION_NOT_FOUND);
+		if (!chat) throw new NotFoundException(Messages.CONVERSATION_NOT_FOUND);
 		return chat;
 	}
 

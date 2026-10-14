@@ -10,6 +10,7 @@ import PropertySchema from '../../schemas/Property.model';
 import TourSchema from '../../schemas/Tour.model';
 import AgentSchema from '../../schemas/Agent.model';
 import DestinationSchema from '../../schemas/Destination.model';
+import CommentSchema from '../../schemas/Comment.model';
 import { ChatModule } from '../chat/chat.module';
 import { BookingModule } from '../booking/booking.module';
 
@@ -21,6 +22,7 @@ import { BookingModule } from '../booking/booking.module';
 		MongooseModule.forFeature([{ name: 'Tour', schema: TourSchema }]),
 		MongooseModule.forFeature([{ name: 'Agent', schema: AgentSchema }]),
 		MongooseModule.forFeature([{ name: 'Destination', schema: DestinationSchema }]),
+		MongooseModule.forFeature([{ name: 'Comment', schema: CommentSchema }]),
 		AuthModule,
 		ViewModule,
 		ChatModule,

@@ -19,4 +19,16 @@ describe('CORS allowlist', () => {
 		);
 		expect(isCorsOriginAllowed('https://anything.example', 'production', '*')).toBe(false);
 	});
+
+	it('reads the allowlist from CORS_ALLOWED_ORIGIN, shared by HTTP and the chat socket', () => {
+		const configured = process.env.CORS_ALLOWED_ORIGIN;
+		process.env.CORS_ALLOWED_ORIGIN = 'https://aurora.example, https://admin.aurora.example';
+		try {
+			expect(isCorsOriginAllowed('https://admin.aurora.example', 'production')).toBe(true);
+			expect(isCorsOriginAllowed('http://localhost:3000', 'production')).toBe(false);
+		} finally {
+			if (configured === undefined) delete process.env.CORS_ALLOWED_ORIGIN;
+			else process.env.CORS_ALLOWED_ORIGIN = configured;
+		}
+	});
 });

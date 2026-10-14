@@ -1,10 +1,16 @@
 import { ObjectId } from 'bson';
 import { BadRequestException } from '@nestjs/common';
 import { Messages } from './enums/common.enum';
+import { ReviewStatus } from './enums/review.enum';
 
 export const HOLD_DURATION_MS = 15 * 60 * 1000;
+/** A hold is free, so one member keeps only this many at once and cannot lock the dates or seats of others **/
+export const MAX_ACTIVE_HOLDS = 3;
 /** A guest cancels a paid booking with a full refund until this long before it starts **/
 export const GUEST_CANCEL_WINDOW_MS = 48 * 60 * 60 * 1000;
+/** Wrong logins a nickname may have in the window; past the limit its sign-in waits for the window to end **/
+export const LOGIN_ATTEMPT_LIMIT = 10;
+export const LOGIN_ATTEMPT_WINDOW_MS = 15 * 60 * 1000;
 export const USD = 'USD';
 export const availableAgentSorts = ['createdAt', 'updatedAt', 'agentType', 'verificationStatus'];
 export const availableMemberSorts = [
@@ -12,11 +18,8 @@ export const availableMemberSorts = [
 	'updatedAt',
 	'lastLoginAt',
 	'memberNick',
-	'memberRank',
-	'memberPoints',
 	'memberFollowers',
 	'memberFollowings',
-	'memberLikes',
 	'memberViews',
 	'memberProperties',
 	'memberTours',
@@ -255,5 +258,47 @@ export const lookupVisitedTour = {
 		localField: 'visitedTour.memberId',
 		foreignField: '_id',
 		as: 'visitedTour.memberData',
+	},
+};
+
+export const lookupPropertyData = {
+	$lookup: {
+		from: 'properties',
+		localField: 'bookingRefId',
+		foreignField: '_id',
+		as: 'propertyData',
+	},
+};
+export const lookupTourData = {
+	$lookup: { from: 'tours', localField: 'bookingRefId', foreignField: '_id', as: 'tourData' },
+};
+/** One pair of dates for every booking: checkIn/checkOut of a stay, the booked dates of a tour **/
+export const addBookingDates = {
+	$addFields: {
+		bookingStartDate: { $ifNull: ['$checkIn', '$priceSnapshot.tourStartDate'] },
+		bookingEndDate: { $ifNull: ['$checkOut', '$priceSnapshot.tourEndDate'] },
+	},
+};
+/** The guest's own rating of the booked hotel or tour: a rating group has the booking category's name **/
+export const lookupRatingData = {
+	$lookup: {
+		from: 'reviews',
+		let: { memberId: '$memberId', refId: '$bookingRefId', group: '$bookingCategory' },
+		pipeline: [
+			{
+				$match: {
+					$expr: {
+						$and: [
+							{ $eq: ['$memberId', '$$memberId'] },
+							{ $eq: ['$reviewRefId', '$$refId'] },
+							{ $eq: ['$reviewGroup', '$$group'] },
+							{ $eq: ['$reviewStatus', ReviewStatus.ACTIVE] },
+						],
+					},
+				},
+			},
+			{ $limit: 1 },
+		],
+		as: 'ratingData',
 	},
 };

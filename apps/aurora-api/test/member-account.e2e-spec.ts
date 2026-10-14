@@ -1,4 +1,6 @@
 import { INestApplication } from '@nestjs/common';
+import { getConnectionToken } from '@nestjs/mongoose';
+import { Connection } from 'mongoose';
 import { AuthService } from '../src/components/auth/auth.service';
 import { MemberService } from '../src/components/member/member.service';
 import { Messages } from '../src/libs/enums/common.enum';
@@ -500,6 +502,32 @@ describe('Member account integrity (e2e)', () => {
 				message: Messages.MEMBER_NOT_FOUND,
 				extensions: { code: 'NOT_FOUND' },
 			});
+		}
+	});
+
+	it('finds a member by nickname through the nickname index, not a scan of every member', async () => {
+		await seedMember(app, 'indexedlogin');
+		const db = app.get<Connection>(getConnectionToken()).db!;
+		await db.command({ profile: 2, slowms: 0 });
+		try {
+			const result = await graphQL(app, login, {
+				input: { memberNick: 'indexedlogin', memberPassword: 'pass1234' },
+			});
+			expect(result.body.errors).toBeUndefined();
+			const lookups = await db
+				.collection('system.profile')
+				.find({ ns: `${db.databaseName}.members`, 'command.filter.memberNick': { $exists: true } })
+				.toArray();
+			expect(lookups.length).toBeGreaterThan(0);
+			expect(lookups.map((entry) => entry.planSummary)).not.toContainEqual(
+				expect.stringMatching(/COLLSCAN/),
+			);
+		} finally {
+			await db.command({ profile: 0 });
+			await db
+				.collection('system.profile')
+				.drop()
+				.catch(() => undefined);
 		}
 	});
 });

@@ -3,7 +3,7 @@ import { AppController } from './app.controller';
 import { AppService } from './app.service';
 import { ConfigModule } from '@nestjs/config';
 import { GraphQLModule } from '@nestjs/graphql';
-import { ApolloDriver } from '@nestjs/apollo';
+import { ApolloDriver, ApolloDriverConfig } from '@nestjs/apollo';
 import { unwrapResolverError } from '@apollo/server/errors';
 import { GraphQLFormattedError } from 'graphql';
 import { AppResolver } from './app.resolver';
@@ -26,28 +26,37 @@ function getSafeErrorMessage(
 	return typeof message === 'string' ? message : formattedError.message;
 }
 
-/** Nest reports a 404 as INTERNAL_SERVER_ERROR and keeps the real status beside it **/
+/** Nest reports a 404 or a 429 as INTERNAL_SERVER_ERROR and keeps the real status beside it **/
 function getErrorCode(formattedError: GraphQLFormattedError): unknown {
 	const { code, status } = formattedError.extensions ?? {};
-	return status === HttpStatus.NOT_FOUND ? 'NOT_FOUND' : code;
+	if (status === HttpStatus.NOT_FOUND) return 'NOT_FOUND';
+	if (status === HttpStatus.TOO_MANY_REQUESTS) return 'TOO_MANY_REQUESTS';
+	return code;
 }
 
 @Module({
 	imports: [
 		ConfigModule.forRoot(),
-		GraphQLModule.forRoot({
+		/** Read at startup, after .env is loaded: production shows neither the schema nor the playground **/
+		GraphQLModule.forRootAsync<ApolloDriverConfig>({
 			driver: ApolloDriver,
-			playground: true,
-			autoSchemaFile: true,
-			formatError: (formattedError: GraphQLFormattedError, originalError: unknown) => {
-				const graphQlFormattedError = {
-					extensions: {
-						code: getErrorCode(formattedError),
+			useFactory: () => {
+				const isProduction = process.env.NODE_ENV === 'production';
+				return {
+					playground: !isProduction,
+					introspection: !isProduction,
+					autoSchemaFile: true,
+					formatError: (formattedError: GraphQLFormattedError, originalError: unknown) => {
+						const graphQlFormattedError = {
+							extensions: {
+								code: getErrorCode(formattedError),
+							},
+							message: getSafeErrorMessage(formattedError, originalError),
+						};
+						console.log('graphQl server error', graphQlFormattedError);
+						return graphQlFormattedError;
 					},
-					message: getSafeErrorMessage(formattedError, originalError),
 				};
-				console.log('graphQl server error', graphQlFormattedError);
-				return graphQlFormattedError;
 			},
 		}),
 		ComponentsModule,

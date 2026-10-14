@@ -143,7 +143,7 @@ export class TourService {
 		};
 		const existingTour = await this.tourModel.findOne(search).lean<Tour>().exec();
 
-		if (!existingTour) throw new InternalServerErrorException(Messages.UPDATE_FAILED);
+		if (!existingTour) throw new BadRequestException(Messages.UPDATE_FAILED);
 
 		const isRescheduled =
 			this.isDateChanged(input.tourStartDate, existingTour.tourStartDate) ||
@@ -243,10 +243,17 @@ export class TourService {
 		if (tourDepartureCity) match.tourDepartureCity = tourDepartureCity;
 		if (tourDestinationCity) match.tourDestinationCity = tourDestinationCity;
 
+		// A tour that has already started takes no new guests, so the catalog lists only the ones ahead
+		const today = new Date();
+		today.setHours(0, 0, 0, 0);
+		match.tourStartDate = { $gte: today };
 		if (tourStartDateRange) {
 			if (tourStartDateRange.end < tourStartDateRange.start)
 				throw new BadRequestException(Messages.INVALID_DATA);
-			match.tourStartDate = { $gte: tourStartDateRange.start, $lte: tourStartDateRange.end };
+			match.tourStartDate = {
+				$gte: tourStartDateRange.start > today ? tourStartDateRange.start : today,
+				$lte: tourStartDateRange.end,
+			};
 		}
 
 		if (tourPriceRange) {
@@ -380,7 +387,7 @@ export class TourService {
 	public async removeTourByAdmin(tourId: Types.ObjectId): Promise<Tour> {
 		const search: T = { _id: tourId, tourStatus: TourStatus.INACTIVE, deletedAt: null };
 		const targetTour = await this.tourModel.findOne(search).lean<Tour>().exec();
-		if (!targetTour) throw new InternalServerErrorException(Messages.REMOVE_FAILED);
+		if (!targetTour) throw new BadRequestException(Messages.REMOVE_FAILED);
 
 		// Guests whose tour is still ahead keep their seats, so such a tour cannot be removed yet.
 		// An INACTIVE tour takes no new bookings, so the seats read here cannot grow before the update
@@ -392,17 +399,18 @@ export class TourService {
 			.findOneAndUpdate(search, { deletedAt: new Date() }, { new: true })
 			.exec();
 
-		if (!result) throw new InternalServerErrorException(Messages.REMOVE_FAILED);
+		if (!result) throw new BadRequestException(Messages.REMOVE_FAILED);
 		return result as unknown as Tour;
 	}
 
-	/** A tour goes live only in an active destination and under an owner whose account is active **/
+	/** A tour goes live only in an active destination and under an active owner who is still an approved TOUR agent **/
 	private async assertCanActivate(tour: Tour): Promise<void> {
 		await this.destinationService.getActiveDestination(tour.destinationId);
 		const owner = await this.memberService.getMember(null, tour.memberId, false);
 		if (owner.memberStatus !== MemberStatus.ACTIVE) {
 			throw new BadRequestException(Messages.MEMBER_BLOCKED);
 		}
+		await this.agentService.assertApprovedAgent(tour.memberId, AgentType.TOUR);
 	}
 
 	/** memberTours and destinationTours count ACTIVE tours, so they move when one enters or leaves ACTIVE **/

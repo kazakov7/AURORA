@@ -43,5 +43,10 @@ CommentSchema.index(
 	{ name: 'comments_target_idx' },
 );
 CommentSchema.index({ memberId: 1, createdAt: 1 }, { name: 'comments_author_idx' });
+// Admin moderation lists live comments newest first
+CommentSchema.index(
+	{ commentStatus: 1, createdAt: -1, _id: -1 },
+	{ name: 'comments_moderation_idx' },
+);
 
 export default CommentSchema;

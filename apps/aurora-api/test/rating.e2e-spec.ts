@@ -155,4 +155,103 @@ describe('One-time ratings (e2e)', () => {
 			expect(stored[countField]).toBe(1);
 		},
 	);
+
+	it('does not let a host rate their own hotel or tour, even with a completed stay', async () => {
+		const owner = await seedMember(app, 'selfrater');
+		const destination = await model(app, 'Destination').create({
+			destinationName: 'Self Country',
+			destinationSlug: 'self-country',
+			destinationCountry: 'SC',
+			destinationStatus: 'ACTIVE',
+		});
+		const property = await model(app, 'Property').create({
+			memberId: owner._id,
+			destinationId: destination._id,
+			propertyType: 'HOTEL',
+			propertyStatus: 'ACTIVE',
+			propertyName: 'Own Hotel',
+			propertyAddress: 'Seoul',
+			pricePerNight: 100,
+			currency: 'USD',
+			maxGuests: 2,
+		});
+		const tour = await model(app, 'Tour').create({
+			memberId: owner._id,
+			destinationId: destination._id,
+			tourName: 'Own Tour',
+			tourStatus: 'ACTIVE',
+			tourPrice: 100,
+			tourCurrency: 'USD',
+			tourStartDate: new Date(Date.now() + 86_400_000),
+			tourEndDate: new Date(Date.now() + 172_800_000),
+			tourCapacity: 10,
+		});
+
+		for (const [group, target] of [
+			['PROPERTY', property],
+			['TOUR', tour],
+		] as const) {
+			await completedStay(owner._id, group, target._id);
+			const result = await graphQL(
+				app,
+				`mutation SubmitRating($input: RatingInput!) { submitRating(input: $input) { _id } }`,
+				{ input: { reviewGroup: group, reviewRefId: target._id.toString(), reviewRating: 5 } },
+				owner.accessToken,
+			);
+			expect(result.body.errors?.[0].message).toBe(Messages.REVIEW_NOT_ALLOWED);
+		}
+		expect(await model(app, 'Review').countDocuments({})).toBe(0);
+	});
+
+	it('shows the guest their own rating on the completed booking', async () => {
+		const guest = await seedMember(app, 'ratedguest');
+		const other = await seedMember(app, 'otherguest');
+		const owner = await seedMember(app, 'ratedowner');
+		const destination = await model(app, 'Destination').create({
+			destinationName: 'Booking Rating Country',
+			destinationSlug: 'booking-rating-country',
+			destinationCountry: 'BR',
+			destinationStatus: 'ACTIVE',
+		});
+		const property = await model(app, 'Property').create({
+			memberId: owner._id,
+			destinationId: destination._id,
+			propertyType: 'HOTEL',
+			propertyStatus: 'ACTIVE',
+			propertyName: 'Rated Stay Hotel',
+			propertyAddress: 'Jeju',
+			pricePerNight: 100000,
+			currency: 'USD',
+			maxGuests: 2,
+		});
+		await completedStay(guest._id, 'PROPERTY', property._id);
+		await completedStay(other._id, 'PROPERTY', property._id);
+		const rate = async (token: string, reviewRating: number) => {
+			const result = await graphQL(
+				app,
+				`mutation SubmitRating($input: RatingInput!) { submitRating(input: $input) { _id } }`,
+				{ input: { reviewGroup: 'PROPERTY', reviewRefId: property._id.toString(), reviewRating } },
+				token,
+			);
+			expect(result.body.errors).toBeUndefined();
+		};
+		const ratingsOnMyBookings = async () =>
+			(
+				await graphQL(
+					app,
+					`query Mine($input: BookingsInquiry!) {
+						getMyBookings(input: $input) { list { ratingData { reviewRating } } }
+					}`,
+					{ input: { page: 1, limit: 10 } },
+					guest.accessToken,
+				)
+			).body.data.getMyBookings.list.map((booking: any) => booking.ratingData);
+
+		// Another guest's rating of the same hotel is not the guest's own
+		await rate(other.accessToken, 2);
+		expect(await ratingsOnMyBookings()).toEqual([null]);
+
+		await rate(guest.accessToken, 5);
+		expect(await ratingsOnMyBookings()).toEqual([{ reviewRating: 5 }]);
+	});
 });

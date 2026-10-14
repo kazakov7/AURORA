@@ -21,7 +21,7 @@ const isLocalDevelopmentOrigin = (origin: string): boolean => {
 export const isCorsOriginAllowed = (
 	origin: string | undefined,
 	nodeEnv = process.env.NODE_ENV,
-	allowlist = process.env.CORS_ALLOWED_ORIGINS,
+	allowlist = process.env.CORS_ALLOWED_ORIGIN,
 ): boolean => {
 	if (!origin) return true;
 	if (configuredOrigins(allowlist).has(origin)) return true;

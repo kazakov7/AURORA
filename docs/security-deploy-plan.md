@@ -26,11 +26,24 @@ Hech qachon chatga, logga yoki shu faylga yozilmaydigan narsalar: `SECRET_TOKEN`
 
 1. **Live API qaysi DB'ga yozadi?** Kod (`apps/aurora-api/src/database/database.module.ts`): `NODE_ENV=production` bo'lsa `MONGO_PROD` (`AURORA`), aks holda `MONGO_DEV` (`AURORA_DEV`).
    Oldingi tekshiruvda live'da introspection ochiq edi, ya'ni `NODE_ENV` production emas. Demak live hozir `AURORA_DEV`ga yozayotgan bo'lishi mumkin. Bu tasdiqlanmagan gipoteza.
-   - Railway → Variables: `NODE_ENV` qiymati va `MONGO_PROD` / `MONGO_DEV` qaysi DB nomiga ishora qilishi. Qiymatlarni hech kimga yubormang, faqat DB nomini ko'ring.
+   - Serverda (SSH, backend papkasida) faqat kalit nomlari va DB nomlarini ko'ring. Qiymatlarni hech kimga yubormang:
+     ```bash
+     grep -o '^[A-Z_]*=' .env                                                     # qaysi kalitlar bor (qiymatsiz)
+     grep -E '^MONGO_(PROD|DEV)=' .env | sed -E 's#=.*/([^/?]+)(\?.*)?$#: \1#'    # faqat DB nomlari
+     pm2 ls && pm2 env <id> | grep '^NODE_ENV'                                    # ishlayotgan jarayonning NODE_ENV qiymati
+     pm2 show <id>                                                                # qaysi buyruq/skript bilan ishga tushirilgan
+     ```
+     `npm run start:prod` `NODE_ENV=production`ni o'zi qo'yadi. Live jarayon boshqa buyruq bilan ishga tushirilgan bo'lsa, u `MONGO_DEV`dan foydalanadi.
    - Agar live = `AURORA_DEV` bo'lsa, `NODE_ENV=production` qo'yish live'ni `AURORA`ga o'tkazadi (eskiroq ma'lumot, yangi foydalanuvchilar "yo'qoladi"). Bitta variantni tanlang:
      (a) `MONGO_PROD`ni hozirgi live DB'ga yo'naltirish;
      (b) avval `AURORA_DEV` → `AURORA` ko'chirish (backupdan keyin), keyin almashtirish.
-2. **`SECRET_TOKEN`** Railway'da bor va kuchli (kamida 32 tasodifiy bayt). Yangi kod usiz ishga tushmaydi (ataylab shunday qilingan).
+2. **`SECRET_TOKEN`** serverdagi `.env`da (yoki PM2 env'da) bor va kuchli (kamida 32 tasodifiy bayt). Yangi kod usiz ishga tushmaydi (ataylab shunday qilingan).
+   **A1 hozir live'da bormi?** O'z tokeningiz bilan, hech qayerga yubormasdan, lokal kompyuterda tekshiring. Tokenni chatga yozmang:
+   ```bash
+   read -s TOKEN   # production saytdagi o'z accessToken'ingiz: DevTools → Application → Local Storage → accessToken
+   TOKEN="$TOKEN" node -e "const [h,p,s]=process.env.TOKEN.split('.');const c=require('crypto').createHmac('sha256','undefined').update(h+'.'+p).digest('base64url');console.log(c===s?'KRITIK: token \"undefined\" kaliti bilan imzolangan':'token \"undefined\" bilan imzolanmagan')"; unset TOKEN
+   ```
+   `KRITIK` chiqsa, har kim istalgan foydalanuvchi, jumladan admin nomidan token yasay oladi. Unda A1 deployi birinchi navbatda qilinadi va admin harakatlari ko'rib chiqiladi. Sabab: `.env`ni `ConfigModule` modullar import qilingandan keyin o'qiydi, eski kod esa kalitni import paytida o'qigan.
 3. **Node versiyasi:** backend lokal Node 20.20.2 da sinovdan o'tgan. Frontend Next 16 uchun build va runtime Node ≥ 20.9 bo'lishi shart.
 4. **Stripe:** live'da qaysi kalit ishlatilishi (live/test) va `STRIPE_WEBHOOK_SECRET` live endpoint'ga mosligi.
 5. **CORS:** `CORS_ALLOWED_ORIGIN` production frontend domenini o'z ichiga olishi.
@@ -46,7 +59,7 @@ Hech qachon chatga, logga yoki shu faylga yozilmaydigan narsalar: `SECRET_TOKEN`
    mongorestore --uri "$LIVE_URI" --nsFrom '<LIVE_DB>.*' --nsTo 'RESTORE_CHECK.*' ./backup-<sana>
    ```
    Tekshiruvdan keyin `RESTORE_CHECK`ni o'chiring.
-3. Railway: hozirgi deployment ID'sini yozib qo'ying (rollback uchun). Frontend: hozirgi production build'ni belgilang.
+3. Server (rollback uchun): hozirgi commit'ni yozib qo'ying (`git rev-parse HEAD`), build va env nusxasini saqlang: `cp -r dist dist.bak-$(date +%F)`, `cp .env .env.bak-$(date +%F) && chmod 600 .env.bak-*`. Frontend build'ini ham xuddi shunday saqlang.
 4. Eski env qiymatlarini (ayniqsa eski `SECRET_TOKEN`ni) parol menejerida saqlang. Faqat rollback uchun kerak.
 
 ## 3. Indekslar (live yozuvlarni to'xtatmaydi)
@@ -61,7 +74,7 @@ Tekshirish: `db.<kolleksiya>.getIndexes()`. Bekor qilish: `db.<kolleksiya>.dropI
 
 ## 4. JWT rotatsiya
 
-1. Yangi secret: `openssl rand -base64 48`. Natijani faqat Railway Variables'ga kiriting.
+1. Yangi secret: `openssl rand -base64 48`. Natijani faqat serverdagi `.env`ga (yoki PM2 env'ga) yozing: chatga, repo'ga yoki logga emas.
 2. Ta'siri: barcha mavjud tokenlar bekor bo'ladi va hamma qayta login qiladi. Frontend `UNAUTHENTICATED` kelganda sessiyani tozalab "session expired" ko'rsatadi. Bu oqim upload gate'da ham saqlangan.
 3. Live'dagi eski kodda A1 xatosi bo'lsa, tokenlar `"undefined"` kaliti bilan imzolangan. Ya'ni har kim istalgan foydalanuvchi uchun token yasay olgan. Shuning uchun A1 deploy va rotatsiya **bir oynada** qilinadi.
 4. Tekshiruv: rotatsiyadan oldingi token bilan so'rov `UNAUTHENTICATED` qaytaradi (6-bo'lim).
@@ -70,8 +83,8 @@ Tekshirish: `db.<kolleksiya>.getIndexes()`. Bekor qilish: `db.<kolleksiya>.dropI
 
 1. Qisqa texnik tanaffusni e'lon qiling (hamma qayta login qiladi).
 2. Backup va uning tekshiruvi (2-bo'lim).
-3. Railway Variables: 1-bo'limdagi DB qarori, `NODE_ENV=production`, yangi `SECRET_TOKEN`.
-4. Backend deploy (commitlardan keyin). Logda kutiladi: `API DB: <kutilgan DB nomi>` va `Nest application successfully started`. DB nomi kutilgandek bo'lmasa, darhol rollback.
+3. Serverdagi `.env`: 1-bo'limdagi DB qarori va yangi `SECRET_TOKEN`. Jarayon `NODE_ENV=production` bilan ishga tushadi (`npm run start:prod` yoki PM2 env'ida).
+4. Backend deploy (commitlardan keyin): kodni yangilash, `npm ci && npm run build`, keyin `pm2 restart <app> --update-env`. Logda kutiladi: `API DB: <kutilgan DB nomi>` va `Nest application successfully started` (`pm2 logs <app>`). DB nomi kutilgandek bo'lmasa, darhol rollback.
 5. Backend smoke test (6-bo'lim).
 6. Frontend `master` deploy. Next 16 branch'ni alohida oynada, merge va QA'dan keyin deploy qiling.
 7. Frontend smoke test.
@@ -108,7 +121,7 @@ Qo'lda tekshiriladiganlar:
 
 Qachon: API ishga tushmasa, logda noto'g'ri DB nomi chiqsa, 5xx keskin ko'paysa, login umuman ishlamasa.
 
-1. Railway'da oldingi deploymentni qayta deploy qiling.
+1. Oldingi build'ga qayting: `rm -rf dist && mv dist.bak-<sana> dist` (yoki oldingi commit'ni checkout qilib build qiling), `.env`ni `.env.bak-<sana>`dan tiklang, keyin `pm2 restart <app> --update-env`.
 2. Env'ni avvalgi holatiga qaytaring (DB qarori, `NODE_ENV`). Eski `SECRET_TOKEN` faqat eski kod bilan kerak.
 3. Eski kodga qaytish A1 zaifligini ham qaytaradi. Rollback vaqtinchalik bo'lsin va sababi tuzatilgach qayta deploy qilinsin.
 4. Indekslarni olib tashlash shart emas, lekin kerak bo'lsa `dropIndex` bilan qilinadi. Bu deployda ma'lumot skriptlari ishlamaydi, shuning uchun DB restore faqat kutilmagan holatda (2-bo'limdagi zaxiradan).

@@ -1,4 +1,4 @@
-import { BadRequestException, InternalServerErrorException } from '@nestjs/common';
+import { BadRequestException, ForbiddenException } from '@nestjs/common';
 import { Types } from 'mongoose';
 import { ChatService } from './chat.service';
 import { ChatType } from '../../libs/enums/chat.enum';
@@ -58,9 +58,7 @@ describe('ChatService.deleteMyChat', () => {
 			}),
 		);
 
-		await expect(service.deleteMyChat(memberId, chatId)).rejects.toBeInstanceOf(
-			InternalServerErrorException,
-		);
+		await expect(service.deleteMyChat(memberId, chatId)).rejects.toBeInstanceOf(ForbiddenException);
 	});
 
 	it('is idempotent when the current participant has no newer message', async () => {

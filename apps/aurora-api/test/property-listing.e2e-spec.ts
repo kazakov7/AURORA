@@ -447,7 +447,9 @@ describe('Property listing (e2e)', () => {
 			propertyStatus: 'ACTIVE',
 			propertyCity: 'Osaka',
 		});
-		expect((await edit(inactive)).body.errors?.[0].message).toBe(Messages.UPDATE_FAILED);
+		const refused = (await edit(inactive)).body.errors?.[0];
+		expect(refused.message).toBe(Messages.UPDATE_FAILED);
+		expect(refused.extensions.code).toBe('BAD_REQUEST');
 	});
 
 	it('shows the owner every status and opens a hotel outside ACTIVE only for its owner and admins', async () => {
@@ -494,7 +496,8 @@ describe('Property listing (e2e)', () => {
 				if (isActive) expect(result.body.errors).toBeUndefined();
 				else expect(result.body.errors?.[0].extensions.code).toBe('NOT_FOUND');
 			}
-			for (const token of [agent.accessToken, admin.accessToken]) {
+			// The owner opens the hotel twice
+			for (const token of [agent.accessToken, admin.accessToken, agent.accessToken]) {
 				const result = await graphQL(app, DETAIL, { id }, token);
 				expect(result.body.errors).toBeUndefined();
 				expect(result.body.data.getProperty._id).toBe(id);
@@ -506,7 +509,7 @@ describe('Property listing (e2e)', () => {
 		}
 	});
 
-	it('activates a hotel only in an active destination and under an active owner', async () => {
+	it('activates a hotel only in an active destination and under an active, approved owner', async () => {
 		const agent = await hotelAgent('ruleagent');
 		const admin = await seedMember(app, 'ruleadmin', MemberType.ADMIN);
 		const destination = await activeDestination();
@@ -548,6 +551,17 @@ describe('Property listing (e2e)', () => {
 		await model(app, 'Member').updateOne(
 			{ _id: agent._id },
 			{ memberStatus: MemberStatus.ACTIVE, deletedAt: null },
+		);
+		// A revoked agent no longer runs hotels, so its hotel cannot go back into the catalog
+		await model(app, 'Agent').updateOne(
+			{ memberId: agent._id },
+			{ verificationStatus: AgentVerificationStatus.REVOKED },
+		);
+		expect((await activate()).body.errors?.[0].message).toBe(Messages.AGENT_NOT_VERIFIED);
+		expect((await model(app, 'Member').findById(agent._id).lean()).memberProperties).toBe(0);
+		await model(app, 'Agent').updateOne(
+			{ memberId: agent._id },
+			{ verificationStatus: AgentVerificationStatus.APPROVED },
 		);
 		const activated = await activate();
 		expect(activated.body.errors).toBeUndefined();

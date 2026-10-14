@@ -1,4 +1,5 @@
 import { INestApplication } from '@nestjs/common';
+import { Types } from 'mongoose';
 import { MemberStatus, MemberType } from '../src/libs/enums/member.enum';
 import { clearDatabase, createTestApp, graphQL, model, seedMember } from './helpers/e2e.helper';
 
@@ -114,6 +115,103 @@ describe('Pagination security (e2e)', () => {
 			);
 			expect(result.body.errors).toBeDefined();
 			expect(result.body.errors[0].extensions.code).toBe('BAD_REQUEST');
+		}
+	});
+
+	it('answers client mistakes with a client error, not a server error', async () => {
+		const member = await seedMember(app, 'mistaken');
+		const peerOne = await seedMember(app, 'peerone');
+		const peerTwo = await seedMember(app, 'peertwo');
+		const MESSAGES = `query M($input: MessagesCursorInquiry!) { getMessages(input: $input) { list { _id } } }`;
+		const codeOf = async (query: string, variables: object) =>
+			(await graphQL(app, query, variables, member.accessToken)).body.errors?.[0].extensions.code;
+		const direct = await graphQL(
+			app,
+			`mutation D($id: String!) { getOrCreateDirectChat(memberTwoId: $id) { _id } }`,
+			{ id: peerTwo._id },
+			peerOne.accessToken,
+		);
+
+		expect(
+			await codeOf(
+				`query Top($input: RankingInquiry) { getTopProperties(input: $input) { list { _id } } }`,
+				{ input: { destinationId: 'not-an-id' } },
+			),
+		).toBe('BAD_REQUEST');
+		expect(await codeOf(MESSAGES, { input: { chatId: 'not-an-id', limit: 10 } })).toBe(
+			'BAD_REQUEST',
+		);
+		expect(
+			await codeOf(`mutation F($id: String!) { subscribe(input: $id) { _id } }`, {
+				id: member._id,
+			}),
+		).toBe('BAD_REQUEST');
+		expect(
+			await codeOf(MESSAGES, {
+				input: { chatId: direct.body.data.getOrCreateDirectChat._id, limit: 10 },
+			}),
+		).toBe('FORBIDDEN');
+	});
+
+	it('answers an id that does not exist with a client error, not a server error', async () => {
+		const member = await seedMember(app, 'missingids');
+		const admin = await seedMember(app, 'missingadmin', MemberType.ADMIN);
+		const id = new Types.ObjectId().toString();
+		const calls: [string, object, string][] = [
+			['mutation { getOrCreateDirectChat(memberTwoId: "ID") { _id } }', {}, member.accessToken],
+			['mutation { markChatAsRead(chatId: "ID") { _id } }', {}, member.accessToken],
+			['mutation { deleteMyChat(chatId: "ID") }', {}, member.accessToken],
+			[
+				'mutation { markNotificationAsRead(input: { notificationId: "ID" }) { _id } }',
+				{},
+				member.accessToken,
+			],
+			[
+				'mutation { updateComment(input: { _id: "ID", commentContent: "x" }) { _id } }',
+				{},
+				member.accessToken,
+			],
+			['mutation { updateBoardArticle(input: { _id: "ID" }) { _id } }', {}, member.accessToken],
+			[
+				'mutation { updateDestinationReview(input: { _id: "ID", reviewRating: 3 }) { _id } }',
+				{},
+				member.accessToken,
+			],
+			['mutation { removeDestinationReview(reviewId: "ID") { _id } }', {}, member.accessToken],
+			[
+				'mutation { removeDestinationReviewByAdmin(reviewId: "ID") { _id } }',
+				{},
+				admin.accessToken,
+			],
+			['mutation { removeCommentByAdmin(commentId: "ID") { _id } }', {}, admin.accessToken],
+			[
+				'mutation { updateBoardArticleByAdmin(input: { _id: "ID" }) { _id } }',
+				{},
+				admin.accessToken,
+			],
+			['mutation { removeBoardArticleByAdmin(articleId: "ID") { _id } }', {}, admin.accessToken],
+			['mutation { removeDestinationByAdmin(destinationId: "ID") }', {}, admin.accessToken],
+			['mutation { removePropertyByAdmin(propertyId: "ID") { _id } }', {}, admin.accessToken],
+			['mutation { removeTourByAdmin(tourId: "ID") { _id } }', {}, admin.accessToken],
+			[
+				'mutation { updateNoticeByAdmin(input: { _id: "ID", noticeTitle: "x" }) { _id } }',
+				{},
+				admin.accessToken,
+			],
+			['mutation { removeNoticeByAdmin(noticeId: "ID") }', {}, admin.accessToken],
+			[
+				'mutation { updateSupportTicketByAdmin(input: { _id: "ID", ticketReply: "x" }) { _id } }',
+				{},
+				admin.accessToken,
+			],
+		];
+
+		for (const [query, variables, token] of calls) {
+			const result = await graphQL(app, query.replace('ID', id), variables, token);
+			expect([query, result.body.errors?.[0].extensions.code]).toEqual([
+				query,
+				expect.stringMatching(/^(NOT_FOUND|BAD_REQUEST)$/),
+			]);
 		}
 	});
 });

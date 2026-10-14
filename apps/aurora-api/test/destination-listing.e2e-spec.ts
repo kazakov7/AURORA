@@ -424,4 +424,60 @@ describe('Destination listing (e2e)', () => {
 			1,
 		);
 	});
+
+	it('lists city reviews for admin moderation, removed ones too', async () => {
+		const admin = await seedMember(app, 'reviewadmin', MemberType.ADMIN);
+		const first = await seedMember(app, 'firstreviewer');
+		const second = await seedMember(app, 'secondreviewer');
+		const busan = await seedCity('Busan');
+		const review = async (token: string, reviewContent: string) =>
+			(
+				await graphQL(
+					app,
+					`mutation Review($input: DestinationReviewInput!) { createDestinationReview(input: $input) { _id } }`,
+					{ input: { destinationId: busan._id.toString(), reviewRating: 4, reviewContent } },
+					token,
+				)
+			).body.data.createDestinationReview._id;
+		const list = async (search: object, token = admin.accessToken) =>
+			await graphQL(
+				app,
+				`query All($input: AllDestinationReviewsInquiry!) {
+					getAllDestinationReviewsByAdmin(input: $input) {
+						list { _id reviewRefId reviewContent reviewStatus memberData { memberNick } }
+						metaCounter { total }
+					}
+				}`,
+				{ input: { page: 1, limit: 10, search } },
+				token,
+			);
+		const ids = async (search: object) =>
+			(await list(search)).body.data.getAllDestinationReviewsByAdmin.list.map(
+				(item: any) => item._id,
+			);
+		const harbour = await review(first.accessToken, 'Lovely harbour at night');
+		const crowded = await review(second.accessToken, 'Too crowded in August');
+
+		const all = (await list({})).body.data.getAllDestinationReviewsByAdmin;
+		expect(all.metaCounter).toEqual([{ total: 2 }]);
+		expect(all.list[1]).toEqual(
+			expect.objectContaining({
+				_id: harbour,
+				reviewRefId: busan._id.toString(),
+				memberData: { memberNick: 'firstreviewer' },
+			}),
+		);
+		expect(await ids({ text: 'HARBOUR' })).toEqual([harbour]);
+
+		const removed = await graphQL(
+			app,
+			`mutation Remove($id: String!) { removeDestinationReviewByAdmin(reviewId: $id) { _id } }`,
+			{ id: harbour },
+			admin.accessToken,
+		);
+		expect(removed.body.errors).toBeUndefined();
+		expect(await ids({ reviewStatus: 'ACTIVE' })).toEqual([crowded]);
+		expect(await ids({ reviewStatus: 'DELETED' })).toEqual([harbour]);
+		expect((await list({}, first.accessToken)).body.errors).toBeDefined();
+	});
 });

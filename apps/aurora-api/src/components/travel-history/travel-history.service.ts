@@ -18,7 +18,14 @@ export class TravelHistoryService implements OnModuleInit, OnModuleDestroy {
 	) {}
 
 	public onModuleInit(): void {
-		this.completionTimer = setInterval(() => void this.completeExpiredBookings(), 60 * 1000);
+		// A failed sweep is retried on the next tick; an unhandled rejection would stop the whole server
+		this.completionTimer = setInterval(
+			() =>
+				void this.completeExpiredBookings().catch((error) =>
+					console.error('Booking completion failed:', error),
+				),
+			60 * 1000,
+		);
 	}
 
 	public onModuleDestroy(): void {

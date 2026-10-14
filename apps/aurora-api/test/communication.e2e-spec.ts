@@ -174,6 +174,64 @@ describe('Notice, Notification, Chat and Socket.IO (e2e)', () => {
 		expect(allRead.body.data.markAllNotificationsAsRead).toBe(1);
 	});
 
+	it('shows the admin reply in My Requests and marks both support notifications as SUPPORT', async () => {
+		const member = await seedMember(app, 'supportguest');
+		const admin = await seedMember(app, 'supportadmin', MemberType.ADMIN);
+		const created = await graphQL(
+			app,
+			`mutation Create($input: SupportTicketInput!) { createSupportTicket(input: $input) { _id } }`,
+			{
+				input: {
+					ticketCategory: 'BOOKING',
+					ticketName: 'Support Guest',
+					ticketEmail: 'guest@example.com',
+					ticketSubject: 'Wrong nights',
+					ticketMessage: 'My stay shows the wrong nights.',
+				},
+			},
+			member.accessToken,
+		);
+		const ticketId = created.body.data.createSupportTicket._id;
+		const reply = await graphQL(
+			app,
+			`mutation Reply($input: SupportTicketUpdate!) { updateSupportTicketByAdmin(input: $input) { _id } }`,
+			{ input: { _id: ticketId, ticketReply: 'Fixed, please check again.' } },
+			admin.accessToken,
+		);
+		expect(reply.body.errors).toBeUndefined();
+
+		const mine = await graphQL(
+			app,
+			`query Mine($input: SupportTicketsInquiry!) {
+				getMySupportTickets(input: $input) { list { _id ticketStatus ticketReply repliedAt } }
+			}`,
+			{ input: { page: 1, limit: 10 } },
+			member.accessToken,
+		);
+		expect(mine.body.data.getMySupportTickets.list).toEqual([
+			{
+				_id: ticketId,
+				ticketStatus: 'RESOLVED',
+				ticketReply: 'Fixed, please check again.',
+				repliedAt: expect.any(String),
+			},
+		]);
+		const notifications = await model(app, 'Notification')
+			.find({ notificationRefId: new Types.ObjectId(ticketId) })
+			.sort({ createdAt: 1 })
+			.lean();
+		expect(
+			notifications.map((item: any) => [
+				item.receiverId.toString(),
+				item.notificationType,
+				item.notificationGroup,
+			]),
+		).toEqual([
+			[admin._id, NotificationType.SUPPORT, NotificationGroup.SUPPORT],
+			[member._id, NotificationType.SUPPORT, NotificationGroup.SUPPORT],
+		]);
+	});
+
 	it('uses the authenticated chat socket for notification:new', async () => {
 		const receiver = await seedMember(app, 'socketnotify');
 		const socket = await connect(receiver.accessToken);
@@ -316,6 +374,110 @@ describe('Notice, Notification, Chat and Socket.IO (e2e)', () => {
 		);
 		expect(history.body.errors).toBeUndefined();
 		expect(history.body.data.getMessages.list).toHaveLength(1);
+	});
+
+	it('keeps the sender contact details and social ids out of socket messages', async () => {
+		const sender = await seedMember(app, 'privsender');
+		const receiver = await seedMember(app, 'privrecv');
+		await model(app, 'Member').collection.updateOne(
+			{ _id: new Types.ObjectId(sender._id) },
+			{
+				$set: {
+					memberEmail: 'sender@aurora.test',
+					memberPhone: '01055556666',
+					googleSubject: 'google-subject',
+				},
+			},
+		);
+		const direct = await graphQL(
+			app,
+			`mutation Direct($id: String!) { getOrCreateDirectChat(memberTwoId: $id) { _id } }`,
+			{ id: receiver._id },
+			sender.accessToken,
+		);
+		const chatId = direct.body.data.getOrCreateDirectChat._id;
+		const senderSocket = await connect(sender.accessToken);
+		const receiverSocket = await connect(receiver.accessToken);
+		const delivered = new Promise<any>((resolve, reject) => {
+			receiverSocket.once('message:new', resolve);
+			setTimeout(() => reject(new Error('message:new timeout')), 5000);
+		});
+
+		const sent: any = await emitAck(senderSocket, 'message:send', {
+			chatId,
+			messageContent: 'Hello',
+		});
+
+		expect(sent.ok).toBe(true);
+		const { senderData } = await delivered;
+		expect(senderData.memberNick).toBe('privsender');
+		for (const field of ['memberEmail', 'memberPhone', 'googleSubject', 'memberPassword']) {
+			expect(senderData).not.toHaveProperty(field);
+			expect(sent.message.senderData).not.toHaveProperty(field);
+		}
+	});
+
+	it('pages older messages from the oldest one shown, keeping messages of the same millisecond', async () => {
+		const reader = await seedMember(app, 'pagereader');
+		const writer = await seedMember(app, 'pagewriter');
+		const direct = await graphQL(
+			app,
+			`mutation Direct($id: String!) { getOrCreateDirectChat(memberTwoId: $id) { _id } }`,
+			{ id: writer._id },
+			reader.accessToken,
+		);
+		const chatId = direct.body.data.getOrCreateDirectChat._id;
+		const sameMoment = new Date(Date.now() - 60_000);
+		await model(app, 'Message').collection.insertMany(
+			Array.from({ length: 5 }, (_, i) => {
+				const createdAt = i < 3 ? sameMoment : new Date(sameMoment.getTime() + i * 1_000);
+				return {
+					chatId: new Types.ObjectId(chatId),
+					senderId: new Types.ObjectId(writer._id),
+					messageType: 'TEXT',
+					messageContent: `Message ${i}`,
+					createdAt,
+					updatedAt: createdAt,
+				};
+			}),
+		);
+		const read = async (input: object) =>
+			(
+				await graphQL(
+					app,
+					`query Messages($input: MessagesCursorInquiry!) {
+						getMessages(input: $input) { list { messageContent } nextCursor nextCursorId }
+					}`,
+					{ input: { chatId, limit: 2, ...input } },
+					reader.accessToken,
+				)
+			).body.data.getMessages;
+		const contents = (page: any) => page.list.map((message: any) => message.messageContent);
+
+		let page = await read({});
+		expect(contents(page)).toEqual(['Message 3', 'Message 4']);
+		// A client that sends only `before` still gets the page right before the oldest message shown
+		expect(contents(await read({ before: page.nextCursor }))).toEqual(['Message 1', 'Message 2']);
+
+		const seen = contents(page);
+		while (page.nextCursor) {
+			page = await read({ before: page.nextCursor, beforeId: page.nextCursorId });
+			seen.unshift(...contents(page));
+		}
+		expect(seen).toEqual(['Message 0', 'Message 1', 'Message 2', 'Message 3', 'Message 4']);
+	});
+
+	it('searches chats by plain text, not by a pattern', async () => {
+		const member = await seedMember(app, 'chatsearch');
+
+		const result = await graphQL(
+			app,
+			`query Chats($input: ChatsInquiry!) { getMyChats(input: $input) { list { _id } } }`,
+			{ input: { page: 1, limit: 10, search: { text: '(' } } },
+			member.accessToken,
+		);
+
+		expect(result.body.errors).toBeUndefined();
 	});
 
 	it('rejects socket connection without JWT', async () => {

@@ -221,7 +221,7 @@ export class DestinationService {
 			.findOne(search)
 			.lean<Destination>()
 			.exec();
-		if (!targetDestination) throw new InternalServerErrorException(Messages.REMOVE_FAILED);
+		if (!targetDestination) throw new BadRequestException(Messages.REMOVE_FAILED);
 
 		// Hotels and tours keep their city, so it is removed only once none of them is left.
 		// An INACTIVE city takes no new listings, so nothing can be added before the update
@@ -240,7 +240,7 @@ export class DestinationService {
 			})
 			.exec();
 
-		if (!result) throw new InternalServerErrorException(Messages.REMOVE_FAILED);
+		if (!result) throw new BadRequestException(Messages.REMOVE_FAILED);
 		return 'Destination successfully deleted';
 	}
 
@@ -248,6 +248,7 @@ export class DestinationService {
 		const { destinationCountry, destinationCountryList, text } = search;
 
 		const countryFilters: T[] = [];
+
 		if (destinationCountry) countryFilters.push({ destinationCountry });
 		if (destinationCountryList?.length)
 			countryFilters.push({ destinationCountry: { $in: destinationCountryList } });

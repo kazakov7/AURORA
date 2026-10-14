@@ -1,12 +1,12 @@
 import { Field, InputType, Int } from '@nestjs/graphql';
-import { IsEnum, IsInt, IsOptional, IsString, Max, Min } from 'class-validator';
+import { IsEnum, IsInt, IsMongoId, IsOptional, Max, Min } from 'class-validator';
 import { AgentType } from '../../enums/agent.enum';
 
 @InputType()
 export class RankingInquiry {
 	@Field(() => String, { nullable: true })
 	@IsOptional()
-	@IsString()
+	@IsMongoId()
 	destinationId?: string;
 
 	@Field(() => Int, { nullable: true })

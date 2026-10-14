@@ -44,4 +44,7 @@ export class Messages {
 
 	@Field(() => Date, { nullable: true })
 	nextCursor?: Date;
+
+	@Field(() => String, { nullable: true })
+	nextCursorId?: string;
 }

@@ -102,6 +102,8 @@
 		]
 	},
 	"overrides": {
+		"lodash": "^4.18.1",
+		"multer": "^2.4.0",
 		"graphql-upload": {
 			"@types/express": "$@types/express"
 		}

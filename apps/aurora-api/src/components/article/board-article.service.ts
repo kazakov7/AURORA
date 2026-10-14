@@ -170,7 +170,7 @@ export class BoardArticleService {
 			)
 			.exec();
 
-		if (!result) throw new InternalServerErrorException(Messages.UPDATE_FAILED);
+		if (!result) throw new BadRequestException(Messages.UPDATE_FAILED);
 
 		if (articleStatus === BoardArticleStatus.DELETED) {
 			await this.memberService.memberStatusEditor({
@@ -301,7 +301,7 @@ export class BoardArticleService {
 			})
 			.exec();
 
-		if (!result) throw new InternalServerErrorException(Messages.UPDATE_FAILED);
+		if (!result) throw new BadRequestException(Messages.UPDATE_FAILED);
 
 		if (articleStatus === BoardArticleStatus.DELETED) {
 			await this.memberService.memberStatusEditor({
@@ -325,15 +325,19 @@ export class BoardArticleService {
 		const session = await this.connection.startSession();
 		try {
 			let result: BoardArticle | null = null;
+			let commenterIds: Types.ObjectId[] = [];
 			await session.withTransaction(async () => {
 				result = (await this.boardArticleModel
 					.findOneAndDelete(search, { session })
 					.exec()) as unknown as BoardArticle | null;
-				if (!result) throw new InternalServerErrorException(Messages.REMOVE_FAILED);
+				if (!result) throw new BadRequestException(Messages.REMOVE_FAILED);
 
-				await this.commentModel
-					.deleteMany({ commentGroup: CommentGroup.ARTICLE, commentRefId: articleId }, { session })
+				const articleComments = { commentGroup: CommentGroup.ARTICLE, commentRefId: articleId };
+				commenterIds = await this.commentModel
+					.distinct('memberId', articleComments)
+					.session(session)
 					.exec();
+				await this.commentModel.deleteMany(articleComments, { session }).exec();
 				await this.likeModel
 					.deleteMany({ likeGroup: LikeGroup.ARTICLE, likeRefId: articleId }, { session })
 					.exec();
@@ -348,7 +352,11 @@ export class BoardArticleService {
 					.exec();
 			});
 
-			if (!result) throw new InternalServerErrorException(Messages.REMOVE_FAILED);
+			if (!result) throw new BadRequestException(Messages.REMOVE_FAILED);
+			// The purged comments leave their writers' counts
+			for (const commenterId of commenterIds) {
+				await this.memberService.syncMemberCommentCounter(commenterId);
+			}
 			return result;
 		} finally {
 			await session.endSession();

@@ -4,6 +4,7 @@ import { Types } from 'mongoose';
 import { shapeIntoMongoObjectId } from '../../libs/config';
 import { Reviews, Review } from '../../libs/dto/review/review';
 import {
+	AllDestinationReviewsInquiry,
 	DestinationReviewInput,
 	DestinationReviewsInquiry,
 	RatingInput,
@@ -82,6 +83,15 @@ export class ReviewResolver {
 		@Args('input') input: DestinationReviewsInquiry,
 	): Promise<Reviews> {
 		return this.reviewService.getDestinationReviews(shapeIntoMongoObjectId(destinationId), input);
+	}
+
+	@Roles(MemberType.ADMIN)
+	@UseGuards(RolesGuard)
+	@Query(() => Reviews)
+	public async getAllDestinationReviewsByAdmin(
+		@Args('input') input: AllDestinationReviewsInquiry,
+	): Promise<Reviews> {
+		return this.reviewService.getAllDestinationReviewsByAdmin(input);
 	}
 
 	@Roles(MemberType.ADMIN)

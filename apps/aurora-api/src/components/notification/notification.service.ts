@@ -1,4 +1,4 @@
-import { BadRequestException, Injectable, InternalServerErrorException } from '@nestjs/common';
+import { BadRequestException, Injectable, NotFoundException } from '@nestjs/common';
 import { InjectModel } from '@nestjs/mongoose';
 import { Model, Types } from 'mongoose';
 import { ChatGateway } from '../chat/chat.gateway';
@@ -42,7 +42,8 @@ export class NotificationService {
 				.exec();
 			if (!receiver) return null;
 
-			if (input.authorId) {
+			// A booking change still reaches the host and the admins when the guest's account is no longer active
+			if (input.authorId && input.notificationType !== NotificationType.BOOKING) {
 				const author = await this.memberModel
 					.findOne({ _id: input.authorId, memberStatus: MemberStatus.ACTIVE, deletedAt: null })
 					.exec();
@@ -150,7 +151,7 @@ export class NotificationService {
 				{ new: true },
 			)
 			.exec();
-		if (!result) throw new InternalServerErrorException(Messages.NOTIFICATION_NOT_FOUND);
+		if (!result) throw new NotFoundException(Messages.NOTIFICATION_NOT_FOUND);
 		return result;
 	}
 

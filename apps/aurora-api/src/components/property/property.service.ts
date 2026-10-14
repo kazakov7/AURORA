@@ -154,7 +154,7 @@ export class PropertyService {
 		};
 		const existingProperty = await this.propertyModel.findOne(search).lean<Property>().exec();
 
-		if (!existingProperty) throw new InternalServerErrorException(Messages.UPDATE_FAILED);
+		if (!existingProperty) throw new BadRequestException(Messages.UPDATE_FAILED);
 
 		// An edited REJECTED hotel returns to the admin queue; every other status is kept as it is
 		const update: T = { ...input };
@@ -413,17 +413,18 @@ export class PropertyService {
 			)
 			.exec();
 
-		if (!result) throw new InternalServerErrorException(Messages.REMOVE_FAILED);
+		if (!result) throw new BadRequestException(Messages.REMOVE_FAILED);
 		return result as unknown as Property;
 	}
 
-	/** A hotel goes live only in an active destination and under an owner whose account is active **/
+	/** A hotel goes live only in an active destination and under an active owner who is still an approved HOTEL agent **/
 	private async assertCanActivate(property: Property): Promise<void> {
 		await this.destinationService.getActiveDestination(property.destinationId);
 		const owner = await this.memberService.getMember(null, property.memberId, false);
 		if (owner.memberStatus !== MemberStatus.ACTIVE) {
 			throw new BadRequestException(Messages.MEMBER_BLOCKED);
 		}
+		await this.agentService.assertApprovedAgent(property.memberId, AgentType.HOTEL);
 	}
 
 	/** memberProperties and destinationProperties count ACTIVE hotels, so they move when one enters or leaves ACTIVE **/

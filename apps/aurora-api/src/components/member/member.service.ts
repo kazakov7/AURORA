@@ -1,14 +1,16 @@
 import {
 	BadRequestException,
 	ConflictException,
+	HttpException,
+	HttpStatus,
 	Injectable,
 	InternalServerErrorException,
 	NotFoundException,
 	UnauthorizedException,
 } from '@nestjs/common';
-import { InjectModel } from '@nestjs/mongoose';
+import { InjectConnection, InjectModel } from '@nestjs/mongoose';
 import { Member, Members } from '../../libs/dto/member/member';
-import { Model, PipelineStage, Types } from 'mongoose';
+import { Connection, Model, PipelineStage, Types } from 'mongoose';
 import {
 	GoogleAuthInput,
 	ChangePasswordInput,
@@ -23,6 +25,7 @@ import { MemberAuthType, MemberStatus, MemberType } from '../../libs/enums/membe
 import { PropertyStatus } from '../../libs/enums/property.enum';
 import { AgentVerificationStatus } from '../../libs/enums/agent.enum';
 import { BookingCategory } from '../../libs/enums/booking.enum';
+import { CommentStatus } from '../../libs/enums/comment.enum';
 import { BookingService } from '../booking/booking.service';
 import { StatisticModifier, T } from '../../libs/types/common';
 import { ViewGroup } from '../../libs/enums/view.enum';
@@ -30,14 +33,24 @@ import { ViewService } from '../view/view.service';
 import { AdminUpdateMemberInput } from '../../libs/dto/member/admin.update.member';
 import { Follower, Following, MeFollowed } from '../../libs/dto/follow/follow';
 import { randomBytes } from 'crypto';
-import { lookUpAuthMemberFollowData } from '../../libs/config';
+import {
+	LOGIN_ATTEMPT_LIMIT,
+	LOGIN_ATTEMPT_WINDOW_MS,
+	lookUpAuthMemberFollowData,
+} from '../../libs/config';
 import { ChatGateway } from '../chat/chat.gateway';
 import { Message } from '../../libs/dto/message/message';
 import { AuthService } from '../auth/auth.service';
 import { SocialIdentity, SocialAuthConfig } from '../../libs/types/social.identity';
 
+/** The nickname index is partial ($type: string), so an exact lookup names that condition to use it instead of scanning every member **/
+const nickLookup = (memberNick: string) => ({ $eq: memberNick, $type: 'string' as const });
+
 @Injectable()
 export class MemberService {
+	/** Wrong logins per lower-case nickname: how many, and when the window started **/
+	private readonly failedLogins = new Map<string, { count: number; since: number }>();
+
 	constructor(
 		@InjectModel('Member')
 		private readonly memberModel: Model<Member>,
@@ -46,6 +59,8 @@ export class MemberService {
 		@InjectModel('Tour') private readonly tourModel: Model<any>,
 		@InjectModel('Agent') private readonly agentModel: Model<any>,
 		@InjectModel('Destination') private readonly destinationModel: Model<any>,
+		@InjectModel('Comment') private readonly commentModel: Model<any>,
+		@InjectConnection() private readonly connection: Connection,
 		private authService: AuthService,
 		private viewService: ViewService,
 		private readonly chatGateway: ChatGateway,
@@ -70,12 +85,17 @@ export class MemberService {
 	}
 	public async login(input: LoginInput): Promise<Member> {
 		const { memberPassword } = input;
+		const attemptKey = input.memberNick.trim().toLowerCase();
+		this.assertLoginAllowed(attemptKey);
 		const response = await this.memberModel
-			.findOne({ memberNick: input.memberNick })
+			.findOne({ memberNick: nickLookup(input.memberNick) })
 			.select('+memberPassword')
 			.exec();
 		// Unknown and passwordless (social) accounts get the same answer as a wrong password
-		if (!response?.memberPassword) throw new UnauthorizedException(Messages.NOT_AUTHENTICATED);
+		if (!response?.memberPassword) {
+			this.recordFailedLogin(attemptKey);
+			throw new UnauthorizedException(Messages.NOT_AUTHENTICATED);
+		}
 
 		const isMatch = await this.authService.comparePasswords(
 			memberPassword,
@@ -88,8 +108,10 @@ export class MemberService {
 			!response.memberPassword ||
 			!isMatch
 		) {
+			this.recordFailedLogin(attemptKey);
 			throw new UnauthorizedException(Messages.NOT_AUTHENTICATED);
 		}
+		this.failedLogins.delete(attemptKey);
 
 		await this.memberModel.findByIdAndUpdate(response._id, {
 			lastLoginAt: new Date(),
@@ -97,6 +119,42 @@ export class MemberService {
 		response.accessToken = await this.authService.createToken(response);
 
 		return response;
+	}
+
+	/** A nickname with too many wrong logins waits until its window ends, so a password cannot be guessed **/
+	private assertLoginAllowed(attemptKey: string): void {
+		const attempts = this.failedLogins.get(attemptKey);
+		if (!attempts) return;
+		if (Date.now() - attempts.since >= LOGIN_ATTEMPT_WINDOW_MS) {
+			this.failedLogins.delete(attemptKey);
+			return;
+		}
+		if (attempts.count >= LOGIN_ATTEMPT_LIMIT) {
+			// The same response shape as the built-in exceptions, so GraphQL keeps the 429 status
+			const status = HttpStatus.TOO_MANY_REQUESTS;
+			throw new HttpException(
+				{
+					statusCode: status,
+					message: Messages.TOO_MANY_LOGIN_ATTEMPTS,
+					error: 'Too Many Requests',
+				},
+				status,
+			);
+		}
+	}
+
+	private recordFailedLogin(attemptKey: string): void {
+		const now = Date.now();
+		const attempts = this.failedLogins.get(attemptKey);
+		if (attempts && now - attempts.since < LOGIN_ATTEMPT_WINDOW_MS) attempts.count += 1;
+		else this.failedLogins.set(attemptKey, { count: 1, since: now });
+
+		// Ended windows are dropped, so guessing many nicknames cannot grow the map without end
+		if (this.failedLogins.size > 10_000) {
+			for (const [key, entry] of this.failedLogins) {
+				if (now - entry.since >= LOGIN_ATTEMPT_WINDOW_MS) this.failedLogins.delete(key);
+			}
+		}
 	}
 
 	public async changePassword(
@@ -241,7 +299,7 @@ export class MemberService {
 		const email = 'email' in identity ? identity.email : undefined;
 		for (let attempt = 0; attempt < 10; attempt++) {
 			const memberNick = this.createSocialMemberNick(identity, config, attempt);
-			const existingNick = await this.memberModel.exists({ memberNick });
+			const existingNick = await this.memberModel.exists({ memberNick: nickLookup(memberNick) });
 			if (existingNick) continue;
 			try {
 				const member = await this.memberModel.create({
@@ -414,6 +472,27 @@ export class MemberService {
 			.exec();
 		if (!result) throw new InternalServerErrorException(Messages.UPDATE_FAILED);
 		return result;
+	}
+
+	/**
+	 * Like memberLikes, memberComments is counted again from the member's live comments, so no path can
+	 * leave it wrong. The count and the write share a transaction: of two parallel recounts, one retries.
+	 */
+	public async syncMemberCommentCounter(memberId: Types.ObjectId): Promise<void> {
+		const session = await this.connection.startSession();
+		try {
+			await session.withTransaction(async () => {
+				const memberComments = await this.commentModel
+					.countDocuments({ memberId, commentStatus: CommentStatus.ACTIVE })
+					.session(session)
+					.exec();
+				await this.memberModel
+					.updateOne({ _id: memberId }, { $set: { memberComments } }, { session })
+					.exec();
+			});
+		} finally {
+			await session.endSession();
+		}
 	}
 
 	public async getAllMembers(

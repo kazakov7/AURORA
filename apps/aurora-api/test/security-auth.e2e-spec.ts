@@ -7,6 +7,7 @@ import { OAuth2Client } from 'google-auth-library';
 import { of } from 'rxjs';
 import { AuthService } from '../src/components/auth/auth.service';
 import { MemberService } from '../src/components/member/member.service';
+import { LOGIN_ATTEMPT_LIMIT, LOGIN_ATTEMPT_WINDOW_MS } from '../src/libs/config';
 import { Messages } from '../src/libs/enums/common.enum';
 import { MemberAuthType, MemberStatus, MemberType } from '../src/libs/enums/member.enum';
 import {
@@ -397,5 +398,31 @@ describe('Phase 1 authentication and CORS security (e2e)', () => {
 			.set('Origin', 'https://evil.example')
 			.set('Access-Control-Request-Method', 'POST');
 		expect(disallowed.headers['access-control-allow-origin']).toBeUndefined();
+	});
+
+	it('pauses sign-in for a nickname after too many wrong passwords, until the window ends', async () => {
+		await seedMember(app, 'guessme');
+		await seedMember(app, 'bystander');
+		const login = async (memberNick: string, memberPassword: string) =>
+			(
+				await graphQL(app, `mutation L($input: LoginInput!) { login(input: $input) { _id } }`, {
+					input: { memberNick, memberPassword },
+				})
+			).body;
+
+		for (let attempt = 0; attempt < LOGIN_ATTEMPT_LIMIT; attempt++) {
+			expect((await login('guessme', 'wrongpass')).errors[0].extensions.code).toBe(
+				'UNAUTHENTICATED',
+			);
+		}
+		// Even the right password, in any letter case, waits now
+		const paused = await login('GuessMe', 'pass1234');
+		expect(paused.errors[0].extensions.code).toBe('TOO_MANY_REQUESTS');
+		expect(paused.errors[0].message).toBe(Messages.TOO_MANY_LOGIN_ATTEMPTS);
+		expect((await login('bystander', 'pass1234')).errors).toBeUndefined();
+
+		const now = Date.now();
+		jest.spyOn(Date, 'now').mockReturnValue(now + LOGIN_ATTEMPT_WINDOW_MS);
+		expect((await login('guessme', 'pass1234')).errors).toBeUndefined();
 	});
 });

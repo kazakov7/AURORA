@@ -8,6 +8,7 @@ export enum NotificationType {
 	REVIEW = 'REVIEW',
 	MESSAGE = 'MESSAGE',
 	SYSTEM = 'SYSTEM',
+	SUPPORT = 'SUPPORT',
 }
 registerEnumType(NotificationType, {
 	name: 'NotificationType',
@@ -31,6 +32,7 @@ export enum NotificationGroup {
 	SYSTEM = 'SYSTEM',
 	CHAT = 'CHAT',
 	MESSAGE = 'MESSAGE',
+	SUPPORT = 'SUPPORT',
 }
 registerEnumType(NotificationGroup, {
 	name: 'NotificationGroup',

@@ -95,6 +95,8 @@ BookingSchema.index(
 );
 BookingSchema.index({ memberId: 1, createdAt: 1 }, { name: 'booking_member_history_idx' });
 BookingSchema.index({ bookingStatus: 1, expiresAt: 1 }, { name: 'booking_expiry_idx' });
+// The admin bookings table pages every booking newest first
+BookingSchema.index({ createdAt: -1, _id: -1 }, { name: 'booking_admin_list_idx' });
 BookingSchema.index(
 	{ memberId: 1, checkoutKey: 1 },
 	{

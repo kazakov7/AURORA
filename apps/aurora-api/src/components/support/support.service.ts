@@ -1,4 +1,4 @@
-import { BadRequestException, Injectable, InternalServerErrorException } from '@nestjs/common';
+import { BadRequestException, Injectable, NotFoundException } from '@nestjs/common';
 import { InjectModel } from '@nestjs/mongoose';
 import { Model, Types } from 'mongoose';
 import { SupportTicket, SupportTickets } from '../../libs/dto/support/support';
@@ -38,8 +38,8 @@ export class SupportService {
 
 		await this.notificationService.notifyActiveAdmins({
 			authorId: memberId,
-			notificationType: NotificationType.SYSTEM,
-			notificationGroup: NotificationGroup.SYSTEM,
+			notificationType: NotificationType.SUPPORT,
+			notificationGroup: NotificationGroup.SUPPORT,
 			notificationRefId: result._id,
 			notificationTitle: 'New support request',
 			notificationDesc: `[${input.ticketCategory}] ${input.ticketSubject}`,
@@ -71,14 +71,15 @@ export class SupportService {
 		}
 
 		const result = await this.supportTicketModel.findByIdAndUpdate(_id, set, { new: true }).exec();
-		if (!result) throw new InternalServerErrorException(Messages.NO_DATA_FOUND);
+		if (!result) throw new NotFoundException(Messages.NO_DATA_FOUND);
 
+		/** A support notification opens the request itself, where the member reads the whole reply **/
 		if (update.ticketReply) {
 			await this.notificationService.createNotification({
 				receiverId: result.memberId,
 				authorId: adminId,
-				notificationType: NotificationType.SYSTEM,
-				notificationGroup: NotificationGroup.SYSTEM,
+				notificationType: NotificationType.SUPPORT,
+				notificationGroup: NotificationGroup.SUPPORT,
 				notificationRefId: result._id,
 				notificationTitle: 'Support replied to your request',
 				notificationDesc: result.ticketSubject,

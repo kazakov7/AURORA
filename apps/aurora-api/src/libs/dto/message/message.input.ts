@@ -3,6 +3,7 @@ import { ObjectId } from 'mongoose';
 import {
 	IsIn,
 	IsInt,
+	IsMongoId,
 	IsNotEmpty,
 	IsOptional,
 	IsString,
@@ -16,9 +17,6 @@ import { MessageType } from '../../enums/message.enum';
 
 @InputType()
 export class MessageInput {
-	/** senderId @AuthMember dan olinadi, clientdan kelmaydi */
-	senderId?: ObjectId;
-
 	@IsNotEmpty()
 	@Field(() => String)
 	chatId: ObjectId;
@@ -105,4 +103,10 @@ export class MessagesCursorInquiry {
 	@IsOptional()
 	@Field(() => Date, { nullable: true })
 	before?: Date;
+
+	/** With `before`, the id of that message: messages sent in the same millisecond are not skipped **/
+	@IsOptional()
+	@IsMongoId()
+	@Field(() => String, { nullable: true })
+	beforeId?: string;
 }

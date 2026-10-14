@@ -7,27 +7,15 @@ import { BookingCategory, BookingStatus } from '../../libs/enums/booking.enum';
 import { Messages } from '../../libs/enums/common.enum';
 import { NotificationGroup, NotificationType } from '../../libs/enums/notification.enum';
 import { T } from '../../libs/types/common';
-import { lookupMember, lookupMemberWithContact } from '../../libs/config';
+import {
+	addBookingDates,
+	lookupMember,
+	lookupMemberWithContact,
+	lookupPropertyData,
+	lookupRatingData,
+	lookupTourData,
+} from '../../libs/config';
 import { NotificationService } from '../notification/notification.service';
-
-const lookupPropertyData = {
-	$lookup: {
-		from: 'properties',
-		localField: 'bookingRefId',
-		foreignField: '_id',
-		as: 'propertyData',
-	},
-};
-const lookupTourData = {
-	$lookup: { from: 'tours', localField: 'bookingRefId', foreignField: '_id', as: 'tourData' },
-};
-/** One pair of dates for every booking: checkIn/checkOut of a stay, the booked dates of a tour **/
-const addBookingDates = {
-	$addFields: {
-		bookingStartDate: { $ifNull: ['$checkIn', '$priceSnapshot.tourStartDate'] },
-		bookingEndDate: { $ifNull: ['$checkOut', '$priceSnapshot.tourEndDate'] },
-	},
-};
 
 @Injectable()
 export class BookingService {
@@ -37,6 +25,44 @@ export class BookingService {
 		@InjectModel('Tour') private readonly tourModel: Model<any>,
 		private readonly notificationService: NotificationService,
 	) {}
+
+	/**
+	 * Calendar availability uses half-open intervals: [checkIn, checkOut).
+	 * Therefore a guest can check in on the same date a previous guest checks out.
+	 */
+	public async getPropertyAvailability(
+		input: PropertyAvailabilityInquiry,
+	): Promise<PropertyAvailabilityRange[]> {
+		if (
+			!Types.ObjectId.isValid(input.propertyId) ||
+			!(input.startDate instanceof Date) ||
+			!(input.endDate instanceof Date) ||
+			input.endDate <= input.startDate
+		) {
+			throw new BadRequestException(Messages.INVALID_DATA);
+		}
+
+		const now = new Date();
+
+		return this.bookingModel
+			.find(
+				{
+					bookingCategory: BookingCategory.PROPERTY,
+					bookingRefId: new Types.ObjectId(input.propertyId),
+					checkIn: { $lt: input.endDate },
+					checkOut: { $gt: input.startDate },
+					$or: [
+						{ bookingStatus: BookingStatus.CONFIRMED },
+						{ bookingStatus: BookingStatus.PENDING, expiresAt: null },
+						{ bookingStatus: BookingStatus.PENDING, expiresAt: { $gt: now } },
+					],
+				},
+				{ _id: 0, checkIn: 1, checkOut: 1 },
+			)
+			.sort({ checkIn: 1 })
+			.lean<PropertyAvailabilityRange[]>()
+			.exec();
+	}
 
 	public async getUnavailablePropertyIds(checkIn: Date, checkOut: Date): Promise<Types.ObjectId[]> {
 		const now = new Date();
@@ -126,52 +152,13 @@ export class BookingService {
 		}
 	}
 
-	/**
-	 * Calendar availability uses half-open intervals: [checkIn, checkOut).
-	 * Therefore a guest can check in on the same date a previous guest checks out.
-	 */
-	public async getPropertyAvailability(
-		input: PropertyAvailabilityInquiry,
-	): Promise<PropertyAvailabilityRange[]> {
-		if (
-			!Types.ObjectId.isValid(input.propertyId) ||
-			!(input.startDate instanceof Date) ||
-			!(input.endDate instanceof Date) ||
-			input.endDate <= input.startDate
-		) {
-			throw new BadRequestException(Messages.INVALID_DATA);
-		}
-
-		const now = new Date();
-		const ranges = await this.bookingModel
-			.find(
-				{
-					bookingCategory: BookingCategory.PROPERTY,
-					bookingRefId: new Types.ObjectId(input.propertyId),
-					checkIn: { $lt: input.endDate },
-					checkOut: { $gt: input.startDate },
-					$or: [
-						{ bookingStatus: BookingStatus.CONFIRMED },
-						{ bookingStatus: BookingStatus.PENDING, expiresAt: null },
-						{ bookingStatus: BookingStatus.PENDING, expiresAt: { $gt: now } },
-					],
-				},
-				{ checkIn: 1, checkOut: 1 },
-			)
-			.sort({ checkIn: 1 })
-			.lean()
-			.exec();
-
-		const availabilityRanges = ranges as unknown as Array<{ checkIn: Date; checkOut: Date }>;
-		return availabilityRanges.map((range) => ({
-			checkIn: range.checkIn,
-			checkOut: range.checkOut,
-		}));
-	}
-
 	public async getMyBookings(memberId: Types.ObjectId, input: BookingsInquiry): Promise<Bookings> {
 		const match: T = { memberId, ...this.shapeSearch(input) };
-		return this.getBookingList(match, input, [lookupPropertyData, lookupTourData]);
+		return this.getBookingList(match, input, [
+			lookupPropertyData,
+			lookupTourData,
+			lookupRatingData,
+		]);
 	}
 
 	/** The host's own listings are read first, so the bookings of other hosts are never scanned **/

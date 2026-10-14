@@ -86,7 +86,14 @@ export class RankingService {
 	): Promise<any> {
 		const scope = destinationId ? RankingScope.DESTINATION : RankingScope.GLOBAL;
 		const entries = await this.getEntries(RankingType.TOP_TOURS, scope, destinationId);
-		const filter: any = { tourStatus: TourStatus.ACTIVE, deletedAt: null };
+		// A snapshot is a day old, so a tour that has started since then is left out here
+		const today = new Date();
+		today.setHours(0, 0, 0, 0);
+		const filter: any = {
+			tourStatus: TourStatus.ACTIVE,
+			deletedAt: null,
+			tourStartDate: { $gte: today },
+		};
 		if (destinationId) filter.destinationId = new Types.ObjectId(destinationId);
 		const list = await this.findInSnapshotOrder(
 			this.tourModel,

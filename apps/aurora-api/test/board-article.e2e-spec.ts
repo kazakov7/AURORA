@@ -212,6 +212,9 @@ describe('Board article (e2e)', () => {
 			await model(app, 'Notification').countDocuments({ notificationRefId: refId }),
 		];
 		expect(await leftovers(target)).toEqual([1, 1, 1, 2]);
+		const readerComments = async () =>
+			(await model(app, 'Member').findById(reader._id).lean()).memberComments;
+		expect(await readerComments()).toBe(2);
 		const remove = async () =>
 			await graphQL(
 				app,
@@ -235,6 +238,20 @@ describe('Board article (e2e)', () => {
 		expect(await leftovers(target)).toEqual([0, 0, 0, 0]);
 		expect(await leftovers(kept._id)).toEqual([1, 1, 1, 2]);
 		expect((await model(app, 'Member').findById(author._id).lean()).memberArticles).toBe(0);
+		expect(await readerComments()).toBe(1);
+	});
+
+	it('counts the first visit of every signed-in member, the author included', async () => {
+		const author = await seedMember(app, 'viewauthor');
+		const reader = await seedMember(app, 'viewreader');
+		const article = await seedArticle(author._id);
+		const id = article._id.toString();
+
+		for (const token of [author.accessToken, author.accessToken, reader.accessToken, undefined]) {
+			expect((await graphQL(app, DETAIL, { id }, token)).body.errors).toBeUndefined();
+		}
+
+		expect((await model(app, 'BoardArticle').findById(id).lean()).articleViews).toBe(2);
 	});
 
 	it('validates the nested search and pages through stories without repeats', async () => {

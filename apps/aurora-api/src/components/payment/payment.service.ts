@@ -19,7 +19,7 @@ import { Messages } from '../../libs/enums/common.enum';
 import { PaymentProvider, PaymentStatus } from '../../libs/enums/payment.enum';
 import { PropertyStatus } from '../../libs/enums/property.enum';
 import { TourStatus } from '../../libs/enums/tour.enum';
-import { GUEST_CANCEL_WINDOW_MS, HOLD_DURATION_MS, USD } from '../../libs/config';
+import { GUEST_CANCEL_WINDOW_MS, HOLD_DURATION_MS, MAX_ACTIVE_HOLDS, USD } from '../../libs/config';
 import { NotificationService } from '../notification/notification.service';
 import { NotificationGroup, NotificationType } from '../../libs/enums/notification.enum';
 
@@ -38,7 +38,14 @@ export class PaymentService implements OnModuleInit, OnModuleDestroy {
 	) {}
 
 	public onModuleInit(): void {
-		this.expiryTimer = setInterval(() => void this.expirePendingBookings(), 60 * 1000);
+		// A failed sweep is retried on the next tick; an unhandled rejection would stop the whole server
+		this.expiryTimer = setInterval(
+			() =>
+				void this.expirePendingBookings().catch((error) =>
+					console.error('Booking hold expiry failed:', error),
+				),
+			60 * 1000,
+		);
 	}
 
 	public onModuleDestroy(): void {
@@ -65,7 +72,10 @@ export class PaymentService implements OnModuleInit, OnModuleDestroy {
 
 		await this.expirePendingBookings();
 		let booking = await this.findReusablePropertyHold(memberId, propertyId, input);
-		if (!booking) booking = await this.createPropertyHold(memberId, propertyId, input);
+		if (!booking) {
+			await this.assertHoldLimit(memberId);
+			booking = await this.createPropertyHold(memberId, propertyId, input);
+		}
 		const pendingPayment = await this.findPendingPaymentForBooking(booking._id as Types.ObjectId);
 		if (pendingPayment) return this.shapeCheckout(pendingPayment);
 
@@ -91,7 +101,10 @@ export class PaymentService implements OnModuleInit, OnModuleDestroy {
 
 		await this.expirePendingBookings();
 		let booking = await this.findReusableTourHold(memberId, tourId, input);
-		if (!booking) booking = await this.createTourHold(memberId, tourId, input);
+		if (!booking) {
+			await this.assertHoldLimit(memberId);
+			booking = await this.createTourHold(memberId, tourId, input);
+		}
 		const pendingPayment = await this.findPendingPaymentForBooking(booking._id as Types.ObjectId);
 		if (pendingPayment) return this.shapeCheckout(pendingPayment);
 
@@ -99,9 +112,9 @@ export class PaymentService implements OnModuleInit, OnModuleDestroy {
 	}
 
 	public async cancelPendingBooking(
-		memberId: Types.ObjectId,
-		bookingId: Types.ObjectId,
-		bookingCategory: BookingCategory,
+		memberId: Types.ObjectId, //kevin
+		bookingId: Types.ObjectId, //grand hotel id
+		bookingCategory: BookingCategory, //type
 	): Promise<any> {
 		const booking = await this.cancelPendingBookingAtomically({
 			_id: bookingId,
@@ -112,7 +125,7 @@ export class PaymentService implements OnModuleInit, OnModuleDestroy {
 
 		if (!booking) throw new BadRequestException(Messages.BOOKING_CANNOT_CANCEL);
 		await this.cancelPendingPaymentIntents(
-			booking._id as Types.ObjectId,
+			booking._id as Types.ObjectId, //grand hotel.
 			'Booking cancelled by member',
 		);
 		await this.notifyBookingTransition(booking, BookingStatus.CANCELLED, memberId);
@@ -121,17 +134,19 @@ export class PaymentService implements OnModuleInit, OnModuleDestroy {
 
 	/** The guest cancels a payment hold any time, and a paid booking until 48 hours before it starts **/
 	public async cancelBooking(
-		memberId: Types.ObjectId,
-		bookingId: Types.ObjectId,
-		bookingCategory: BookingCategory,
+		memberId: Types.ObjectId, //kevin
+		bookingId: Types.ObjectId, //grand hotel:id
+		bookingCategory: BookingCategory, //type
 	): Promise<any> {
-		const booking = await this.bookingModel
+		const booking = await this.bookingModel //target hotel/tour
 			.findOne({ _id: bookingId, memberId, bookingCategory })
 			.lean<any>()
 			.exec();
+
 		if (booking?.bookingStatus === BookingStatus.PENDING) {
 			return this.cancelPendingBooking(memberId, bookingId, bookingCategory);
 		}
+
 		if (booking?.bookingStatus !== BookingStatus.CONFIRMED) {
 			throw new BadRequestException(Messages.BOOKING_CANNOT_CANCEL);
 		}
@@ -208,6 +223,7 @@ export class PaymentService implements OnModuleInit, OnModuleDestroy {
 			.exec();
 
 		for (const expiredBooking of expiredBookings) {
+			if (await this.settlePaidHold(expiredBooking._id as Types.ObjectId)) continue;
 			const booking = await this.cancelPendingBookingAtomically({
 				_id: expiredBooking._id,
 				bookingStatus: BookingStatus.PENDING,
@@ -216,6 +232,43 @@ export class PaymentService implements OnModuleInit, OnModuleDestroy {
 
 			if (!booking) continue;
 			await this.cancelPendingPaymentIntents(booking._id as Types.ObjectId, 'Booking hold expired');
+		}
+	}
+
+	/**
+	 * A guest may pay in the last seconds of a hold while the webhook arrives after it. Such a hold is
+	 * confirmed here from Stripe, or kept while the payment is still processing, instead of being expired.
+	 */
+	private async settlePaidHold(bookingId: Types.ObjectId): Promise<boolean> {
+		const payments = await this.paymentModel
+			.find({ bookingId, paymentStatus: { $in: [PaymentStatus.PENDING, PaymentStatus.FAILED] } })
+			.exec();
+		for (const payment of payments) {
+			const intent = await this.stripe.paymentIntents
+				.retrieve(payment.providerPaymentId)
+				.catch(() => null);
+			if (intent?.status === 'processing') return true;
+			if (intent?.status !== 'succeeded') continue;
+			// A failed confirmation keeps the hold, so the next sweep tries again instead of losing the payment
+			await this.confirmPaidBooking(intent).catch((error) =>
+				console.error('Paid hold confirmation failed:', error),
+			);
+			return true;
+		}
+		return false;
+	}
+
+	/** Holds cost nothing, so a member keeps only a few at once **/
+	private async assertHoldLimit(memberId: Types.ObjectId): Promise<void> {
+		const activeHolds = await this.bookingModel
+			.countDocuments({
+				memberId,
+				bookingStatus: BookingStatus.PENDING,
+				expiresAt: { $gt: new Date() },
+			})
+			.exec();
+		if (activeHolds >= MAX_ACTIVE_HOLDS) {
+			throw new BadRequestException(Messages.BOOKING_HOLD_LIMIT);
 		}
 	}
 
@@ -233,6 +286,9 @@ export class PaymentService implements OnModuleInit, OnModuleDestroy {
 					.session(session)
 					.exec();
 				if (!property) throw new BadRequestException(Messages.PROPERTY_CANNOT_BE_BOOKED);
+				if (property.memberId.equals(memberId)) {
+					throw new BadRequestException(Messages.BOOKING_OWN_LISTING);
+				}
 				if (input.bookingGuests > property.maxGuests)
 					throw new BadRequestException(Messages.PROPERTY_NOT_AVAILABLE);
 				this.validateCheckoutAmount(property.pricePerNight, property.currency);
@@ -308,6 +364,19 @@ export class PaymentService implements OnModuleInit, OnModuleDestroy {
 			await session.withTransaction(async () => {
 				const today = new Date();
 				today.setHours(0, 0, 0, 0);
+				const listedTour: any = await this.tourModel
+					.findOne({ _id: tourId, tourStatus: TourStatus.ACTIVE, deletedAt: null })
+					.session(session)
+					.lean()
+					.exec();
+				if (!listedTour) throw new BadRequestException(Messages.TOUR_NOT_AVAILABLE);
+				if (listedTour.memberId.equals(memberId)) {
+					throw new BadRequestException(Messages.BOOKING_OWN_LISTING);
+				}
+				if (listedTour.tourStartDate < today) {
+					throw new BadRequestException(Messages.TOUR_ALREADY_STARTED);
+				}
+
 				const tour: any = await this.tourModel
 					.findOneAndUpdate(
 						{
@@ -379,6 +448,8 @@ export class PaymentService implements OnModuleInit, OnModuleDestroy {
 				{
 					amount: stripeCharge.amount,
 					currency: stripeCharge.currency,
+					// Checkout confirms in place with no return page, so methods that leave the site are not offered
+					automatic_payment_methods: { enabled: true, allow_redirects: 'never' },
 					metadata: { bookingId: booking._id.toString(), memberId: memberId.toString() },
 				},
 				{ idempotencyKey },
@@ -413,10 +484,15 @@ export class PaymentService implements OnModuleInit, OnModuleDestroy {
 	private async confirmPaidBooking(paymentIntent: Stripe.PaymentIntent): Promise<void> {
 		const session = await this.connection.startSession();
 		let shouldRefund = false;
+		let listingGone = false;
 		let refundBookingId: Types.ObjectId | null = null;
 		let confirmedBooking: any | null = null;
 		try {
 			await session.withTransaction(async () => {
+				// A retried transaction starts over, so no outcome of a failed attempt is carried along
+				shouldRefund = false;
+				listingGone = false;
+				confirmedBooking = null;
 				const payment = await this.paymentModel
 					.findOne({ providerPaymentId: paymentIntent.id })
 					.session(session)
@@ -450,13 +526,28 @@ export class PaymentService implements OnModuleInit, OnModuleDestroy {
 						.exec();
 					return;
 				}
+				const pendingBooking = await this.bookingModel
+					.findOne({ _id: payment.bookingId, bookingStatus: BookingStatus.PENDING })
+					.session(session)
+					.exec();
+				if (!pendingBooking) {
+					shouldRefund = true;
+					return;
+				}
+				// The guest is refunded for a listing that left the catalog while the hold was open
+				if (!(await this.isListingLive(pendingBooking, session))) {
+					shouldRefund = true;
+					listingGone = true;
+					return;
+				}
+				if (await this.hasLostStayDates(pendingBooking, session)) {
+					shouldRefund = true;
+					return;
+				}
+
 				const booking = await this.bookingModel
 					.findOneAndUpdate(
-						{
-							_id: payment.bookingId,
-							bookingStatus: BookingStatus.PENDING,
-							expiresAt: { $gt: new Date() },
-						},
+						{ _id: payment.bookingId, bookingStatus: BookingStatus.PENDING },
 						{
 							bookingStatus: BookingStatus.CONFIRMED,
 							confirmedPaymentId: payment._id,
@@ -488,11 +579,67 @@ export class PaymentService implements OnModuleInit, OnModuleDestroy {
 		}
 		if (shouldRefund) {
 			await this.refundPayment(paymentIntent.id);
-			if (refundBookingId)
-				await this.cancelPendingBookingBySystem(refundBookingId, 'Payment verification failed');
+			if (refundBookingId) {
+				const cancelled = await this.cancelPendingBookingBySystem(
+					refundBookingId,
+					listingGone ? 'Listing is no longer available' : 'Payment verification failed',
+				);
+				if (cancelled && listingGone) {
+					await this.notifyBookingTransition(cancelled, BookingStatus.CANCELLED);
+				}
+			}
 		}
 		if (confirmedBooking)
 			await this.notifyBookingTransition(confirmedBooking, BookingStatus.CONFIRMED);
+	}
+
+	private async isListingLive(booking: any, session: any): Promise<boolean> {
+		const listing =
+			booking.bookingCategory === BookingCategory.PROPERTY
+				? await this.propertyModel
+						.exists({
+							_id: booking.bookingRefId,
+							propertyStatus: PropertyStatus.ACTIVE,
+							deletedAt: null,
+						})
+						.session(session)
+						.exec()
+				: await this.tourModel
+						.exists({ _id: booking.bookingRefId, tourStatus: TourStatus.ACTIVE, deletedAt: null })
+						.session(session)
+						.exec();
+		return Boolean(listing);
+	}
+
+	/**
+	 * A hold past its time no longer keeps its dates, so another guest may have taken them before the
+	 * late payment arrived. Tour seats stay reserved until a hold is cancelled, so only a stay is checked.
+	 */
+	private async hasLostStayDates(booking: any, session: any): Promise<boolean> {
+		if (booking.bookingCategory !== BookingCategory.PROPERTY || booking.expiresAt > new Date()) {
+			return false;
+		}
+		// The same write as a new hold, so the two transactions cannot both take the dates
+		await this.propertyModel
+			.updateOne({ _id: booking.bookingRefId }, { $inc: { availabilityVersion: 1 } }, { session })
+			.exec();
+		const now = new Date();
+		const conflict = await this.bookingModel
+			.exists({
+				_id: { $ne: booking._id },
+				bookingCategory: BookingCategory.PROPERTY,
+				bookingRefId: booking.bookingRefId,
+				checkIn: { $lt: booking.checkOut },
+				checkOut: { $gt: booking.checkIn },
+				$or: [
+					{ bookingStatus: BookingStatus.CONFIRMED },
+					{ bookingStatus: BookingStatus.PENDING, expiresAt: null },
+					{ bookingStatus: BookingStatus.PENDING, expiresAt: { $gt: now } },
+				],
+			})
+			.session(session)
+			.exec();
+		return Boolean(conflict);
 	}
 
 	private async markPaymentFailed(providerPaymentId: string, failureReason: string): Promise<void> {
@@ -583,12 +730,13 @@ export class PaymentService implements OnModuleInit, OnModuleDestroy {
 	private async refundPayment(providerPaymentId: string): Promise<void> {
 		try {
 			const intent = await this.stripe.paymentIntents.retrieve(providerPaymentId);
-			if (intent.latest_charge) {
-				await this.stripe.refunds.create(
-					{ payment_intent: providerPaymentId },
-					{ idempotencyKey: `booking-refund:${providerPaymentId}` },
-				);
+			if (!intent.latest_charge) {
+				throw new Error('Payment has no charge to refund');
 			}
+			await this.stripe.refunds.create(
+				{ payment_intent: providerPaymentId },
+				{ idempotencyKey: `booking-refund:${providerPaymentId}` },
+			);
 			await this.paymentModel
 				.updateOne(
 					{ providerPaymentId },
@@ -601,8 +749,8 @@ export class PaymentService implements OnModuleInit, OnModuleDestroy {
 	}
 
 	private async cancelPendingPaymentIntents(
-		bookingId: Types.ObjectId,
-		failureReason: string,
+		bookingId: Types.ObjectId, //grand hotel
+		failureReason: string, //sababi
 	): Promise<void> {
 		const payments = await this.paymentModel
 			.find({ bookingId, paymentStatus: { $in: [PaymentStatus.PENDING, PaymentStatus.FAILED] } })
@@ -610,7 +758,9 @@ export class PaymentService implements OnModuleInit, OnModuleDestroy {
 		for (const payment of payments) {
 			try {
 				await this.stripe.paymentIntents.cancel(payment.providerPaymentId);
-			} catch (error) {}
+			} catch (error) {
+				console.log('error on cancelPendingPaymentIntents:', error);
+			}
 			await this.paymentModel
 				.updateOne(
 					{ _id: payment._id, paymentStatus: { $ne: PaymentStatus.SUCCEEDED } },
@@ -623,13 +773,14 @@ export class PaymentService implements OnModuleInit, OnModuleDestroy {
 	private async cancelPendingBookingBySystem(
 		bookingId: Types.ObjectId,
 		failureReason: string,
-	): Promise<void> {
+	): Promise<any | null> {
 		const booking = await this.cancelPendingBookingAtomically({
 			_id: bookingId,
 			bookingStatus: BookingStatus.PENDING,
 		});
-		if (!booking) return;
+		if (!booking) return null;
 		await this.cancelPendingPaymentIntents(booking._id as Types.ObjectId, failureReason);
+		return booking;
 	}
 
 	private async notifyBookingTransition(
@@ -706,11 +857,11 @@ export class PaymentService implements OnModuleInit, OnModuleDestroy {
 			await session.withTransaction(async () => {
 				cancelledBooking = await this.bookingModel
 					.findOneAndUpdate(
-						search,
+						search, //grand hote/ kevin/ hotel/ pending.
 						{ bookingStatus: BookingStatus.CANCELLED, cancelledAt: new Date() },
 						{ new: true, session },
 					)
-					.exec();
+					.exec(); //cancelled
 				if (!cancelledBooking || cancelledBooking.bookingCategory !== BookingCategory.TOUR) return;
 				await this.releaseTourSeats(cancelledBooking, session);
 			});
@@ -895,6 +1046,11 @@ export class PaymentService implements OnModuleInit, OnModuleDestroy {
 
 	private validateBookingDates(checkIn: Date, checkOut: Date): void {
 		if (!(checkIn instanceof Date) || !(checkOut instanceof Date) || checkOut <= checkIn) {
+			throw new BadRequestException(Messages.INVALID_DATA);
+		}
+		/** A stay is whole UTC days, the days the calendar shows and the availability checks compare **/
+		const day = 1000 * 60 * 60 * 24;
+		if (checkIn.getTime() % day || checkOut.getTime() % day) {
 			throw new BadRequestException(Messages.INVALID_DATA);
 		}
 		const today = new Date();

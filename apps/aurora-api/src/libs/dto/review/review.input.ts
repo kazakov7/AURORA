@@ -1,4 +1,5 @@
 import { Field, InputType, Int } from '@nestjs/graphql';
+import { Type } from 'class-transformer';
 import {
 	IsEnum,
 	IsInt,
@@ -9,8 +10,9 @@ import {
 	Max,
 	MaxLength,
 	Min,
+	ValidateNested,
 } from 'class-validator';
-import { ReviewGroup } from '../../enums/review.enum';
+import { ReviewGroup, ReviewStatus } from '../../enums/review.enum';
 
 @InputType()
 export class RatingInput {
@@ -84,4 +86,40 @@ export class DestinationReviewsInquiry {
 	@Min(1)
 	@Max(100)
 	limit!: number;
+}
+
+/** ADMIN **/
+
+@InputType()
+class AllDestinationReviewsSearch {
+	@Field(() => ReviewStatus, { nullable: true })
+	@IsOptional()
+	@IsEnum(ReviewStatus)
+	reviewStatus?: ReviewStatus;
+
+	@Field(() => String, { nullable: true })
+	@IsOptional()
+	@IsString()
+	@MaxLength(100)
+	text?: string;
+}
+
+@InputType()
+export class AllDestinationReviewsInquiry {
+	@Field(() => Int)
+	@IsInt()
+	@Min(1)
+	page!: number;
+
+	@Field(() => Int)
+	@IsInt()
+	@Min(1)
+	@Max(100)
+	limit!: number;
+
+	@Field(() => AllDestinationReviewsSearch, { nullable: true })
+	@IsOptional()
+	@ValidateNested()
+	@Type(() => AllDestinationReviewsSearch)
+	search?: AllDestinationReviewsSearch;
 }

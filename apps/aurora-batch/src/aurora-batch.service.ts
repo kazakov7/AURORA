@@ -12,6 +12,9 @@ import { ViewGroup } from '../../aurora-api/src/libs/enums/view.enum';
 
 type Entry = { entityId: Types.ObjectId; score: number };
 type Signal = { weight: number; values: Map<string, number> };
+type RatingTotal = { count: number; sum: number };
+/** How many mean ratings every listing starts with, so a few reviews cannot outweigh many **/
+const RATING_PRIOR_WEIGHT = 5;
 
 @Injectable()
 export class AuroraBatchService implements OnModuleInit, OnModuleDestroy {
@@ -44,8 +47,9 @@ export class AuroraBatchService implements OnModuleInit, OnModuleDestroy {
 
 	public async runRankings(source: 'daily' | 'manual' = 'daily'): Promise<boolean> {
 		const owner = new Types.ObjectId().toHexString();
-		if (!(await this.lock(owner))) return false;
+		// The run never rejects: the daily timer re-arms only after it, so a thrown error would stop the rankings for good
 		try {
+			if (!(await this.lock(owner))) return false;
 			const calculatedAt = new Date(),
 				publicationId = new Types.ObjectId();
 			const snapshots = await this.calculate(publicationId, calculatedAt);
@@ -80,7 +84,10 @@ export class AuroraBatchService implements OnModuleInit, OnModuleDestroy {
 			console.error('[ranking] failed; previous publication remains active', error);
 			return false;
 		} finally {
-			await this.lockModel.deleteOne({ _id: 'daily-ranking', owner }).exec();
+			await this.lockModel
+				.deleteOne({ _id: 'daily-ranking', owner })
+				.exec()
+				.catch((error) => console.error('[ranking] lock release failed', error));
 		}
 	}
 
@@ -292,6 +299,8 @@ export class AuroraBatchService implements OnModuleInit, OnModuleDestroy {
 			statusKey = kind === 'property' ? 'propertyStatus' : 'tourStatus';
 		const filter: any = { [statusKey]: 'ACTIVE', deletedAt: null };
 		if (destinationId) filter.destinationId = destinationId;
+		// A tour that has already started cannot be booked, so it takes no ranking place
+		if (kind === 'tour') filter.tourStartDate = { $gte: this.startOfToday() };
 		const ids = (await model.find(filter).select('_id').lean()).map((v: any) => v._id);
 		if (!ids.length) return [];
 		const group =
@@ -314,22 +323,17 @@ export class AuroraBatchService implements OnModuleInit, OnModuleDestroy {
 				{
 					bookingCategory: group.booking,
 					bookingStatus: { $in: [BookingStatus.CONFIRMED, BookingStatus.COMPLETED] },
-					updatedAt: { $gte: since },
+					createdAt: { $gte: since },
 					bookingRefId: { $in: ids },
 				},
 				'$bookingRefId',
 			),
-			this.map(
-				this.reviewModel,
-				{
-					reviewGroup: group.review,
-					reviewStatus: ReviewStatus.ACTIVE,
-					createdAt: { $gte: since },
-					reviewRefId: { $in: ids },
-				},
-				'$reviewRefId',
-				'$reviewRating',
-			),
+			this.ratingTotals({
+				reviewGroup: group.review,
+				reviewStatus: ReviewStatus.ACTIVE,
+				createdAt: { $gte: since },
+				reviewRefId: { $in: ids },
+			}).then((totals) => this.bayes(totals)),
 			this.map(
 				this.likeModel,
 				{ likeGroup: group.like, createdAt: { $gte: since }, likeRefId: { $in: ids } },
@@ -377,15 +381,9 @@ export class AuroraBatchService implements OnModuleInit, OnModuleDestroy {
 				'$memberId',
 			),
 		]);
-		const likes = await this.map(
-			this.likeModel,
-			{ likeGroup: LikeGroup.MEMBER, createdAt: { $gte: since } },
-			'$likeRefId',
-		);
 		return this.rank(ids, [
 			{ weight: 0.5, values: history },
 			{ weight: 0.2, values: comments },
-			{ weight: 0.15, values: likes },
 			{ weight: 0.15, values: articles },
 		]);
 	}
@@ -427,22 +425,17 @@ export class AuroraBatchService implements OnModuleInit, OnModuleDestroy {
 				{
 					bookingCategory: category,
 					bookingStatus: { $in: [BookingStatus.CONFIRMED, BookingStatus.COMPLETED] },
-					updatedAt: { $gte: since },
+					createdAt: { $gte: since },
 					bookingRefId: { $in: listingIds },
 				},
 				'$bookingRefId',
 			),
-			this.map(
-				this.reviewModel,
-				{
-					reviewGroup,
-					reviewStatus: ReviewStatus.ACTIVE,
-					createdAt: { $gte: since },
-					reviewRefId: { $in: listingIds },
-				},
-				'$reviewRefId',
-				'$reviewRating',
-			),
+			this.ratingTotals({
+				reviewGroup,
+				reviewStatus: ReviewStatus.ACTIVE,
+				createdAt: { $gte: since },
+				reviewRefId: { $in: listingIds },
+			}),
 			this.map(
 				this.likeModel,
 				{ likeGroup, createdAt: { $gte: since }, likeRefId: { $in: listingIds } },
@@ -466,6 +459,20 @@ export class AuroraBatchService implements OnModuleInit, OnModuleDestroy {
 						.reduce((sum, [, value]) => sum + value, 0),
 				]),
 			);
+		// An agent is rated on all ratings of its listings together, not on a sum of per-listing averages
+		const agentIdByMember = new Map(
+			agents.map((agent: any) => [agent.memberId.toString(), agent._id.toString()]),
+		);
+		const agentRatings = new Map<string, RatingTotal>();
+		for (const [listingId, total] of reviews) {
+			const agentId = agentIdByMember.get(ownerByListing.get(listingId) ?? '');
+			if (!agentId) continue;
+			const current = agentRatings.get(agentId) ?? { count: 0, sum: 0 };
+			agentRatings.set(agentId, {
+				count: current.count + total.count,
+				sum: current.sum + total.sum,
+			});
+		}
 		const listingScores = new Map(
 			agents.map((agent: any) => [
 				agent._id.toString(),
@@ -481,7 +488,7 @@ export class AuroraBatchService implements OnModuleInit, OnModuleDestroy {
 		return this.rank(ids, [
 			{ weight: 0.3, values: listingScores },
 			{ weight: 0.4, values: toAgent(bookings) },
-			{ weight: 0.2, values: toAgent(reviews) },
+			{ weight: 0.2, values: this.bayes(agentRatings) },
 			{ weight: 0.1, values: engagement },
 		]);
 	}
@@ -491,7 +498,7 @@ export class AuroraBatchService implements OnModuleInit, OnModuleDestroy {
 			{
 				$match: {
 					bookingStatus: { $in: [BookingStatus.CONFIRMED, BookingStatus.COMPLETED] },
-					updatedAt: { $gte: since },
+					createdAt: { $gte: since },
 				},
 			},
 			{
@@ -531,6 +538,31 @@ export class AuroraBatchService implements OnModuleInit, OnModuleDestroy {
 			]),
 		);
 	}
+	private async ratingTotals(match: any): Promise<Map<string, RatingTotal>> {
+		const rows = await this.reviewModel.aggregate([
+			{ $match: match },
+			{ $group: { _id: '$reviewRefId', count: { $sum: 1 }, sum: { $sum: '$reviewRating' } } },
+		]);
+		return new Map(
+			rows.filter((v) => v._id).map((v) => [v._id.toString(), { count: v.count, sum: v.sum }]),
+		);
+	}
+	/** (C*m + sum) / (C + n): one 5-star leans on the mean m, and every 1-star pulls the score down **/
+	private bayes(totals: Map<string, RatingTotal>): Map<string, number> {
+		let count = 0,
+			sum = 0;
+		for (const total of totals.values()) {
+			count += total.count;
+			sum += total.sum;
+		}
+		const mean = count ? sum / count : 0;
+		return new Map(
+			Array.from(totals, ([id, total]) => [
+				id,
+				(RATING_PRIOR_WEIGHT * mean + total.sum) / (RATING_PRIOR_WEIGHT + total.count),
+			]),
+		);
+	}
 	private rows(rows: any[]): Map<string, number> {
 		return new Map(rows.filter((v) => v._id).map((v) => [v._id.toString(), v.value]));
 	}
@@ -556,5 +588,10 @@ export class AuroraBatchService implements OnModuleInit, OnModuleDestroy {
 	}
 	private since(days: number): Date {
 		return new Date(Date.now() - days * 86400000);
+	}
+	private startOfToday(): Date {
+		const today = new Date();
+		today.setHours(0, 0, 0, 0);
+		return today;
 	}
 }

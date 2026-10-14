@@ -1,4 +1,5 @@
 import { INestApplication } from '@nestjs/common';
+import { randomUUID } from 'crypto';
 import { Types } from 'mongoose';
 import { AgentType, AgentVerificationStatus } from '../src/libs/enums/agent.enum';
 import { Messages } from '../src/libs/enums/common.enum';
@@ -262,7 +263,8 @@ describe('Tour listing (e2e)', () => {
 				if (isActive) expect(result.body.errors).toBeUndefined();
 				else expect(result.body.errors?.[0].extensions.code).toBe('NOT_FOUND');
 			}
-			for (const token of [agent.accessToken, admin.accessToken]) {
+			// The owner opens the tour twice
+			for (const token of [agent.accessToken, admin.accessToken, agent.accessToken]) {
 				const result = await graphQL(app, DETAIL, { id }, token);
 				expect(result.body.errors).toBeUndefined();
 				expect(result.body.data.getTour._id).toBe(id);
@@ -274,7 +276,7 @@ describe('Tour listing (e2e)', () => {
 		}
 	});
 
-	it('activates a tour only in an active destination and under an active owner', async () => {
+	it('activates a tour only in an active destination and under an active, approved owner', async () => {
 		const agent = await tourAgent('ruleagent');
 		const admin = await seedMember(app, 'ruleadmin', MemberType.ADMIN);
 		const destination = await activeDestination();
@@ -306,6 +308,17 @@ describe('Tour listing (e2e)', () => {
 		await model(app, 'Member').updateOne(
 			{ _id: agent._id },
 			{ memberStatus: MemberStatus.ACTIVE, deletedAt: null },
+		);
+		// A revoked agent no longer runs tours, so its tour cannot go back into the catalog
+		await model(app, 'Agent').updateOne(
+			{ memberId: agent._id },
+			{ verificationStatus: AgentVerificationStatus.REVOKED },
+		);
+		expect((await activate()).body.errors?.[0].message).toBe(Messages.AGENT_NOT_VERIFIED);
+		expect((await model(app, 'Member').findById(agent._id).lean()).memberTours).toBe(0);
+		await model(app, 'Agent').updateOne(
+			{ memberId: agent._id },
+			{ verificationStatus: AgentVerificationStatus.APPROVED },
 		);
 		const activated = await activate();
 		expect(activated.body.errors).toBeUndefined();
@@ -475,7 +488,9 @@ describe('Tour listing (e2e)', () => {
 
 		expect((await edit(rejected)).body.data.updateTour.tourStatus).toBe('PENDING');
 		expect((await edit(active)).body.data.updateTour.tourStatus).toBe('ACTIVE');
-		expect((await edit(inactive)).body.errors?.[0].message).toBe(Messages.UPDATE_FAILED);
+		const refused = (await edit(inactive)).body.errors?.[0];
+		expect(refused.message).toBe(Messages.UPDATE_FAILED);
+		expect(refused.extensions.code).toBe('BAD_REQUEST');
 	});
 
 	it('answers mutations without owner data and opens a tour whose owner account is gone', async () => {
@@ -603,5 +618,40 @@ describe('Tour listing (e2e)', () => {
 
 		expect(ids).toHaveLength(25);
 		expect(new Set(ids).size).toBe(25);
+	});
+
+	it('lists only tours that have not started, and a started tour cannot be booked', async () => {
+		const agent = await tourAgent('pastagent');
+		const guest = await seedMember(app, 'pastguest');
+		const destination = await activeDestination();
+		const started = await seedTour(agent._id, destination._id, {
+			tourName: 'Started Tour',
+			tourStartDate: new Date(Date.now() - 2 * DAY),
+			tourEndDate: new Date(Date.now() + DAY),
+		});
+		const upcoming = await seedTour(agent._id, destination._id, { tourName: 'Upcoming Tour' });
+		const list = async (search: object) =>
+			(
+				await graphQL(app, LIST, { input: { page: 1, limit: 10, search } })
+			).body.data.getTours.list.map((tour) => tour._id);
+
+		expect(await list({})).toEqual([upcoming._id.toString()]);
+		expect(
+			await list({
+				tourStartDateRange: {
+					start: new Date(Date.now() - 5 * DAY),
+					end: new Date(Date.now() + 5 * DAY),
+				},
+			}),
+		).toEqual([upcoming._id.toString()]);
+
+		const booked = await graphQL(
+			app,
+			`mutation Pay($input: StartTourPaymentInput!) { startTourPayment(input: $input) { clientSecret } }`,
+			{ input: { tourId: started._id.toString(), bookingGuests: 1, idempotencyKey: randomUUID() } },
+			guest.accessToken,
+		);
+		expect(booked.body.errors?.[0].message).toBe(Messages.TOUR_ALREADY_STARTED);
+		expect((await model(app, 'Tour').findById(started._id).lean()).tourReservedSeats).toBe(0);
 	});
 });

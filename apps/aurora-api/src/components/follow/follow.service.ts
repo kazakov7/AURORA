@@ -33,7 +33,7 @@ export class FollowService {
 		followingId: Types.ObjectId,
 	): Promise<Follower> {
 		if (followerId.toString() === followingId.toString()) {
-			throw new InternalServerErrorException(Messages.SELF_SUBSCRIPTION_DENIED);
+			throw new BadRequestException(Messages.SELF_SUBSCRIPTION_DENIED);
 		}
 
 		const targetMember = await this.memberService.getMember(null, followingId);

@@ -3,6 +3,7 @@ import { ObjectId } from 'mongoose';
 import { BookingCategory, BookingStatus } from '../../enums/booking.enum';
 import { Member, TotalCounter } from '../member/member';
 import { Property } from '../property/property';
+import { Review } from '../review/review';
 import { Tour } from '../tour/tour';
 
 @ObjectType()
@@ -78,6 +79,10 @@ export class Booking {
 
 	@Field(() => Tour, { nullable: true })
 	tourData?: Tour;
+
+	/** The guest's own rating of the booked hotel or tour (only in getMyBookings) **/
+	@Field(() => Review, { nullable: true })
+	ratingData?: Review;
 }
 
 @ObjectType()

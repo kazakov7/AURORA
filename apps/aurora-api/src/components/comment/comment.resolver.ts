@@ -2,7 +2,11 @@ import { Args, Mutation, Resolver, Query } from '@nestjs/graphql';
 import { CommentService } from './comment.service';
 import { UseGuards } from '@nestjs/common';
 import { ObjectId, Types } from 'mongoose';
-import { CommentInput, CommentsInquiry } from '../../libs/dto/comment/comment.input';
+import {
+	AllCommentsInquiry,
+	CommentInput,
+	CommentsInquiry,
+} from '../../libs/dto/comment/comment.input';
 import { AuthMember } from '../auth/decorators/authMember.decorator';
 import { AuthGuard } from '../auth/guards/auth.guard';
 import { Comment, Comments } from '../../libs/dto/comment/comment';
@@ -57,6 +61,15 @@ export class CommentResolver {
 	}
 
 	// ADMIN
+	@Roles(MemberType.ADMIN)
+	@UseGuards(RolesGuard)
+	@Query(() => Comments)
+	public async getAllCommentsByAdmin(@Args('input') input: AllCommentsInquiry): Promise<Comments> {
+		console.log('Query: getAllCommentsByAdmin');
+
+		return await this.commentService.getAllCommentsByAdmin(input);
+	}
+
 	@Roles(MemberType.ADMIN)
 	@UseGuards(RolesGuard)
 	@Mutation(() => Comment)

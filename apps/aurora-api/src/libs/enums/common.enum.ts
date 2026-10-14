@@ -26,6 +26,7 @@ export enum Messages {
 	NOT_AUTHENTICATED = 'You are not authenticated, please login first!',
 	TOKEN_NOT_EXIST = 'Bearer token is not provided!',
 	TOKEN_EXPIRED = 'Your session has expired, please login again!',
+	TOO_MANY_LOGIN_ATTEMPTS = 'Too many failed logins, please try again in 15 minutes!',
 	NOT_AUTHORIZED = 'You are not authorized to perform this action!',
 	GOOGLE_AUTH_NOT_CONFIGURED = 'Google authentication is not configured!',
 	INVALID_GOOGLE_CREDENTIAL = 'Google authentication failed. Please try again.',
@@ -106,6 +107,7 @@ export enum Messages {
 	TOUR_NOT_OWNED = 'You are not the owner of this tour!',
 	TOUR_FULL = 'This tour is fully booked!',
 	TOUR_HAS_BOOKINGS = 'This tour has booked seats!',
+	TOUR_ALREADY_STARTED = 'This tour has already started!',
 
 	// =========================
 	// TOUR SCHEDULE
@@ -127,6 +129,8 @@ export enum Messages {
 	BOOKING_CANCEL_WINDOW_PASSED = 'Free cancellation closes 48 hours before the start!',
 	BOOKING_CANNOT_UPDATE = 'This booking cannot be updated!',
 	BOOKING_EXPIRED = 'This booking has expired!',
+	BOOKING_OWN_LISTING = 'You cannot book your own listing!',
+	BOOKING_HOLD_LIMIT = 'Finish or cancel one of your unpaid bookings first!',
 
 	// =========================
 	// PAYMENT

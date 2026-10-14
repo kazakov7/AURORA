@@ -88,5 +88,7 @@ AgentSchema.index(
 		name: 'agents_verification_created_idx',
 	},
 );
+// A member's own applications of every status, newest first (the index above serves only live ones)
+AgentSchema.index({ memberId: 1, createdAt: -1 }, { name: 'agents_member_history_idx' });
 
 export default AgentSchema;
