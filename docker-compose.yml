@@ -1,0 +1,37 @@
+services:
+  aurora-api:
+    container_name: aurora-api
+    restart: always
+    image: node:22
+    ports:
+      - '4007:3007'
+
+    volumes:
+      - ./:/usr/src/aurora
+
+    working_dir: /usr/src/aurora
+
+    networks:
+      - monorepo-network
+
+    command: bash -c "npm install && npm run build && npm run start:prod"
+
+  aurora-batch:
+    container_name: aurora-batch
+    restart: always
+    image: node:22
+    ports:
+      - '4008:3008'
+    volumes:
+      - ./:/usr/src/aurora
+
+    working_dir: /usr/src/aurora
+
+    networks:
+      - monorepo-network
+
+    command: bash -c "npm install && npm run build && npm run dev:batch"
+
+networks:
+  monorepo-network:
+    driver: bridge
