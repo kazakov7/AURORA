@@ -1,24 +1,11 @@
 import { Field, InputType } from '@nestjs/graphql';
 import { Transform } from 'class-transformer';
-import {
-	IsOptional,
-	IsString,
-	IsNotEmpty,
-	Length,
-	Matches,
-	MaxLength,
-	ValidateIf,
-} from 'class-validator';
+import { IsOptional, IsString, Length, Matches, MaxLength, ValidateIf } from 'class-validator';
 import { imageSourceRegex, memberNickRegex, memberPhoneRegex, trimString } from '../../config';
 import { Messages } from '../../enums/common.enum';
 
 @InputType()
 export class MemberUpdate {
-	@Field({ nullable: true })
-	@IsOptional()
-	_id?: string;
-
-	// Optional, but never null: Member.memberNick is non-nullable in the schema
 	@Field({ nullable: true })
 	@ValidateIf((_, value) => value !== undefined)
 	@Transform(trimString)

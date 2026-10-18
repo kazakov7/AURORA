@@ -134,10 +134,6 @@ const PropertySchema = new Schema(
 			default: 0,
 		},
 
-		// ─────────────────────────────
-		// System
-		// ─────────────────────────────
-
 		deletedAt: {
 			type: Date,
 			default: null,

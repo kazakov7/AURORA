@@ -1,6 +1,5 @@
 import { Field, InputType, Int } from '@nestjs/graphql';
 import {
-	IsEmail,
 	IsEnum,
 	IsIn,
 	IsInt,
@@ -12,7 +11,6 @@ import {
 	Max,
 	MaxLength,
 	Min,
-	ValidateIf,
 } from 'class-validator';
 import { Transform } from 'class-transformer';
 import { availableMemberSorts, memberNickRegex, trimString } from '../../config';
@@ -26,11 +24,10 @@ export class MemberInput {
 	@Matches(memberNickRegex, { message: Messages.INVALID_NICKNAME })
 	@IsString()
 	@Transform(trimString)
-	@Field(() => String, { nullable: true })
+	@Field(() => String)
 	memberNick: string;
 
-	// Spaces alone are not a password
-	@Field({ nullable: true })
+	@Field(() => String)
 	@IsNotEmpty()
 	@Length(5, 12)
 	@Matches(/\S/)
@@ -45,7 +42,7 @@ export class MemberInput {
 @InputType()
 export class LoginInput {
 	@IsNotEmpty()
-	@Length(3, 254)
+	@Length(3, 12)
 	@Field(() => String)
 	memberNick!: string;
 

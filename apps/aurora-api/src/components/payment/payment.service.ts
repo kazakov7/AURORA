@@ -134,11 +134,11 @@ export class PaymentService implements OnModuleInit, OnModuleDestroy {
 
 	/** The guest cancels a payment hold any time, and a paid booking until 48 hours before it starts **/
 	public async cancelBooking(
-		memberId: Types.ObjectId, //kevin
-		bookingId: Types.ObjectId, //grand hotel:id
-		bookingCategory: BookingCategory, //type
+		memberId: Types.ObjectId,
+		bookingId: Types.ObjectId,
+		bookingCategory: BookingCategory,
 	): Promise<any> {
-		const booking = await this.bookingModel //target hotel/tour
+		const booking = await this.bookingModel
 			.findOne({ _id: bookingId, memberId, bookingCategory })
 			.lean<any>()
 			.exec();

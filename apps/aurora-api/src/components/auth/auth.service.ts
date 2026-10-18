@@ -25,16 +25,15 @@ import {
 	TelegramIdentity,
 	TelegramTokenResponse,
 } from '../../libs/types/social.identity';
-
-const KAKAO_TOKEN_ENDPOINT = 'https://kauth.kakao.com/oauth/token';
-const KAKAO_USER_INFO_ENDPOINT = 'https://kapi.kakao.com/v2/user/me';
-const KAKAO_ISSUER = 'https://kauth.kakao.com';
-const kakaoJwks = createRemoteJWKSet(new URL('https://kauth.kakao.com/.well-known/jwks.json'));
-const TELEGRAM_TOKEN_ENDPOINT = 'https://oauth.telegram.org/token';
-const TELEGRAM_ISSUER = 'https://oauth.telegram.org';
-const telegramJwks = createRemoteJWKSet(
-	new URL('https://oauth.telegram.org/.well-known/jwks.json'),
-);
+import {
+	KAKAO_TOKEN_ENDPOINT,
+	kakaoJwks,
+	KAKAO_ISSUER,
+	KAKAO_USER_INFO_ENDPOINT,
+	TELEGRAM_TOKEN_ENDPOINT,
+	telegramJwks,
+	TELEGRAM_ISSUER,
+} from '../../libs/auth.constants';
 
 @Injectable()
 export class AuthService {

@@ -40,15 +40,11 @@ export class DestinationInput {
 	@Field(() => Float, { nullable: true })
 	@IsOptional()
 	@IsNumber()
-	@Min(-90)
-	@Max(90)
 	latitude?: number;
 
 	@Field(() => Float, { nullable: true })
 	@IsOptional()
 	@IsNumber()
-	@Min(-180)
-	@Max(180)
 	longitude?: number;
 
 	// Optional, but never null: the image list is non-nullable in the schema

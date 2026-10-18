@@ -39,12 +39,8 @@ import {
 	lookUpAuthMemberFollowData,
 } from '../../libs/config';
 import { ChatGateway } from '../chat/chat.gateway';
-import { Message } from '../../libs/dto/message/message';
 import { AuthService } from '../auth/auth.service';
 import { SocialIdentity, SocialAuthConfig } from '../../libs/types/social.identity';
-
-/** The nickname index is partial ($type: string), so an exact lookup names that condition to use it instead of scanning every member **/
-const nickLookup = (memberNick: string) => ({ $eq: memberNick, $type: 'string' as const });
 
 @Injectable()
 export class MemberService {
@@ -88,7 +84,7 @@ export class MemberService {
 		const attemptKey = input.memberNick.trim().toLowerCase();
 		this.assertLoginAllowed(attemptKey);
 		const response = await this.memberModel
-			.findOne({ memberNick: nickLookup(input.memberNick) })
+			.findOne({ memberNick: input.memberNick })
 			.select('+memberPassword')
 			.exec();
 		// Unknown and passwordless (social) accounts get the same answer as a wrong password
@@ -130,7 +126,6 @@ export class MemberService {
 			return;
 		}
 		if (attempts.count >= LOGIN_ATTEMPT_LIMIT) {
-			// The same response shape as the built-in exceptions, so GraphQL keeps the 429 status
 			const status = HttpStatus.TOO_MANY_REQUESTS;
 			throw new HttpException(
 				{
@@ -203,7 +198,6 @@ export class MemberService {
 				{ $set: { memberPassword: hashedPassword } },
 			)
 			.exec();
-		if (result.modifiedCount !== 1) throw new BadRequestException(Messages.WRONG_PASSWORD);
 
 		return true;
 	}
@@ -299,7 +293,7 @@ export class MemberService {
 		const email = 'email' in identity ? identity.email : undefined;
 		for (let attempt = 0; attempt < 10; attempt++) {
 			const memberNick = this.createSocialMemberNick(identity, config, attempt);
-			const existingNick = await this.memberModel.exists({ memberNick: nickLookup(memberNick) });
+			const existingNick = await this.memberModel.exists({ memberNick: memberNick });
 			if (existingNick) continue;
 			try {
 				const member = await this.memberModel.create({
@@ -429,7 +423,7 @@ export class MemberService {
 		const result = (await this.memberModel.findOne(search).lean().exec()) as unknown as Member;
 		if (!result) throw new NotFoundException(Messages.MEMBER_NOT_FOUND);
 
-		if (memberId && recordView) {
+		if (memberId) {
 			const viewInput = {
 				memberId: memberId,
 				viewRefId: targetId,
@@ -570,7 +564,6 @@ export class MemberService {
 		input: AdminUpdateMemberInput,
 		_adminId?: Types.ObjectId,
 	): Promise<Member> {
-		this.clearBlankFields(input);
 		const update: T = { ...input };
 		// deletedAt follows the status: stamped when a member is deleted, cleared when restored
 		if (input.memberStatus) {

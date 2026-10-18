@@ -34,13 +34,13 @@ export class BookingResolver {
 	@UseGuards(AuthGuard)
 	@Mutation(() => Booking)
 	public async cancelBooking(
-		@Args('bookingId') bookingId: string, //grand hotel:id
-		@AuthMember('_id') memberId: Types.ObjectId, //kevin
+		@Args('bookingId') bookingId: string,
+		@AuthMember('_id') memberId: Types.ObjectId,
 	): Promise<Booking> {
 		return this.paymentService.cancelBooking(
-			memberId, //kevin
-			shapeIntoMongoObjectId(bookingId), //grand hotel:id
-			BookingCategory.PROPERTY, //type
+			memberId,
+			shapeIntoMongoObjectId(bookingId),
+			BookingCategory.PROPERTY,
 		);
 	}
 

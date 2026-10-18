@@ -65,12 +65,6 @@ export class Member {
 	@Field(() => Int)
 	memberArticles: number;
 
-	@Field(() => Int)
-	memberPoints: number;
-
-	@Field(() => Int)
-	memberRank: number;
-
 	@Field({ nullable: true })
 	lastLoginAt?: Date;
 

@@ -21,6 +21,7 @@ import { shapeIntoMongoObjectId } from '../../libs/config';
 import { MemberType } from '../../libs/enums/member.enum';
 import { Roles } from '../auth/decorators/roles.decorator';
 import { RolesGuard } from '../auth/guards/roles.guard';
+
 @Resolver(() => Member)
 export class MemberResolver {
 	constructor(private readonly memberService: MemberService) {}
@@ -36,19 +37,20 @@ export class MemberResolver {
 		console.log('Query: login');
 		return await this.memberService.login(input);
 	}
+
 	@UseGuards(AuthGuard)
 	@Mutation(() => Boolean)
 	public async changePassword(
 		@Args('input') input: ChangePasswordInput,
 		@AuthMember('_id') memberId: Types.ObjectId,
 	): Promise<boolean> {
-		console.log('Query: telegchangePasswordramAuth');
+		console.log('Mutation: changePassword');
 		return await this.memberService.changePassword(memberId, input);
 	}
 
 	@Mutation(() => Member)
 	public async googleAuth(@Args('input') input: GoogleAuthInput): Promise<Member> {
-		console.log('Query: googleAuth');
+		console.log('Mutation: googleAuth');
 		return await this.memberService.googleAuth(input);
 	}
 
@@ -71,7 +73,6 @@ export class MemberResolver {
 		@AuthMember('_id') memberId: Types.ObjectId,
 	): Promise<Member> {
 		console.log('Mutation: updateMember');
-		delete input._id;
 		return this.memberService.updateMember(memberId, input);
 	}
 
@@ -85,7 +86,7 @@ export class MemberResolver {
 
 		const targetId = shapeIntoMongoObjectId(input);
 		const shouldRecordView = memberId ? !memberId.equals(targetId) : false;
-		return this.memberService.getMember(memberId, targetId, shouldRecordView);
+		return this.memberService.getMember(memberId, targetId);
 	}
 
 	@UseGuards(WithoutGuard)

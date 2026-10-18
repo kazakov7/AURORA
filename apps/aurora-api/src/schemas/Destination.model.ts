@@ -34,6 +34,7 @@ const DestinationSchema = new Schema(
 		latitude: Number,
 
 		longitude: Number,
+
 		destinationImages: {
 			type: [String],
 			default: [],

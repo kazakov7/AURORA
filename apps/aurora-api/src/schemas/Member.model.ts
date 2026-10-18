@@ -25,12 +25,14 @@ const MemberSchema = new Schema(
 
 		memberPhone: {
 			type: String,
+			unique: true,
 		},
 
 		memberEmail: {
 			type: String,
 			lowercase: true,
 			trim: true,
+			unique: true,
 		},
 
 		googleSubject: {
@@ -63,6 +65,7 @@ const MemberSchema = new Schema(
 		memberNick: {
 			type: String,
 			trim: true,
+			unique: true,
 		},
 
 		memberFullName: {
@@ -123,16 +126,6 @@ const MemberSchema = new Schema(
 			default: 0,
 		},
 
-		memberPoints: {
-			type: Number,
-			default: 0,
-		},
-
-		memberRank: {
-			type: Number,
-			default: 0,
-		},
-
 		deletedAt: {
 			type: Date,
 			default: null,
@@ -144,19 +137,6 @@ const MemberSchema = new Schema(
 	},
 );
 
-MemberSchema.index(
-	{ memberPhone: 1 },
-	{ unique: true, partialFilterExpression: { memberPhone: { $type: 'string' } } },
-);
-MemberSchema.index(
-	{ memberEmail: 1 },
-	{ unique: true, partialFilterExpression: { memberEmail: { $type: 'string' } } },
-);
-MemberSchema.index(
-	{ memberNick: 1 },
-	{ unique: true, partialFilterExpression: { memberNick: { $type: 'string' } } },
-);
-// 'alice' and 'Alice' are one nickname; the index above still serves the exact-match lookups
 MemberSchema.index(
 	{ memberNick: 1 },
 	{
@@ -177,10 +157,6 @@ MemberSchema.index(
 MemberSchema.index(
 	{ telegramSubject: 1 },
 	{ unique: true, partialFilterExpression: { telegramSubject: { $type: 'string' } } },
-);
-MemberSchema.index(
-	{ memberType: 1, memberStatus: 1, memberRank: 1 },
-	{ name: 'members_ranking_idx' },
 );
 MemberSchema.index({ memberStatus: 1, createdAt: 1 }, { name: 'members_status_created_idx' });
 

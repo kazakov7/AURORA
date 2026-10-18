@@ -13,7 +13,7 @@ import MemberSchema from '../../schemas/Member.model';
 			useFactory: () => {
 				const secret = process.env.SECRET_TOKEN;
 				if (!secret) throw new Error('SECRET_TOKEN is not set');
-				return { secret, signOptions: { expiresIn: '30d' } };
+				return { secret, signOptions: { expiresIn: '7d' } };
 			},
 		}),
 	],
